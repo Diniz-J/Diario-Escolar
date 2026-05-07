@@ -1,0 +1,12 @@
+"""Rotas da app escola — incluídas no roteamento global em config/urls.py (etapa 6)."""
+from rest_framework.routers import DefaultRouter
+
+from .views import AlunoViewSet, DisciplinaViewSet, EscolaViewSet, TurmaViewSet
+
+router = DefaultRouter()
+router.register(r"escolas", EscolaViewSet, basename="escola")
+router.register(r"turmas", TurmaViewSet, basename="turma")
+router.register(r"disciplinas", DisciplinaViewSet, basename="disciplina")
+router.register(r"alunos", AlunoViewSet, basename="aluno")
+
+urlpatterns = router.urls
