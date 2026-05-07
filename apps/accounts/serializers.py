@@ -1,4 +1,5 @@
 """Serializers da app accounts."""
+from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
 from .models import Usuario
@@ -22,6 +23,11 @@ class UsuarioSerializer(serializers.ModelSerializer):
             "password",
         ]
         read_only_fields = ["id"]
+
+    def validate_password(self, value: str) -> str:
+        """Aplica os validadores configurados em AUTH_PASSWORD_VALIDATORS."""
+        validate_password(value)
+        return value
 
     def create(self, validated_data: dict) -> Usuario:
         password = validated_data.pop("password", None)

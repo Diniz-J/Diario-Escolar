@@ -2,12 +2,16 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
+from .forms import UsuarioChangeForm, UsuarioCreationForm
 from .models import Usuario
 
 
 @admin.register(Usuario)
 class UsuarioAdmin(UserAdmin):
     """Admin do Usuario com o campo `perfil` adicional."""
+
+    add_form = UsuarioCreationForm
+    form = UsuarioChangeForm
 
     fieldsets = UserAdmin.fieldsets + (
         ("Perfil de acesso", {"fields": ("perfil",)}),
