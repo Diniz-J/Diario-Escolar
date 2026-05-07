@@ -19,6 +19,12 @@ class BaseModelEscopado(TimeStampedModel):
     quando uma classe concreta herda este modelo. `related_name="+"` desabilita
     o reverse accessor genérico — cada subclasse concreta deve sobrescrever
     o campo `escola` se quiser um reverse acessível em `Escola.<nome>`.
+
+    `on_delete=PROTECT` é proposital: deletar uma `Escola` com qualquer
+    registro filho (Turma, Aluno, Professor, etc.) levanta
+    `ProtectedError`. Em produção, a remoção de uma escola exige limpar
+    seus dependentes antes — ou desativá-la via `Escola.ativa=False`,
+    que é o caminho recomendado.
     """
 
     escola = models.ForeignKey(

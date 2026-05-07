@@ -15,8 +15,15 @@ _PERFIL_PROFESSOR = "professor"
 
 
 def _tem_bypass(usuario) -> bool:
-    """Retorna True se o usuário é admin global (perfil admin ou superuser)."""
-    return usuario.is_superuser or getattr(usuario, "perfil", None) == _PERFIL_ADMIN
+    """Retorna True se o usuário é admin global (perfil admin ou superuser).
+
+    Usa `getattr` para tolerar objetos sem `is_superuser` (ex.: AnonymousUser
+    chamado fora do fluxo padrão de `has_permission`, que já checa
+    `is_authenticated` antes).
+    """
+    if getattr(usuario, "is_superuser", False):
+        return True
+    return getattr(usuario, "perfil", None) == _PERFIL_ADMIN
 
 
 class _BasePerfilPermission(BasePermission):
@@ -34,7 +41,12 @@ class _BasePerfilPermission(BasePermission):
 
 
 class IsAdmin(_BasePerfilPermission):
-    """Apenas administradores (perfil admin ou superuser)."""
+    """Apenas administradores (perfil admin ou superuser).
+
+    `PERFIS_PERMITIDOS` é proposital e fica vazio: admin/superuser já passam
+    pelo `_tem_bypass`. NÃO adicione `_PERFIL_ADMIN` aqui — duplicaria a
+    verificação e fragmentaria a fonte da verdade do que conta como bypass.
+    """
 
     PERFIS_PERMITIDOS = frozenset()
 
