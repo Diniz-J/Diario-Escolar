@@ -29,6 +29,7 @@ THIRD_PARTY_APPS = [
 
 # Apps locais — adicionadas conforme cada domínio é implementado
 LOCAL_APPS: list[str] = [
+    "apps.common",
     "apps.accounts",
 ]
 

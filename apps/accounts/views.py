@@ -1,8 +1,9 @@
 """Views da app accounts."""
 from rest_framework import viewsets
 
+from apps.common.permissions import IsAdminOrDiretor
+
 from .models import Usuario
-from .permissions import PodeGerenciarUsuarios
 from .serializers import UsuarioSerializer
 
 
@@ -11,4 +12,4 @@ class UsuarioViewSet(viewsets.ModelViewSet):
 
     queryset = Usuario.objects.all().order_by("id")
     serializer_class = UsuarioSerializer
-    permission_classes = [PodeGerenciarUsuarios]
+    permission_classes = [IsAdminOrDiretor]
