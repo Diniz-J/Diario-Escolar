@@ -28,7 +28,9 @@ THIRD_PARTY_APPS = [
 ]
 
 # Apps locais — adicionadas conforme cada domínio é implementado
-LOCAL_APPS: list[str] = []
+LOCAL_APPS: list[str] = [
+    "apps.accounts",
+]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
@@ -96,8 +98,8 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Modelo de usuário customizado — definido na app accounts (etapa 2)
-# AUTH_USER_MODEL = "accounts.Usuario"
+# Modelo de usuário customizado
+AUTH_USER_MODEL = "accounts.Usuario"
 
 # Django REST Framework
 REST_FRAMEWORK = {
