@@ -59,7 +59,8 @@ class Turma(BaseModelEscopado):
         ]
 
     def __str__(self) -> str:
-        return f"{self.nome} ({self.get_turno_display()}, {self.ano_letivo})"
+        # Inclui escola para diferenciar turmas homônimas no admin/dropdowns.
+        return f"{self.nome} ({self.get_turno_display()}, {self.ano_letivo}) — {self.escola}"
 
 
 class Disciplina(BaseModelEscopado):
