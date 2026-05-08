@@ -3,13 +3,20 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.common.models import BaseModelEscopado, TimeStampedModel
+from apps.common.validators import validar_cnpj
 
 
 class Escola(TimeStampedModel):
     """Instituição de ensino — raiz do escopo de domínio (tenant root)."""
 
     nome = models.CharField(max_length=200)
-    cnpj = models.CharField(max_length=18, blank=True, null=True, unique=True)
+    cnpj = models.CharField(
+        max_length=18,
+        blank=True,
+        null=True,
+        unique=True,
+        validators=[validar_cnpj],
+    )
     ativa = models.BooleanField(default=True)
 
     class Meta:
