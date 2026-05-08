@@ -25,12 +25,14 @@ THIRD_PARTY_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "corsheaders",
+    "django_filters",
 ]
 
 # Apps locais — adicionadas conforme cada domínio é implementado
 LOCAL_APPS: list[str] = [
     "apps.common",
     "apps.accounts",
+    "apps.escola",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

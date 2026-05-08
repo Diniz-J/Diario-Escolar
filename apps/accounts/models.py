@@ -4,7 +4,14 @@ from django.db import models
 
 
 class Usuario(AbstractUser):
-    """Usuário do sistema com perfil de acesso."""
+    """Usuário do sistema com perfil de acesso e vínculo com Escola.
+
+    O campo `escola` é opcional hoje porque o superusuário do Django (e
+    eventuais contas globais de manutenção) não pertencem a nenhuma escola.
+    Quando o sistema migrar para SaaS multi-tenant, a obrigatoriedade vai
+    ser imposta via `clean()`/serializer para todos os perfis exceto
+    superuser — sem precisar de migration de dados.
+    """
 
     class Perfil(models.TextChoices):
         ADMIN = "admin", "Admin"
@@ -17,6 +24,13 @@ class Usuario(AbstractUser):
         max_length=20,
         choices=Perfil.choices,
         default=Perfil.PROFESSOR,
+    )
+    escola = models.ForeignKey(
+        "escola.Escola",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="usuarios",
     )
 
     class Meta:
