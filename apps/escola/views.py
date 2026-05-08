@@ -14,11 +14,12 @@ from apps.common.permissions import (
 )
 from apps.common.views import EscopoEscolaMixin
 
-from .models import Aluno, Disciplina, Escola, Turma
+from .models import Aluno, Disciplina, Escola, Professor, Turma
 from .serializers import (
     AlunoSerializer,
     DisciplinaSerializer,
     EscolaSerializer,
+    ProfessorSerializer,
     TurmaSerializer,
 )
 
@@ -86,3 +87,21 @@ class AlunoViewSet(EscopoEscolaMixin, _BasePermissionMixin, viewsets.ModelViewSe
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ["turma", "ativo"]
     search_fields = ["nome_completo", "matricula"]
+
+
+class ProfessorViewSet(EscopoEscolaMixin, _BasePermissionMixin, viewsets.ModelViewSet):
+    """CRUD de professores. Busca pelo nome do usuário vinculado."""
+
+    queryset = (
+        Professor.objects.select_related("usuario", "escola")
+        .prefetch_related("disciplinas")
+        .order_by("usuario__first_name", "usuario__last_name")
+    )
+    serializer_class = ProfessorSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ["ativo", "disciplinas"]
+    search_fields = [
+        "usuario__first_name",
+        "usuario__last_name",
+        "usuario__username",
+    ]

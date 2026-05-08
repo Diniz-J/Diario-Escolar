@@ -5,7 +5,8 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
-from apps.escola.models import Aluno, Disciplina, Escola, Turma
+from apps.accounts.models import Usuario
+from apps.escola.models import Aluno, Disciplina, Escola, Professor, Turma
 
 
 class _BaseEscolaSetup(TestCase):
@@ -121,3 +122,38 @@ class AlunoCleanTests(_BaseEscolaSetup):
             turma=self.turma_a,
         )
         aluno.full_clean()  # não deve levantar
+
+
+class ProfessorCleanTests(_BaseEscolaSetup):
+    """Cobre invariantes de `Professor`: vínculo único e mesma escola que o usuário."""
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        super().setUpTestData()
+        cls.usuario_a = Usuario.objects.create_user(
+            username="prof_a",
+            password="x",
+            perfil=Usuario.Perfil.PROFESSOR,
+            escola=cls.escola_a,
+        )
+        cls.usuario_b = Usuario.objects.create_user(
+            username="prof_b",
+            password="x",
+            perfil=Usuario.Perfil.PROFESSOR,
+            escola=cls.escola_b,
+        )
+
+    def test_clean_falha_quando_usuario_de_outra_escola(self):
+        professor = Professor(escola=self.escola_a, usuario=self.usuario_b)
+        with self.assertRaises(ValidationError) as ctx:
+            professor.full_clean()
+        self.assertIn("usuario", ctx.exception.message_dict)
+
+    def test_clean_passa_quando_usuario_da_mesma_escola(self):
+        professor = Professor(escola=self.escola_a, usuario=self.usuario_a)
+        professor.full_clean()  # não deve levantar
+
+    def test_one_to_one_impede_vinculo_duplicado(self):
+        Professor.objects.create(escola=self.escola_a, usuario=self.usuario_a)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Professor.objects.create(escola=self.escola_a, usuario=self.usuario_a)
