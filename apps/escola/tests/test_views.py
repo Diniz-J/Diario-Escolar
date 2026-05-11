@@ -11,11 +11,12 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from django.test import TestCase
 
 from apps.accounts.models import Usuario
-from apps.escola.models import Aluno, Disciplina, Escola, Turma
+from apps.escola.models import Aluno, Disciplina, Escola, Professor, Turma
 from apps.escola.views import (
     AlunoViewSet,
     DisciplinaViewSet,
     EscolaViewSet,
+    ProfessorViewSet,
     TurmaViewSet,
 )
 
@@ -232,6 +233,76 @@ class AlunoPermissionAndFilterTests(_PermissionSetup):
         self.assertIn("turma", resp.data)
 
 
+class ProfessorPermissionAndValidationTests(_PermissionSetup):
+    """Cobre permissões padrão (admin/diretor escrevem, todos leem) e
+    invariante de mesma escola entre `usuario` e `professor`.
+    """
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        super().setUpTestData()
+        cls.disciplina = Disciplina.objects.create(escola=cls.escola, nome="Mat")
+        # Usuário-alvo do Professor: precisa estar na mesma escola.
+        cls.usuario_docente = Usuario.objects.create_user(
+            username="docente",
+            password="x",
+            perfil=Usuario.Perfil.PROFESSOR,
+            escola=cls.escola,
+        )
+
+    def test_list_professor_aceito(self):
+        self.assertEqual(
+            self._request(ProfessorViewSet, "list", "professor").status_code, 200
+        )
+
+    def test_create_diretor_aceito(self):
+        payload = {
+            "escola": self.escola.id,
+            "usuario": self.usuario_docente.id,
+            "disciplinas": [self.disciplina.id],
+        }
+        resp = self._request(ProfessorViewSet, "create", "diretor", payload)
+        self.assertEqual(resp.status_code, 201)
+
+    def test_create_professor_negado(self):
+        payload = {
+            "escola": self.escola.id,
+            "usuario": self.usuario_docente.id,
+        }
+        self.assertEqual(
+            self._request(ProfessorViewSet, "create", "professor", payload).status_code,
+            403,
+        )
+
+    def test_create_falha_quando_usuario_de_outra_escola(self):
+        outra_escola = Escola.objects.create(nome="Outra")
+        usuario_outra = Usuario.objects.create_user(
+            username="docente_outra",
+            password="x",
+            perfil=Usuario.Perfil.PROFESSOR,
+            escola=outra_escola,
+        )
+        payload = {
+            "escola": self.escola.id,
+            "usuario": usuario_outra.id,
+        }
+        resp = self._request(ProfessorViewSet, "create", "diretor", payload)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("usuario", resp.data)
+
+    def test_create_falha_quando_disciplina_de_outra_escola(self):
+        outra_escola = Escola.objects.create(nome="Outra")
+        disc_outra = Disciplina.objects.create(escola=outra_escola, nome="Hist")
+        payload = {
+            "escola": self.escola.id,
+            "usuario": self.usuario_docente.id,
+            "disciplinas": [disc_outra.id],
+        }
+        resp = self._request(ProfessorViewSet, "create", "diretor", payload)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("disciplinas", resp.data)
+
+
 class EscopoQuerysetTests(TestCase):
     """Verifica que `EscopoEscolaMixin` isola dados entre escolas.
 
@@ -262,6 +333,20 @@ class EscopoQuerysetTests(TestCase):
         cls.aluno_b = Aluno.objects.create(
             escola=cls.escola_b, matricula="B1",
             nome_completo="Aluno B", turma=cls.turma_b,
+        )
+        cls.docente_a = Usuario.objects.create_user(
+            username="docente_a", password="x",
+            perfil=Usuario.Perfil.PROFESSOR, escola=cls.escola_a,
+        )
+        cls.docente_b = Usuario.objects.create_user(
+            username="docente_b", password="x",
+            perfil=Usuario.Perfil.PROFESSOR, escola=cls.escola_b,
+        )
+        cls.professor_obj_a = Professor.objects.create(
+            escola=cls.escola_a, usuario=cls.docente_a
+        )
+        cls.professor_obj_b = Professor.objects.create(
+            escola=cls.escola_b, usuario=cls.docente_b
         )
         cls.diretor_a = Usuario.objects.create_user(
             username="da", password="x",
@@ -325,6 +410,16 @@ class EscopoQuerysetTests(TestCase):
         matriculas = {item["matricula"] for item in resp.data}
         self.assertEqual(matriculas, {"A1", "B1"})
 
+    def test_professor_a_so_ve_professores_de_sua_escola(self):
+        resp = self._list(ProfessorViewSet, self.professor_a)
+        ids = {item["id"] for item in resp.data}
+        self.assertEqual(ids, {self.professor_obj_a.id})
+
+    def test_admin_ve_professores_de_todas_escolas(self):
+        resp = self._list(ProfessorViewSet, self.admin)
+        ids = {item["id"] for item in resp.data}
+        self.assertEqual(ids, {self.professor_obj_a.id, self.professor_obj_b.id})
+
     # -------- usuário sem escola --------
 
     def test_usuario_sem_escola_nao_ve_turmas(self):
@@ -337,4 +432,8 @@ class EscopoQuerysetTests(TestCase):
 
     def test_usuario_sem_escola_nao_ve_alunos(self):
         resp = self._list(AlunoViewSet, self.usuario_sem_escola)
+        self.assertEqual(len(resp.data), 0)
+
+    def test_usuario_sem_escola_nao_ve_professores(self):
+        resp = self._list(ProfessorViewSet, self.usuario_sem_escola)
         self.assertEqual(len(resp.data), 0)

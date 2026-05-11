@@ -7,7 +7,7 @@ abaixo em runtime sem aviso prévio.
 """
 from django.contrib import admin
 
-from .models import Aluno, Disciplina, Escola, Turma
+from .models import Aluno, Disciplina, Escola, Professor, Turma
 
 
 @admin.register(Escola)
@@ -46,3 +46,19 @@ class AlunoAdmin(admin.ModelAdmin):
     # depende de TurmaAdmin.search_fields e EscolaAdmin.search_fields
     autocomplete_fields = ("turma", "escola")
     ordering = ("nome_completo",)
+
+
+@admin.register(Professor)
+class ProfessorAdmin(admin.ModelAdmin):
+    list_display = ("usuario", "escola", "ativo")
+    list_filter = ("ativo", "escola")
+    # Busca pelos campos do Usuario relacionado — útil pra autocompletes
+    # futuros em Ocorrencia/Presença.
+    search_fields = (
+        "usuario__first_name",
+        "usuario__last_name",
+        "usuario__username",
+    )
+    autocomplete_fields = ("escola",)
+    filter_horizontal = ("disciplinas",)
+    ordering = ("usuario__first_name", "usuario__last_name")

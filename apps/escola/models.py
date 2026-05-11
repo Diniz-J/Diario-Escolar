@@ -1,4 +1,5 @@
 """Modelos da app escola — domínio principal do sistema."""
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -132,3 +133,51 @@ class Aluno(BaseModelEscopado):
             raise ValidationError(
                 {"turma": "A turma deve pertencer à mesma escola do aluno."}
             )
+
+
+class Professor(BaseModelEscopado):
+    """Professor da escola — perfil docente vinculado a um `Usuario`.
+
+    O `usuario` é a fonte de identidade (login, nome, email). Este modelo
+    adiciona os atributos de domínio escolar: a escola onde leciona e as
+    disciplinas que cobre. Um professor pode lecionar mais de uma matéria,
+    por isso `disciplinas` é M2M.
+
+    A invariante `usuario.escola == self.escola` é validada em `clean()`
+    para impedir vincular um docente de outra escola por engano.
+    """
+
+    usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="professor",
+        limit_choices_to={"perfil": "professor"},
+    )
+    disciplinas = models.ManyToManyField(
+        Disciplina,
+        related_name="professores",
+        blank=True,
+    )
+    ativo = models.BooleanField(default=True)
+
+    escola = models.ForeignKey(
+        Escola, on_delete=models.PROTECT, related_name="professores"
+    )
+
+    class Meta:
+        verbose_name = "professor"
+        verbose_name_plural = "professores"
+        ordering = ["usuario__first_name", "usuario__last_name"]
+
+    def __str__(self) -> str:
+        return self.usuario.get_full_name() or self.usuario.username
+
+    def clean(self) -> None:
+        """Garante que `usuario.escola` coincide com a escola do professor."""
+        super().clean()
+        if self.usuario_id and self.escola_id:
+            usuario_escola_id = getattr(self.usuario, "escola_id", None)
+            if usuario_escola_id and usuario_escola_id != self.escola_id:
+                raise ValidationError(
+                    {"usuario": "O usuário deve pertencer à mesma escola do professor."}
+                )
