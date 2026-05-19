@@ -12,6 +12,7 @@ from rest_framework.permissions import BasePermission
 _PERFIL_ADMIN = "admin"
 _PERFIL_DIRETOR = "diretor"
 _PERFIL_PROFESSOR = "professor"
+_PERFIL_INSPETOR = "inspetor"
 
 
 def _tem_bypass(usuario) -> bool:
@@ -61,3 +62,15 @@ class IsAdminOrDiretorOrProfessor(_BasePerfilPermission):
     """Administradores (bypass), diretores ou professores."""
 
     PERFIS_PERMITIDOS = frozenset({_PERFIL_DIRETOR, _PERFIL_PROFESSOR})
+
+
+class IsAdminOrDiretorOrProfessorOrInspetor(_BasePerfilPermission):
+    """Administradores (bypass), diretores, professores ou inspetores.
+
+    Pensado para leituras em domínios onde o inspetor monitora o dia a dia
+    (ex.: lista de chamadas para cruzar com ocorrências), mas não escreve.
+    """
+
+    PERFIS_PERMITIDOS = frozenset(
+        {_PERFIL_DIRETOR, _PERFIL_PROFESSOR, _PERFIL_INSPETOR}
+    )
