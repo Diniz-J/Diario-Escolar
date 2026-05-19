@@ -212,6 +212,52 @@ class RegistroValidationTests(_PresencaSetup):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("escola", resp.data)
 
+    def test_diretor_patch_registro_de_outra_escola_404(self):
+        """Defesa do `EscopoEscolaMixin`: registro de outra escola some do queryset.
+
+        O get_queryset escopa por user.escola_id — registros da Outra escola
+        nem aparecem, então PATCH/PUT/DELETE retornam 404 (e não 403). É a
+        defesa correta: usuário não tem como descobrir que o objeto existe.
+        """
+        registro_outra = RegistroPresenca.objects.create(
+            escola=self.outra_escola, turma=self.outra_turma,
+        )
+        req = self.factory.patch(
+            "/", {"observacao": "tentativa cross-escola"}, format="json",
+        )
+        force_authenticate(req, user=self.usuarios["diretor"])
+        resp = RegistroPresencaViewSet.as_view(
+            {"patch": "partial_update"}
+        )(req, pk=registro_outra.id)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_diretor_delete_registro_de_outra_escola_404(self):
+        registro_outra = RegistroPresenca.objects.create(
+            escola=self.outra_escola, turma=self.outra_turma,
+        )
+        req = self.factory.delete("/")
+        force_authenticate(req, user=self.usuarios["diretor"])
+        resp = RegistroPresencaViewSet.as_view(
+            {"delete": "destroy"}
+        )(req, pk=registro_outra.id)
+        self.assertEqual(resp.status_code, 404)
+        # Confirma que o registro NÃO foi removido.
+        self.assertTrue(
+            RegistroPresenca.objects.filter(pk=registro_outra.id).exists()
+        )
+
+    def test_mensagem_duplicidade_em_portugues(self):
+        """A mensagem customizada do UniqueTogetherValidator chega no payload."""
+        RegistroPresenca.objects.create(
+            escola=self.escola, turma=self.turma, data=date.today()
+        )
+        payload = self._registro_payload(data=date.today().isoformat())
+        resp = self._request_registro("create", "diretor", payload)
+        self.assertEqual(resp.status_code, 400)
+        # A mensagem cai em "non_field_errors" porque o validator é a nível de objeto.
+        mensagens = " ".join(str(v) for v in resp.data.values())
+        self.assertIn("Já existe chamada", mensagens)
+
 
 class RegistroEscopoTests(TestCase):
     """Isolamento entre escolas via `EscopoEscolaMixin`."""

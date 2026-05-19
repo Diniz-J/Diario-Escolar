@@ -1,4 +1,8 @@
 """Mixins de view reutilizáveis."""
+from apps.common.permissions import (
+    IsAdminOrDiretor,
+    IsAdminOrDiretorOrProfessor,
+)
 
 
 class EscopoEscolaMixin:
@@ -31,3 +35,27 @@ class EscopoEscolaMixin:
         if not getattr(user, "escola_id", None):
             return qs.none()
         return qs.filter(escola_id=user.escola_id)
+
+
+class ReadWritePermissionMixin:
+    """Resolve `permission_classes` por ação: leitura mais ampla que escrita.
+
+    Subclasses customizam `READ_PERMISSION` e `WRITE_PERMISSION`. As ações
+    `list` e `retrieve` usam READ; o restante usa WRITE.
+
+    Defaults imitam o padrão do projeto:
+    - Leitura: admin/diretor/professor.
+    - Escrita: admin/diretor.
+
+    Apps com necessidades diferentes (ex.: `presenca` inclui inspetor na
+    leitura; `ocorrencias` libera escrita pra professor) sobrescrevem os
+    atributos de classe.
+    """
+
+    READ_PERMISSION = IsAdminOrDiretorOrProfessor
+    WRITE_PERMISSION = IsAdminOrDiretor
+
+    def get_permissions(self):
+        if self.action in ("list", "retrieve"):
+            return [self.READ_PERMISSION()]
+        return [self.WRITE_PERMISSION()]

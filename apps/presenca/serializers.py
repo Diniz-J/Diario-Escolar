@@ -2,11 +2,18 @@
 from datetime import date
 
 from rest_framework import serializers
+from rest_framework.validators import UniqueTogetherValidator
 
 from .models import ItemPresenca, RegistroPresenca
 
 
 class RegistroPresencaSerializer(serializers.ModelSerializer):
+    # Replicar o default do model: o `UniqueTogetherValidator` declarado
+    # explicitamente abaixo torna todos os campos required, descartando o
+    # default herdado do field. Sem isso, POST sem `data` falha com
+    # "Este campo é obrigatório".
+    data = serializers.DateField(default=date.today)
+
     class Meta:
         model = RegistroPresenca
         fields = [
@@ -20,6 +27,15 @@ class RegistroPresencaSerializer(serializers.ModelSerializer):
             "atualizado_em",
         ]
         read_only_fields = ["id", "criado_em", "atualizado_em"]
+        # Mensagem customizada pra UX em pt-BR (sobrescreve o default
+        # do DRF baseado na UniqueConstraint do model).
+        validators = [
+            UniqueTogetherValidator(
+                queryset=RegistroPresenca.objects.all(),
+                fields=["escola", "turma", "data"],
+                message="Já existe chamada para essa turma nesse dia.",
+            ),
+        ]
 
     def validate_data(self, value: date) -> date:
         """Bloqueia data futura — replica `RegistroPresenca.clean()`."""
@@ -79,9 +95,11 @@ class ItemPresencaSerializer(serializers.ModelSerializer):
     """Serializer de `ItemPresenca`.
 
     `escola` é derivado de `registro.escola` no `save()` do model — por
-    isso fica fora dos campos editáveis. Aluno e registro normalmente são
-    fixados na criação automática (via `perform_create` do registro pai);
-    PATCH é o caso de uso esperado, para mudar `status` e `observacao`.
+    isso fica fora dos campos editáveis. Aluno e registro são `read_only`
+    porque são fixados na criação automática (via `perform_create` do
+    registro pai); PATCH é o caso de uso esperado, para mudar `status`
+    e `observacao`. Coerência aluno/turma/escola é garantida no momento
+    da criação em `RegistroPresencaViewSet.perform_create`.
     """
 
     status_display = serializers.CharField(
@@ -101,28 +119,3 @@ class ItemPresencaSerializer(serializers.ModelSerializer):
             "atualizado_em",
         ]
         read_only_fields = ["id", "registro", "aluno", "criado_em", "atualizado_em"]
-
-    def validate(self, attrs: dict) -> dict:
-        """Em PATCH, garante que aluno/registro continuem coerentes.
-
-        Os campos `aluno` e `registro` são read_only — então em prática
-        este `validate` blinda contra mudanças futuras nessa lista. Hoje
-        ele é defensivo: se o registro pai for atualizado e `aluno.turma`
-        mudar, o item pode ficar inconsistente; o `clean()` do model
-        captura isso ao reapurar.
-        """
-        instance = self.instance
-        if instance is None:
-            return attrs
-
-        aluno = instance.aluno
-        registro = instance.registro
-        if aluno.turma_id != registro.turma_id:
-            raise serializers.ValidationError(
-                {"aluno": "O aluno deve pertencer à turma do registro de presença."}
-            )
-        if aluno.escola_id != registro.escola_id:
-            raise serializers.ValidationError(
-                {"aluno": "O aluno deve pertencer à mesma escola do registro."}
-            )
-        return attrs

@@ -22,23 +22,27 @@ from apps.common.permissions import (
     IsAdminOrDiretorOrProfessor,
     IsAdminOrDiretorOrProfessorOrInspetor,
 )
-from apps.common.views import EscopoEscolaMixin
+from apps.common.views import EscopoEscolaMixin, ReadWritePermissionMixin
 
 from .models import ItemPresenca, RegistroPresenca
 from .serializers import ItemPresencaSerializer, RegistroPresencaSerializer
 
 
-class _PresencaPermissionMixin:
-    """Leitura inclui inspetor; escrita só admin/diretor/professor."""
+class _PresencaReadWriteMixin(ReadWritePermissionMixin):
+    """Leitura inclui inspetor; escrita só admin/diretor/professor.
 
-    def get_permissions(self):
-        if self.action in ("list", "retrieve"):
-            return [IsAdminOrDiretorOrProfessorOrInspetor()]
-        return [IsAdminOrDiretorOrProfessor()]
+    Sobrescreve apenas READ_PERMISSION para incluir inspetor — escrita
+    permanece com o default mais restritivo do mixin base, mas precisa
+    de override explícito porque o default é `IsAdminOrDiretor` (sem
+    professor).
+    """
+
+    READ_PERMISSION = IsAdminOrDiretorOrProfessorOrInspetor
+    WRITE_PERMISSION = IsAdminOrDiretorOrProfessor
 
 
 class RegistroPresencaViewSet(
-    EscopoEscolaMixin, _PresencaPermissionMixin, viewsets.ModelViewSet
+    EscopoEscolaMixin, _PresencaReadWriteMixin, viewsets.ModelViewSet
 ):
     """CRUD de registros de presença. Cria itens automaticamente."""
 
@@ -64,7 +68,17 @@ class RegistroPresencaViewSet(
         """
         with transaction.atomic():
             registro = serializer.save()
-            alunos_ativos = registro.turma.alunos.filter(ativo=True)
+            alunos_ativos = list(registro.turma.alunos.filter(ativo=True))
+            # `bulk_create` não chama `save()` nem `clean()` — a invariante
+            # `aluno.turma == registro.turma` já é garantida pelo filtro
+            # acima, mas explicitar protege contra alterações futuras no
+            # queryset que possam introduzir alunos de outra turma.
+            for aluno in alunos_ativos:
+                if aluno.turma_id != registro.turma_id:
+                    raise ValueError(
+                        f"Aluno {aluno.id} tem turma_id={aluno.turma_id} "
+                        f"divergente de registro.turma_id={registro.turma_id}."
+                    )
             ItemPresenca.objects.bulk_create(
                 [
                     ItemPresenca(
@@ -80,7 +94,7 @@ class RegistroPresencaViewSet(
 
 class ItemPresencaViewSet(
     EscopoEscolaMixin,
-    _PresencaPermissionMixin,
+    _PresencaReadWriteMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     mixins.UpdateModelMixin,
