@@ -1,8 +1,32 @@
 """Serializers da app accounts."""
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from .models import Usuario
+
+
+class UsuarioTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Inclui `escola_id` e `perfil` no payload do JWT.
+
+    Permite que o frontend leia o escopo de tenancy e o perfil de acesso
+    direto do token, sem precisar fazer GET extra em `/usuarios/me/` após
+    o login.
+
+    Trade-off conhecido: se admin trocar `escola` ou `perfil` do usuário,
+    os JWTs já emitidos continuam refletindo o estado anterior. Como
+    `TokenRefreshView` (SimpleJWT 5.x) propaga claims do refresh para o
+    novo access, a janela real de staleness é o `REFRESH_TOKEN_LIFETIME`
+    (7 dias por default), não o `ACCESS_TOKEN_LIFETIME` (1h). Invalidação
+    imediata exige blacklist server-side — fora do escopo do MVP.
+    """
+
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        token["escola_id"] = user.escola_id
+        token["perfil"] = user.perfil
+        return token
 
 
 class UsuarioSerializer(serializers.ModelSerializer):

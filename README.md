@@ -12,7 +12,7 @@ Construído com Django 5.2 + Django REST Framework. Arquitetura single-tenant co
 |---|---|
 | Framework | Django 5.2 + Django REST Framework |
 | Banco de dados | PostgreSQL (driver `psycopg` 3) |
-| Autenticação | SimpleJWT (Bearer token) |
+| Autenticação | SimpleJWT (Bearer token, claims customizados) |
 | Filtros | django-filter |
 | Configuração | python-decouple (`.env`) |
 | CORS | django-cors-headers |
@@ -37,19 +37,32 @@ apps/<dominio>/
 
 ### Modelo de permissões
 
-Três níveis granulares definidos em `apps/common/permissions.py`, combinados por ViewSet:
+Quatro classes granulares definidas em `apps/common/permissions.py`, combinadas por ViewSet:
 
 | Classe | Acesso |
 |---|---|
 | `IsAdmin` | Superuser Django ou `perfil=admin` |
 | `IsAdminOrDiretor` | Admin + `perfil=diretor` |
 | `IsAdminOrDiretorOrProfessor` | Admin + diretor + `perfil=professor` |
+| `IsAdminOrDiretorOrProfessorOrInspetor` | Acima + `perfil=inspetor` (leitura em domínios de monitoramento) |
 
-Leitura (`list`/`retrieve`) usa a permissão mais ampla; escrita (`create`/`update`/`destroy`) usa a mais restrita. Todos os querysets são escopados à `escola` do usuário autenticado.
+`ReadWritePermissionMixin` (em `apps/common/views.py`) padroniza a separação read/write por ação: `list`/`retrieve` usam `READ_PERMISSION`; demais usam `WRITE_PERMISSION`. Apps com regra uniforme (ex.: `ocorrencias`) usam `permission_classes` direto.
+
+Leitura usa a permissão mais ampla; escrita usa a mais restrita. Todos os querysets são escopados à `escola` do usuário autenticado via `EscopoEscolaMixin`. Defesa contra IDOR na escrita: serializers de `ocorrencias` e `presenca` recusam payload com `escola` divergente da do usuário (admin/superuser bypassam).
 
 ### Multi-tenancy
 
 Single-tenant hoje. A base abstrata `BaseModelEscopado` (FK `escola` + timestamps em todos os modelos de domínio) foi desenhada para ativar row-level tenancy sem refatoração quando o sistema escalar para SaaS.
+
+### Autenticação JWT
+
+Endpoints públicos:
+- `POST /api/v1/auth/token/` — troca username/password por par `access` + `refresh`.
+- `POST /api/v1/auth/token/refresh/` — gera novo `access` a partir de um `refresh` válido.
+
+O `access` carrega claims customizados (`escola_id`, `perfil`) para que o frontend leia o escopo sem precisar de requests extras.
+
+**Trade-off conhecido:** se admin trocar escola/perfil do usuário, os JWTs já emitidos continuam refletindo o estado anterior. Como `TokenRefreshView` propaga claims do refresh para o novo access, a janela real de staleness é o `REFRESH_TOKEN_LIFETIME` (7 dias por default), não o `ACCESS_TOKEN_LIFETIME` (1h). Invalidação imediata exige token blacklist server-side — fora do escopo do MVP.
 
 ---
 
@@ -59,11 +72,11 @@ Single-tenant hoje. A base abstrata `BaseModelEscopado` (FK `escola` + timestamp
 Diario-Escolar/
 ├── config/               — configurações Django (settings, urls, wsgi, asgi)
 ├── apps/
-│   ├── common/           — base abstrata, validators, permissões reutilizáveis
-│   ├── accounts/         — Usuario (AbstractUser) + perfis de acesso
+│   ├── common/           — base abstrata, validators, permissões, mixins reutilizáveis
+│   ├── accounts/         — Usuario (AbstractUser) + perfis de acesso + JWT customizado
 │   ├── escola/           — Escola, Turma, Disciplina, Aluno, Professor
-│   ├── ocorrencias/      — (planejado) Ocorrencia
-│   └── presenca/         — (planejado) RegistroPresenca + ItemPresenca
+│   ├── ocorrencias/      — Ocorrencia
+│   └── presenca/         — RegistroPresenca + ItemPresenca
 ├── manage.py
 ├── requirements.txt
 └── .env.example
@@ -77,14 +90,16 @@ Diario-Escolar/
 - `TimeStampedModel` — `criado_em` / `atualizado_em` automáticos
 - `BaseModelEscopado` — base abstrata com FK `escola` para todos os modelos de domínio
 - `EscopoEscolaMixin` — filtra querysets automaticamente pela escola do usuário logado
-- Permissões granulares por perfil (`IsAdmin`, `IsAdminOrDiretor`, `IsAdminOrDiretorOrProfessor`)
+- `ReadWritePermissionMixin` — padroniza permissão por ação (READ vs WRITE)
+- Permissões granulares por perfil (`IsAdmin`, `IsAdminOrDiretor`, `IsAdminOrDiretorOrProfessor`, `IsAdminOrDiretorOrProfessorOrInspetor`)
 - Validator de CNPJ com dígito verificador
 
 ### `apps/accounts`
 - `Usuario` estendendo `AbstractUser`
 - Perfis: `admin`, `diretor`, `professor`, `secretaria`, `inspetor`
-- FK opcional para `Escola` (obrigatória para usuários não-superuser no futuro SaaS)
+- FK opcional para `Escola`
 - CRUD via API (`UsuarioViewSet`), restrito a admin e diretor
+- `UsuarioTokenObtainPairView` + `UsuarioTokenObtainPairSerializer` (JWT com `escola_id` e `perfil` no payload)
 
 ### `apps/escola`
 - `Escola` — tenant root; CNPJ validado; remoção protegida enquanto houver dados vinculados
@@ -95,24 +110,39 @@ Diario-Escolar/
 - CRUD completo via API para todos os modelos acima
 - Filtros declarativos (django-filter) + busca por nome/matrícula
 
+### `apps/ocorrencias`
+- `Ocorrencia` — turma + aluno + professor opcional + descrição + data + status (`aberta`/`em_andamento`/`resolvida`/`arquivada`)
+- Invariantes em `clean()` e serializer: `aluno.escola == escola`, `aluno.turma == turma` (snapshot atual), `professor.escola == escola`, `data <= hoje`
+- Permissão uniforme `admin/diretor/professor` em todas as ações — colegas auxiliam a resolver registros uns dos outros
+- Guard de IDOR no payload `escola`
+
+### `apps/presenca`
+- `RegistroPresenca` — chamada de uma turma num dia, única por `(escola, turma, data)`; `professor` opcional
+- `ItemPresenca` — status individual por aluno (`P`/`A`/`J`/`R`: presente, ausente, justificado, retardatário). `CASCADE` no `registro` (único cascade do projeto)
+- Auto-geração: criar `RegistroPresenca` via API gera `ItemPresenca(status=P)` para cada aluno ativo da turma em transação atômica
+- `ItemPresenca.save()` força `escola_id = registro.escola_id` (coerência defensiva)
+- `ItemPresencaViewSet` não expõe POST/DELETE — ciclo de vida pertence ao registro pai
+- Leitura inclui inspetor; escrita admin/diretor/professor
+
+### Roteamento `/api/v1/` + JWT
+- Todos os endpoints versionados sob `/api/v1/`
+- Autenticação Bearer obrigatória (exceto `/auth/token/` e `/auth/token/refresh/`)
+- Claims customizados no JWT (`escola_id`, `perfil`)
+
 ---
 
 ## O que está planejado
 
 | Etapa | Escopo |
 |---|---|
-| **Etapa 4** | App `ocorrencias` — `Ocorrencia` (turma + aluno + professor opcional + status: `aberta`/`em_andamento`/`resolvida`/`arquivada`) |
-| **Etapa 5** | App `presenca` — `RegistroPresenca` (turma + data, único por dia) + `ItemPresenca` (status: `P`/`A`/`J` por aluno) |
-| **Etapa 6** | URLs versionadas `/api/v1/` + JWT (`/api/v1/auth/token/` obtain e refresh) |
-| **Etapa 7** | README de operação inicial |
-| **Backlog** | `repositories.py` e `services.py` em cada app, Docker + docker-compose, drf-spectacular (Swagger/OpenAPI), linting (black + isort + flake8) |
+| **Backlog** | `repositories.py` e `services.py` em cada app, Docker + docker-compose, drf-spectacular (Swagger/OpenAPI), linting (black + isort + flake8), token blacklist server-side |
 
 ---
 
-## Endpoints planejados
+## Endpoints
 
 ```
-POST   /api/v1/auth/token/          — obter JWT
+POST   /api/v1/auth/token/          — obter JWT (access + refresh)
 POST   /api/v1/auth/token/refresh/  — renovar JWT
 
 GET|POST        /api/v1/usuarios/
@@ -136,11 +166,14 @@ GET|PUT|DELETE  /api/v1/professores/{id}/
 GET|POST        /api/v1/ocorrencias/
 GET|PUT|DELETE  /api/v1/ocorrencias/{id}/
 
-GET|POST        /api/v1/presenca/
-GET|PUT|DELETE  /api/v1/presenca/{id}/
+GET|POST        /api/v1/registros-presenca/
+GET|PUT|DELETE  /api/v1/registros-presenca/{id}/
+
+GET             /api/v1/itens-presenca/
+GET|PATCH|PUT   /api/v1/itens-presenca/{id}/
 ```
 
-> Todos os endpoints exigem autenticação Bearer. O queryset retornado é sempre escopado à escola do usuário autenticado.
+> Todos os endpoints (exceto `/auth/token/` e `/auth/token/refresh/`) exigem `Authorization: Bearer <access_token>`. O queryset retornado é sempre escopado à escola do usuário autenticado.
 
 ---
 
@@ -194,8 +227,10 @@ feature/* → develop → main
 
 **Primary keys como `BigAutoField`** — app interno autenticado; autorização por `escola` já protege contra IDOR; FKs leves importam quando `Usuario` é referenciado em vários lugares. Se um dia UUID for necessário, usar UUIDv7 (time-ordered, RFC 9562).
 
-**`on_delete=PROTECT` em todas as FKs de tenant** — deletar uma `Escola` com registros filhos levanta `ProtectedError`. A remoção exige limpar dependentes ou desativar via `Escola.ativa=False`.
+**`on_delete=PROTECT` em todas as FKs de tenant** — deletar uma `Escola` com registros filhos levanta `ProtectedError`. A remoção exige limpar dependentes ou desativar via `Escola.ativa=False`. Única exceção: `ItemPresenca.registro` usa `CASCADE` porque itens são filhos do ciclo de vida do registro.
 
 **Alunos não logam** — identificados por nome e matrícula. Não têm conta `Usuario`.
 
 **Sem middleware de tenant por enquanto** — o isolamento é feito por queryset escopado (`EscopoEscolaMixin`). Middleware, Postgres RLS e billing são trabalho de um PR focado quando/se o sistema virar SaaS.
+
+**JWT com claims customizados** — `access` carrega `escola_id` e `perfil` para que o frontend não precise de request adicional após o login. Como o `TokenRefreshView` propaga claims do refresh, mudanças de escola/perfil só refletem após o `REFRESH_TOKEN_LIFETIME` (7 dias) expirar — trade-off aceito no MVP.
