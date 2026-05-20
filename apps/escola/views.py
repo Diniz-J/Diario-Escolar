@@ -7,12 +7,8 @@ bypassam o filtro.
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, viewsets
 
-from apps.common.permissions import (
-    IsAdmin,
-    IsAdminOrDiretor,
-    IsAdminOrDiretorOrProfessor,
-)
-from apps.common.views import EscopoEscolaMixin
+from apps.common.permissions import IsAdmin, IsAdminOrDiretor
+from apps.common.views import EscopoEscolaMixin, ReadWritePermissionMixin
 
 from .models import Aluno, Disciplina, Escola, Professor, Turma
 from .serializers import (
@@ -24,23 +20,7 @@ from .serializers import (
 )
 
 
-class _BasePermissionMixin:
-    """Padrão de permissões: leitura mais ampla que escrita.
-
-    Subclasses definem `READ_PERMISSION` e `WRITE_PERMISSION`. As ações
-    `list`/`retrieve` usam READ; o restante usa WRITE.
-    """
-
-    READ_PERMISSION = IsAdminOrDiretorOrProfessor
-    WRITE_PERMISSION = IsAdminOrDiretor
-
-    def get_permissions(self):
-        if self.action in ("list", "retrieve"):
-            return [self.READ_PERMISSION()]
-        return [self.WRITE_PERMISSION()]
-
-
-class EscolaViewSet(_BasePermissionMixin, viewsets.ModelViewSet):
+class EscolaViewSet(ReadWritePermissionMixin, viewsets.ModelViewSet):
     """CRUD de escolas. Apenas admins criam/editam/removem.
 
     Filtro de queryset é feito manualmente porque Escola é o tenant root —
@@ -64,7 +44,7 @@ class EscolaViewSet(_BasePermissionMixin, viewsets.ModelViewSet):
         return qs.filter(id=user.escola_id)
 
 
-class TurmaViewSet(EscopoEscolaMixin, _BasePermissionMixin, viewsets.ModelViewSet):
+class TurmaViewSet(EscopoEscolaMixin, ReadWritePermissionMixin, viewsets.ModelViewSet):
     queryset = Turma.objects.select_related("escola").order_by("-ano_letivo", "nome")
     serializer_class = TurmaSerializer
     filter_backends = [DjangoFilterBackend]
@@ -72,14 +52,14 @@ class TurmaViewSet(EscopoEscolaMixin, _BasePermissionMixin, viewsets.ModelViewSe
     filterset_fields = ["ano_letivo", "turno", "ativa"]
 
 
-class DisciplinaViewSet(EscopoEscolaMixin, _BasePermissionMixin, viewsets.ModelViewSet):
+class DisciplinaViewSet(EscopoEscolaMixin, ReadWritePermissionMixin, viewsets.ModelViewSet):
     queryset = Disciplina.objects.select_related("escola").order_by("nome")
     serializer_class = DisciplinaSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["ativa"]
 
 
-class AlunoViewSet(EscopoEscolaMixin, _BasePermissionMixin, viewsets.ModelViewSet):
+class AlunoViewSet(EscopoEscolaMixin, ReadWritePermissionMixin, viewsets.ModelViewSet):
     """CRUD de alunos. Suporta busca por nome/matrícula e filtro por turma."""
 
     queryset = Aluno.objects.select_related("turma", "escola").order_by("nome_completo")
@@ -89,7 +69,7 @@ class AlunoViewSet(EscopoEscolaMixin, _BasePermissionMixin, viewsets.ModelViewSe
     search_fields = ["nome_completo", "matricula"]
 
 
-class ProfessorViewSet(EscopoEscolaMixin, _BasePermissionMixin, viewsets.ModelViewSet):
+class ProfessorViewSet(EscopoEscolaMixin, ReadWritePermissionMixin, viewsets.ModelViewSet):
     """CRUD de professores. Busca pelo nome do usuário vinculado."""
 
     queryset = (
