@@ -14,9 +14,11 @@ class UsuarioTokenObtainPairSerializer(TokenObtainPairSerializer):
     o login.
 
     Trade-off conhecido: se admin trocar `escola` ou `perfil` do usuário,
-    o JWT antigo continua refletindo o estado anterior até expirar
-    (ACCESS_TOKEN_LIFETIME = 1h). Para invalidação imediata, seria
-    necessário token blacklist server-side — fora do escopo do MVP.
+    os JWTs já emitidos continuam refletindo o estado anterior. Como
+    `TokenRefreshView` (SimpleJWT 5.x) propaga claims do refresh para o
+    novo access, a janela real de staleness é o `REFRESH_TOKEN_LIFETIME`
+    (7 dias por default), não o `ACCESS_TOKEN_LIFETIME` (1h). Invalidação
+    imediata exige blacklist server-side — fora do escopo do MVP.
     """
 
     @classmethod
