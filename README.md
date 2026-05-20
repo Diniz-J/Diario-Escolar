@@ -62,7 +62,7 @@ Endpoints públicos:
 
 O `access` carrega claims customizados (`escola_id`, `perfil`) para que o frontend leia o escopo sem precisar de requests extras.
 
-**Trade-off conhecido:** se admin trocar escola/perfil do usuário, o JWT antigo continua refletindo o estado anterior até expirar (`ACCESS_TOKEN_LIFETIME=1h`). Invalidação imediata exige token blacklist server-side — fora do escopo do MVP.
+**Trade-off conhecido:** se admin trocar escola/perfil do usuário, os JWTs já emitidos continuam refletindo o estado anterior. Como `TokenRefreshView` propaga claims do refresh para o novo access, a janela real de staleness é o `REFRESH_TOKEN_LIFETIME` (7 dias por default), não o `ACCESS_TOKEN_LIFETIME` (1h). Invalidação imediata exige token blacklist server-side — fora do escopo do MVP.
 
 ---
 
@@ -233,4 +233,4 @@ feature/* → develop → main
 
 **Sem middleware de tenant por enquanto** — o isolamento é feito por queryset escopado (`EscopoEscolaMixin`). Middleware, Postgres RLS e billing são trabalho de um PR focado quando/se o sistema virar SaaS.
 
-**JWT com claims customizados** — `access` carrega `escola_id` e `perfil` para que o frontend não precise de request adicional após o login. Trade-off de staleness até expiração é aceito no MVP.
+**JWT com claims customizados** — `access` carrega `escola_id` e `perfil` para que o frontend não precise de request adicional após o login. Como o `TokenRefreshView` propaga claims do refresh, mudanças de escola/perfil só refletem após o `REFRESH_TOKEN_LIFETIME` (7 dias) expirar — trade-off aceito no MVP.

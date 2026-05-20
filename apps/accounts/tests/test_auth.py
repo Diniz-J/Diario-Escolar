@@ -92,10 +92,12 @@ class TokenRefreshTests(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
+        cls.escola = Escola.objects.create(nome="Escola Teste Refresh")
         cls.usuario = Usuario.objects.create_user(
             username="prof1",
             password="senha-super-segura-123",
             perfil=Usuario.Perfil.PROFESSOR,
+            escola=cls.escola,
         )
 
     def setUp(self) -> None:
@@ -124,6 +126,32 @@ class TokenRefreshTests(TestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 401)
+
+    def test_refresh_preserva_custom_claims_no_novo_access(self):
+        """Trava o contrato: claims customizados sobrevivem ao refresh.
+
+        SimpleJWT 5.x copia o payload do refresh pro novo access. Este
+        teste protege o frontend caso alguém habilite `ROTATE_REFRESH_TOKENS`
+        ou troque o serializer do refresh — qualquer regressão silenciosa
+        ali quebra a leitura de `escola_id`/`perfil` no app cliente.
+        """
+        obtain = self.client.post(
+            reverse("api_v1:token_obtain_pair"),
+            {"username": "prof1", "password": "senha-super-segura-123"},
+            format="json",
+        )
+        refresh_token = obtain.data["refresh"]
+
+        resp = self.client.post(
+            reverse("api_v1:token_refresh"),
+            {"refresh": refresh_token},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        novo_access = resp.data["access"]
+        payload = jwt.decode(novo_access, options={"verify_signature": False})
+        self.assertEqual(payload["escola_id"], self.escola.id)
+        self.assertEqual(payload["perfil"], Usuario.Perfil.PROFESSOR)
 
 
 class ApiV1RoutingTests(TestCase):
