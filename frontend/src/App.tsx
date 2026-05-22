@@ -19,7 +19,10 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <AppRoutes />
-        <Toaster richColors position="top-right" />
+        {/* `bottom-right` evita que toasts sobreponham botões de ação
+            no canto superior direito das páginas (ex.: Resolver/Arquivar
+            em ocorrências). */}
+        <Toaster richColors position="bottom-right" />
       </AuthProvider>
     </QueryClientProvider>
   );

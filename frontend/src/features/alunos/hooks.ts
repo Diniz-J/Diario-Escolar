@@ -4,16 +4,29 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { Aluno, AlunoInput } from "@/types/api";
 
-const ALUNOS_KEY = ["alunos"] as const;
+// `params` opcionais entram tanto na queryKey quanto na URL — assim
+// /alunos/?turma=3 e /alunos/ têm caches independentes.
+interface AlunosFilter {
+  turma?: number;
+  ativo?: boolean;
+}
 
-export function useAlunos() {
+const ALUNOS_BASE_KEY = ["alunos"] as const;
+
+export function useAlunos(filter: AlunosFilter = {}) {
   return useQuery({
-    queryKey: ALUNOS_KEY,
+    queryKey: [...ALUNOS_BASE_KEY, filter],
     queryFn: async (): Promise<Aluno[]> => {
-      const { data } = await api.get<Aluno[]>("/alunos/");
+      const { data } = await api.get<Aluno[]>("/alunos/", { params: filter });
       return data;
     },
   });
+}
+
+// Invalida o prefixo inteiro de alunos — refetch de todas as variantes
+// filtradas que estiverem montadas.
+function invalidateAlunos(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ALUNOS_BASE_KEY });
 }
 
 export function useCreateAluno() {
@@ -24,15 +37,10 @@ export function useCreateAluno() {
       return data;
     },
     onSuccess: (aluno) => {
-      qc.invalidateQueries({ queryKey: ALUNOS_KEY });
+      invalidateAlunos(qc);
       toast.success(`Aluno ${aluno.nome_completo} criado.`);
     },
-    onError: () => {
-      // Mensagem específica já é exibida inline no form; toast aqui
-      // serve só pra reforçar visualmente. Componente que chama
-      // `mutateAsync` ainda pode tratar o erro localmente.
-      toast.error("Não foi possível criar o aluno.");
-    },
+    onError: () => toast.error("Não foi possível criar o aluno."),
   });
 }
 
@@ -50,12 +58,10 @@ export function useUpdateAluno() {
       return data;
     },
     onSuccess: (aluno) => {
-      qc.invalidateQueries({ queryKey: ALUNOS_KEY });
+      invalidateAlunos(qc);
       toast.success(`Aluno ${aluno.nome_completo} atualizado.`);
     },
-    onError: () => {
-      toast.error("Não foi possível atualizar o aluno.");
-    },
+    onError: () => toast.error("Não foi possível atualizar o aluno."),
   });
 }
 
@@ -66,13 +72,9 @@ export function useDeleteAluno() {
       await api.delete(`/alunos/${id}/`);
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ALUNOS_KEY });
+      invalidateAlunos(qc);
       toast.success("Aluno excluído.");
     },
-    onError: () => {
-      // Pode falhar com 400/409 (ex.: aluno tem ocorrências ligadas e
-      // backend usa PROTECT). Sinaliza pro usuário sem detalhe técnico.
-      toast.error("Não foi possível excluir o aluno.");
-    },
+    onError: () => toast.error("Não foi possível excluir o aluno."),
   });
 }
