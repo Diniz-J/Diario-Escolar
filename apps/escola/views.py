@@ -60,13 +60,27 @@ class DisciplinaViewSet(EscopoEscolaMixin, ReadWritePermissionMixin, viewsets.Mo
 
 
 class AlunoViewSet(EscopoEscolaMixin, ReadWritePermissionMixin, viewsets.ModelViewSet):
-    """CRUD de alunos. Suporta busca por nome/matrícula e filtro por turma."""
+    """CRUD de alunos. Suporta busca por nome/matrícula e filtro por turma.
+
+    DELETE faz soft delete (marca `ativo=False`). Decisão consciente para
+    preservar histórico de ocorrências e registros de presença vinculados
+    ao aluno — alunos com dados históricos não podem ser apagados de fato
+    pela FK PROTECT, e o registro escolar tem valor de auditoria.
+
+    Frontend que quiser esconder inativos da listagem usa `?ativo=true`
+    via DjangoFilterBackend (filterset_fields já inclui `ativo`).
+    """
 
     queryset = Aluno.objects.select_related("turma", "escola").order_by("nome_completo")
     serializer_class = AlunoSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ["turma", "ativo"]
     search_fields = ["nome_completo", "matricula"]
+
+    def perform_destroy(self, instance: Aluno) -> None:
+        """Soft delete: só marca `ativo=False`, mantém a linha no banco."""
+        instance.ativo = False
+        instance.save(update_fields=["ativo", "atualizado_em"])
 
 
 class ProfessorViewSet(EscopoEscolaMixin, ReadWritePermissionMixin, viewsets.ModelViewSet):
