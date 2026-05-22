@@ -437,3 +437,72 @@ class EscopoQuerysetTests(TestCase):
     def test_usuario_sem_escola_nao_ve_professores(self):
         resp = self._list(ProfessorViewSet, self.usuario_sem_escola)
         self.assertEqual(len(resp.data), 0)
+
+
+class AlunoSoftDeleteTests(TestCase):
+    """Cobre o soft delete em `AlunoViewSet.perform_destroy`.
+
+    DELETE não remove a linha — só seta `ativo=False`. Preserva histórico
+    de ocorrências e presença vinculadas ao aluno.
+    """
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        cls.factory = APIRequestFactory()
+        cls.escola = Escola.objects.create(nome="Escola Teste")
+        cls.turma = Turma.objects.create(
+            escola=cls.escola, nome="1º A",
+            turno=Turma.Turno.MATUTINO, ano_letivo=2026,
+        )
+        cls.aluno = Aluno.objects.create(
+            escola=cls.escola, matricula="A1",
+            nome_completo="Aluno Teste", turma=cls.turma,
+        )
+        cls.diretor = Usuario.objects.create_user(
+            username="dir", password="x",
+            perfil=Usuario.Perfil.DIRETOR, escola=cls.escola,
+        )
+
+    def _destroy(self, user, pk):
+        req = self.factory.delete("/")
+        force_authenticate(req, user=user)
+        return AlunoViewSet.as_view({"delete": "destroy"})(req, pk=pk)
+
+    def test_delete_marca_aluno_como_inativo(self):
+        resp = self._destroy(self.diretor, self.aluno.id)
+        self.assertEqual(resp.status_code, 204)
+        # Linha continua no banco, mas com `ativo=False`.
+        self.assertTrue(Aluno.objects.filter(pk=self.aluno.id).exists())
+        self.aluno.refresh_from_db()
+        self.assertFalse(self.aluno.ativo)
+
+    def test_filter_ativo_true_esconde_aluno_inativo(self):
+        self._destroy(self.diretor, self.aluno.id)
+        req = self.factory.get("/?ativo=true")
+        force_authenticate(req, user=self.diretor)
+        resp = AlunoViewSet.as_view({"get": "list"})(req)
+        self.assertEqual(resp.status_code, 200)
+        ids = [item["id"] for item in resp.data]
+        self.assertNotIn(self.aluno.id, ids)
+
+    def test_lista_sem_filtro_ainda_mostra_inativo(self):
+        """Sem `?ativo=true`, o aluno marcado inativo continua na lista
+        — útil pra telas de histórico/admin que querem ver tudo.
+        """
+        self._destroy(self.diretor, self.aluno.id)
+        req = self.factory.get("/")
+        force_authenticate(req, user=self.diretor)
+        resp = AlunoViewSet.as_view({"get": "list"})(req)
+        self.assertEqual(resp.status_code, 200)
+        ids = [item["id"] for item in resp.data]
+        self.assertIn(self.aluno.id, ids)
+
+    def test_delete_idempotente_em_aluno_ja_inativo(self):
+        """Chamar DELETE de novo num aluno inativo continua retornando 204
+        (não é erro repetir).
+        """
+        self._destroy(self.diretor, self.aluno.id)
+        resp = self._destroy(self.diretor, self.aluno.id)
+        self.assertEqual(resp.status_code, 204)
+        self.aluno.refresh_from_db()
+        self.assertFalse(self.aluno.ativo)
