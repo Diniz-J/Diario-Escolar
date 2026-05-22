@@ -80,3 +80,33 @@ export type OcorrenciaInput = Omit<
   Ocorrencia,
   "id" | "status_display" | "criado_em" | "atualizado_em"
 >;
+
+// P=Presente, A=Ausente, J=Justificado, R=Retardatário
+export type PresencaStatus = "P" | "A" | "J" | "R";
+
+export interface RegistroPresenca {
+  id: number;
+  escola: number;
+  turma: number;
+  data: string;
+  professor: number | null;
+  observacao: string;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export type RegistroPresencaInput = Omit<
+  RegistroPresenca,
+  "id" | "criado_em" | "atualizado_em"
+>;
+
+export interface ItemPresenca {
+  id: number;
+  registro: number;
+  aluno: number;
+  status: PresencaStatus;
+  status_display: string;
+  observacao: string;
+  criado_em: string;
+  atualizado_em: string;
+}
