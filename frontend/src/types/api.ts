@@ -44,3 +44,39 @@ export type AlunoInput = Omit<
   Aluno,
   "id" | "criado_em" | "atualizado_em"
 >;
+
+export interface Professor {
+  id: number;
+  escola: number;
+  usuario: number;
+  nome_completo: string;
+  disciplinas: number[];
+  ativo: boolean;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export type OcorrenciaStatus =
+  | "aberta"
+  | "em_andamento"
+  | "resolvida"
+  | "arquivada";
+
+export interface Ocorrencia {
+  id: number;
+  escola: number;
+  turma: number;
+  aluno: number;
+  professor: number | null;
+  descricao: string;
+  data_ocorrencia: string;
+  status: OcorrenciaStatus;
+  status_display: string;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export type OcorrenciaInput = Omit<
+  Ocorrencia,
+  "id" | "status_display" | "criado_em" | "atualizado_em"
+>;

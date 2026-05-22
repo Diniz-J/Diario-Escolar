@@ -6,6 +6,8 @@ import { AlunosPage } from "@/pages/AlunosPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
+import { OcorrenciaDetalhePage } from "@/pages/OcorrenciaDetalhePage";
+import { OcorrenciasPage } from "@/pages/OcorrenciasPage";
 import { TurmaDetalhePage } from "@/pages/TurmaDetalhePage";
 import { TurmasPage } from "@/pages/TurmasPage";
 
@@ -23,6 +25,11 @@ export function AppRoutes() {
           <Route path="/alunos" element={<AlunosPage />} />
           <Route path="/turmas" element={<TurmasPage />} />
           <Route path="/turmas/:id" element={<TurmaDetalhePage />} />
+          <Route path="/ocorrencias" element={<OcorrenciasPage />} />
+          <Route
+            path="/ocorrencias/:id"
+            element={<OcorrenciaDetalhePage />}
+          />
         </Route>
       </Route>
 
