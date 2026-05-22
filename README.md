@@ -1,12 +1,19 @@
 # Diário Escolar
 
-API REST para registro escolar — controle de ocorrências, presença e gestão de turmas.
+Aplicação web para registro escolar — controle de ocorrências, presença e gestão de turmas.
 
-Construído com Django 5.2 + Django REST Framework. Arquitetura single-tenant com estrutura preparada para evolução SaaS sem retrofit doloroso.
+Monorepo:
+
+- **Backend** — Django 5.2 + Django REST Framework, autenticação JWT, PostgreSQL.
+- **Frontend** — React 19 + Vite + TypeScript, Tailwind 4 + shadcn/ui, TanStack Query.
+
+Arquitetura single-tenant com base abstrata desenhada para escalar a row-level multi-tenancy (SaaS) sem retrofit doloroso.
 
 ---
 
 ## Stack
+
+### Backend
 
 | Camada | Tecnologia |
 |---|---|
@@ -17,27 +24,59 @@ Construído com Django 5.2 + Django REST Framework. Arquitetura single-tenant co
 | Configuração | python-decouple (`.env`) |
 | CORS | django-cors-headers |
 
+### Frontend
+
+| Camada | Tecnologia |
+|---|---|
+| Build / dev server | Vite 8 |
+| Framework | React 19 |
+| Linguagem | TypeScript 6 |
+| Estilo | Tailwind CSS 4 + shadcn/ui (preset radix-nova) |
+| Roteamento | React Router 7 |
+| Estado de servidor | TanStack Query 5 |
+| HTTP | axios (com interceptors de Bearer + refresh) |
+| Notificações | sonner |
+
 ---
 
-## Arquitetura
-
-Cada app de domínio segue o mesmo padrão de camadas (inspirado no layout Go RESTful usado em produção):
+## Estrutura do projeto
 
 ```
-apps/<dominio>/
-├── models.py        — estrutura de dados e invariantes
-├── serializers.py   — validação HTTP e representação JSON
-├── views.py         — handlers HTTP (DRF ViewSets)
-├── urls.py          — registro de rotas
-├── admin.py         — interface administrativa
-├── repositories.py  — (planejado) queries ORM isoladas
-├── services.py      — (planejado) lógica de negócio
-└── migrations/      — histórico versionado do schema
+Diario-Escolar/
+├── config/                  — settings, urls, wsgi, asgi do Django
+├── apps/
+│   ├── common/              — base abstrata, validators, permissões, mixins reutilizáveis
+│   ├── accounts/            — Usuario (AbstractUser) + perfis + JWT customizado
+│   ├── escola/              — Escola, Turma, Disciplina, Aluno, Professor
+│   ├── ocorrencias/         — Ocorrencia
+│   └── presenca/            — RegistroPresenca + ItemPresenca
+├── frontend/                — app React (Vite + TypeScript)
+│   ├── src/
+│   │   ├── components/      — AppLayout, ProtectedRoute, ui/* (shadcn)
+│   │   ├── features/        — domínio por pasta: auth, alunos, turmas, escolas,
+│   │   │                     professores, ocorrencias, presenca
+│   │   ├── lib/             — api (axios + interceptors), queryClient, utils
+│   │   ├── pages/           — Login, Dashboard, Alunos, Turmas (+ detalhe),
+│   │   │                     Ocorrencias (+ detalhe), Presenca (+ detalhe), 404
+│   │   ├── routes.tsx       — mapa central de rotas
+│   │   ├── types/api.ts     — interfaces que casam com os serializers do backend
+│   │   ├── App.tsx          — providers globais (Query, Auth, Toaster)
+│   │   └── main.tsx         — entry point + BrowserRouter
+│   ├── components.json      — config do shadcn/ui CLI
+│   ├── package.json
+│   └── vite.config.ts
+├── manage.py
+├── requirements.txt
+└── .env.example
 ```
+
+---
+
+## Backend
 
 ### Modelo de permissões
 
-Quatro classes granulares definidas em `apps/common/permissions.py`, combinadas por ViewSet:
+Quatro classes granulares em `apps/common/permissions.py`, combinadas por ViewSet:
 
 | Classe | Acesso |
 |---|---|
@@ -46,9 +85,9 @@ Quatro classes granulares definidas em `apps/common/permissions.py`, combinadas 
 | `IsAdminOrDiretorOrProfessor` | Admin + diretor + `perfil=professor` |
 | `IsAdminOrDiretorOrProfessorOrInspetor` | Acima + `perfil=inspetor` (leitura em domínios de monitoramento) |
 
-`ReadWritePermissionMixin` (em `apps/common/views.py`) padroniza a separação read/write por ação: `list`/`retrieve` usam `READ_PERMISSION`; demais usam `WRITE_PERMISSION`. Apps com regra uniforme (ex.: `ocorrencias`) usam `permission_classes` direto.
+`ReadWritePermissionMixin` (em `apps/common/views.py`) padroniza separação read/write por ação: `list`/`retrieve` usam `READ_PERMISSION`; o restante usa `WRITE_PERMISSION`. Apps com regra uniforme (ex.: `ocorrencias`) declaram `permission_classes` direto.
 
-Leitura usa a permissão mais ampla; escrita usa a mais restrita. Todos os querysets são escopados à `escola` do usuário autenticado via `EscopoEscolaMixin`. Defesa contra IDOR na escrita: serializers de `ocorrencias` e `presenca` recusam payload com `escola` divergente da do usuário (admin/superuser bypassam).
+Todos os querysets são escopados à `escola` do usuário autenticado via `EscopoEscolaMixin`. Defesa contra IDOR na escrita: serializers de `ocorrencias` e `presenca` recusam payload com `escola` divergente da do usuário (admin/superuser bypassam).
 
 ### Multi-tenancy
 
@@ -57,117 +96,84 @@ Single-tenant hoje. A base abstrata `BaseModelEscopado` (FK `escola` + timestamp
 ### Autenticação JWT
 
 Endpoints públicos:
+
 - `POST /api/v1/auth/token/` — troca username/password por par `access` + `refresh`.
 - `POST /api/v1/auth/token/refresh/` — gera novo `access` a partir de um `refresh` válido.
 
-O `access` carrega claims customizados (`escola_id`, `perfil`) para que o frontend leia o escopo sem precisar de requests extras.
+O `access` carrega claims customizados para o frontend ler sem requests extras:
 
-**Trade-off conhecido:** se admin trocar escola/perfil do usuário, os JWTs já emitidos continuam refletindo o estado anterior. Como `TokenRefreshView` propaga claims do refresh para o novo access, a janela real de staleness é o `REFRESH_TOKEN_LIFETIME` (7 dias por default), não o `ACCESS_TOKEN_LIFETIME` (1h). Invalidação imediata exige token blacklist server-side — fora do escopo do MVP.
+- `escola_id`, `perfil` — escopo de tenancy e perfil de acesso.
+- `username`, `first_name`, `last_name` — identificação humana (saudação na UI).
 
----
+**Trade-off conhecido:** se admin trocar escola/perfil/nome do usuário, os JWTs já emitidos continuam refletindo o estado anterior. Como `TokenRefreshView` propaga claims do refresh para o novo access, a janela real de staleness é o `REFRESH_TOKEN_LIFETIME` (7 dias por default), não o `ACCESS_TOKEN_LIFETIME` (1h). Invalidação imediata exige token blacklist server-side — fora do escopo do MVP.
 
-## Estrutura do projeto
+### Apps do backend
 
-```
-Diario-Escolar/
-├── config/               — configurações Django (settings, urls, wsgi, asgi)
-├── apps/
-│   ├── common/           — base abstrata, validators, permissões, mixins reutilizáveis
-│   ├── accounts/         — Usuario (AbstractUser) + perfis de acesso + JWT customizado
-│   ├── escola/           — Escola, Turma, Disciplina, Aluno, Professor
-│   ├── ocorrencias/      — Ocorrencia
-│   └── presenca/         — RegistroPresenca + ItemPresenca
-├── manage.py
-├── requirements.txt
-└── .env.example
-```
+Cada app de domínio segue o mesmo layout (`models.py`, `serializers.py`, `views.py`, `urls.py`, `admin.py`, `migrations/`, `tests/`). `repositories.py` e `services.py` estão planejados (no backlog).
 
----
+**`apps/common`**
+- `TimeStampedModel` — `criado_em` / `atualizado_em` automáticos.
+- `BaseModelEscopado` — base abstrata com FK `escola`.
+- `EscopoEscolaMixin` — filtra queryset pela escola do usuário.
+- `ReadWritePermissionMixin` — padroniza permissão por ação.
+- Validator de CNPJ com dígito verificador.
 
-## O que está implementado
+**`apps/accounts`**
+- `Usuario` estendendo `AbstractUser` com `perfil` (admin/diretor/professor/secretaria/inspetor) + FK opcional para `Escola`.
+- CRUD via `/api/v1/usuarios/` (admin e diretor).
+- `UsuarioTokenObtainPairView` + `UsuarioTokenObtainPairSerializer` injetando os claims customizados.
 
-### `apps/common`
-- `TimeStampedModel` — `criado_em` / `atualizado_em` automáticos
-- `BaseModelEscopado` — base abstrata com FK `escola` para todos os modelos de domínio
-- `EscopoEscolaMixin` — filtra querysets automaticamente pela escola do usuário logado
-- `ReadWritePermissionMixin` — padroniza permissão por ação (READ vs WRITE)
-- Permissões granulares por perfil (`IsAdmin`, `IsAdminOrDiretor`, `IsAdminOrDiretorOrProfessor`, `IsAdminOrDiretorOrProfessorOrInspetor`)
-- Validator de CNPJ com dígito verificador
+**`apps/escola`**
+- `Escola` — tenant root; CNPJ validado; remoção protegida.
+- `Turma` — turno + ano letivo; única por `(escola, nome, ano_letivo)`.
+- `Disciplina` — única por `(escola, nome)`.
+- `Aluno` — não loga; identificado por matrícula única por escola; invariante turma/escola validada. **`DELETE` faz soft delete** (marca `ativo=False`) para preservar histórico de ocorrências/presença.
+- `Professor` — OneToOne com `Usuario` (`perfil=professor`); M2M com `Disciplina`; invariante `usuario.escola == professor.escola`.
+- CRUD completo para todos via API, filtros declarativos + busca por nome/matrícula.
 
-### `apps/accounts`
-- `Usuario` estendendo `AbstractUser`
-- Perfis: `admin`, `diretor`, `professor`, `secretaria`, `inspetor`
-- FK opcional para `Escola`
-- CRUD via API (`UsuarioViewSet`), restrito a admin e diretor
-- `UsuarioTokenObtainPairView` + `UsuarioTokenObtainPairSerializer` (JWT com `escola_id` e `perfil` no payload)
+**`apps/ocorrencias`**
+- `Ocorrencia` — turma + aluno + professor opcional + descrição + data + status (`aberta`/`em_andamento`/`resolvida`/`arquivada`).
+- Invariantes em `clean()` e serializer: `aluno.escola == escola`, `aluno.turma == turma` (snapshot atual), `professor.escola == escola`, `data <= hoje`.
+- Permissão uniforme `admin/diretor/professor` — colegas auxiliam a resolver registros uns dos outros.
+- Guard de IDOR no payload `escola`.
 
-### `apps/escola`
-- `Escola` — tenant root; CNPJ validado; remoção protegida enquanto houver dados vinculados
-- `Turma` — turno (`matutino`/`vespertino`/`noturno`/`integral`) + ano letivo; única por `(escola, nome, ano_letivo)`
-- `Disciplina` — matéria oferecida; única por `(escola, nome)`
-- `Aluno` — não loga; identificado por nome + `matricula` única por escola; invariante turma/escola validada
-- `Professor` — OneToOne com `Usuario` (`perfil=professor`); M2M com `Disciplina`; invariante `usuario.escola == professor.escola`
-- CRUD completo via API para todos os modelos acima
-- Filtros declarativos (django-filter) + busca por nome/matrícula
+**`apps/presenca`**
+- `RegistroPresenca` — chamada de uma turma num dia; única por `(escola, turma, data)`; `professor` opcional.
+- `ItemPresenca` — status individual por aluno (`P`/`A`/`J`/`R`: presente, ausente, justificado, retardatário). `CASCADE` no `registro` (único cascade do projeto).
+- Auto-geração: criar `RegistroPresenca` gera `ItemPresenca(status=P)` para cada aluno ativo da turma em transação atômica.
+- `ItemPresenca.save()` força `escola_id = registro.escola_id` (coerência defensiva).
+- `ItemPresencaViewSet` não expõe POST/DELETE — ciclo de vida pertence ao registro pai.
+- Leitura inclui inspetor; escrita admin/diretor/professor.
 
-### `apps/ocorrencias`
-- `Ocorrencia` — turma + aluno + professor opcional + descrição + data + status (`aberta`/`em_andamento`/`resolvida`/`arquivada`)
-- Invariantes em `clean()` e serializer: `aluno.escola == escola`, `aluno.turma == turma` (snapshot atual), `professor.escola == escola`, `data <= hoje`
-- Permissão uniforme `admin/diretor/professor` em todas as ações — colegas auxiliam a resolver registros uns dos outros
-- Guard de IDOR no payload `escola`
-
-### `apps/presenca`
-- `RegistroPresenca` — chamada de uma turma num dia, única por `(escola, turma, data)`; `professor` opcional
-- `ItemPresenca` — status individual por aluno (`P`/`A`/`J`/`R`: presente, ausente, justificado, retardatário). `CASCADE` no `registro` (único cascade do projeto)
-- Auto-geração: criar `RegistroPresenca` via API gera `ItemPresenca(status=P)` para cada aluno ativo da turma em transação atômica
-- `ItemPresenca.save()` força `escola_id = registro.escola_id` (coerência defensiva)
-- `ItemPresencaViewSet` não expõe POST/DELETE — ciclo de vida pertence ao registro pai
-- Leitura inclui inspetor; escrita admin/diretor/professor
-
-### Roteamento `/api/v1/` + JWT
-- Todos os endpoints versionados sob `/api/v1/`
-- Autenticação Bearer obrigatória (exceto `/auth/token/` e `/auth/token/refresh/`)
-- Claims customizados no JWT (`escola_id`, `perfil`)
-
----
-
-## O que está planejado
-
-| Etapa | Escopo |
-|---|---|
-| **Backlog** | `repositories.py` e `services.py` em cada app, Docker + docker-compose, drf-spectacular (Swagger/OpenAPI), linting (black + isort + flake8), token blacklist server-side |
-
----
-
-## Endpoints
+### Endpoints
 
 ```
 POST   /api/v1/auth/token/          — obter JWT (access + refresh)
 POST   /api/v1/auth/token/refresh/  — renovar JWT
 
 GET|POST        /api/v1/usuarios/
-GET|PUT|DELETE  /api/v1/usuarios/{id}/
+GET|PUT|PATCH|DELETE /api/v1/usuarios/{id}/
 
 GET|POST        /api/v1/escolas/
-GET|PUT|DELETE  /api/v1/escolas/{id}/
+GET|PUT|PATCH|DELETE /api/v1/escolas/{id}/
 
 GET|POST        /api/v1/turmas/
-GET|PUT|DELETE  /api/v1/turmas/{id}/
+GET|PUT|PATCH|DELETE /api/v1/turmas/{id}/
 
 GET|POST        /api/v1/disciplinas/
-GET|PUT|DELETE  /api/v1/disciplinas/{id}/
+GET|PUT|PATCH|DELETE /api/v1/disciplinas/{id}/
 
-GET|POST        /api/v1/alunos/
-GET|PUT|DELETE  /api/v1/alunos/{id}/
+GET|POST        /api/v1/alunos/                          (DELETE faz soft delete)
+GET|PUT|PATCH|DELETE /api/v1/alunos/{id}/
 
 GET|POST        /api/v1/professores/
-GET|PUT|DELETE  /api/v1/professores/{id}/
+GET|PUT|PATCH|DELETE /api/v1/professores/{id}/
 
 GET|POST        /api/v1/ocorrencias/
-GET|PUT|DELETE  /api/v1/ocorrencias/{id}/
+GET|PUT|PATCH|DELETE /api/v1/ocorrencias/{id}/
 
 GET|POST        /api/v1/registros-presenca/
-GET|PUT|DELETE  /api/v1/registros-presenca/{id}/
+GET|PUT|PATCH|DELETE /api/v1/registros-presenca/{id}/
 
 GET             /api/v1/itens-presenca/
 GET|PATCH|PUT   /api/v1/itens-presenca/{id}/
@@ -177,9 +183,43 @@ GET|PATCH|PUT   /api/v1/itens-presenca/{id}/
 
 ---
 
+## Frontend
+
+Single-Page Application em React 19 + TypeScript que consome a API REST do backend. Roda em `http://localhost:5173/` em desenvolvimento.
+
+### Páginas
+
+| Rota | Descrição |
+|---|---|
+| `/login` | Autenticação contra `/auth/token/` |
+| `/dashboard` | Página inicial autenticada (atualmente exibe perfil e expiração; métricas planejadas) |
+| `/alunos` | CRUD de alunos com busca por nome/matrícula |
+| `/turmas` | CRUD de turmas com contagem de alunos por turma |
+| `/turmas/:id` | Detalhe da turma com lista de alunos vinculados |
+| `/ocorrencias` | Lista ordenada por status (abertas → arquivadas) + data desc; filtro por status |
+| `/ocorrencias/:id` | Detalhe com botões rápidos de mudança de status; editar/excluir num dropdown discreto |
+| `/presenca` | Lista de chamadas por turma e data |
+| `/presenca/:id` | Tela da chamada com resumo P/A/J/R e edição inline por aluno (optimistic update) |
+
+### Camadas
+
+- **`features/auth`** — `AuthProvider` com login/logout, decode do JWT (jwt-decode), tokenStorage em `localStorage`, `useAuth` hook.
+- **`lib/api.ts`** — instância única do axios. Request interceptor injeta `Authorization: Bearer`. Response interceptor detecta 401 → chama `/auth/token/refresh/` → refaz request original (com promise compartilhada para evitar thundering herd em queries paralelas).
+- **`lib/queryClient.ts`** — TanStack Query configurado com `staleTime` 30s, retry desabilitado pra 401/403.
+- **`features/<dominio>/hooks.ts`** — `useXxx`, `useCreate`, `useUpdate`, `useDelete` com invalidação automática de cache + toasts via sonner.
+- **`components/ui/`** — código copiado pelo shadcn CLI (Button, Input, Card, Dialog, Table, Select, DropdownMenu, Sonner, AlertDialog, etc.). Editável livremente.
+
+### Tema
+
+Dark mode permanente (`<html class="dark">`), com paleta um pouco mais clara que o default do shadcn-nova. Toggle de light/dark não exposto (decisão de UI).
+
+---
+
 ## Setup local
 
-**Requisitos:** Python 3.12+, PostgreSQL 15+
+**Requisitos:** Python 3.12+, PostgreSQL 15+, Node.js 22+ (ou via Docker), npm 11+.
+
+### Backend
 
 ```bash
 # 1. ambiente virtual
@@ -192,7 +232,7 @@ pip install -r requirements.txt
 
 # 3. variáveis de ambiente
 copy .env.example .env
-# editar .env com as credenciais reais do PostgreSQL
+# editar .env (DB_*, SECRET_KEY, CORS_ALLOWED_ORIGINS=http://localhost:5173)
 
 # 4. criar o banco (no PostgreSQL)
 # CREATE DATABASE diario_escolar;
@@ -203,9 +243,29 @@ python manage.py migrate
 # 6. criar superusuário
 python manage.py createsuperuser
 
-# 7. rodar o servidor
+# 7. rodar o servidor (porta 8000)
 python manage.py runserver
 ```
+
+### Frontend
+
+```bash
+cd frontend
+
+# 1. dependências
+npm install
+
+# 2. variáveis de ambiente
+copy .env.example .env
+# default já aponta pra VITE_API_URL=http://localhost:8000/api/v1
+
+# 3. servidor de desenvolvimento (porta 5173)
+npm run dev
+```
+
+Para build de produção: `npm run build` (saída em `frontend/dist/`).
+
+> O backend precisa estar com `CORS_ALLOWED_ORIGINS=http://localhost:5173` no `.env` para o frontend conseguir autenticar.
 
 ---
 
@@ -215,11 +275,11 @@ python manage.py runserver
 feature/* → develop → main
 ```
 
-- Todo desenvolvimento começa em `feature/<nome>`
-- PR obrigatório para `develop`
-- Quando `develop` está estável, PR `develop → main`
-- Antes de abrir PR: `python manage.py check && python manage.py test`
-- Migrations geradas via `makemigrations` e versionadas no mesmo commit da mudança de model
+- Todo desenvolvimento começa em `feature/<nome>` (ou `docs/`, `chore/`, etc.).
+- PR obrigatório para `develop`. Quando `develop` está estável, PR `develop → main`.
+- Antes de abrir PR backend: `python manage.py check && python manage.py test`.
+- Antes de abrir PR frontend: `npm --prefix frontend run build`.
+- Migrations geradas via `makemigrations` e versionadas no mesmo commit da mudança de model.
 
 ---
 
@@ -229,8 +289,32 @@ feature/* → develop → main
 
 **`on_delete=PROTECT` em todas as FKs de tenant** — deletar uma `Escola` com registros filhos levanta `ProtectedError`. A remoção exige limpar dependentes ou desativar via `Escola.ativa=False`. Única exceção: `ItemPresenca.registro` usa `CASCADE` porque itens são filhos do ciclo de vida do registro.
 
+**Soft delete em `Aluno`** — `DELETE /api/v1/alunos/{id}/` marca `ativo=False` em vez de remover a linha. Preserva histórico de ocorrências e presença vinculados ao aluno, que têm valor de auditoria escolar. Frontend pode filtrar inativos com `?ativo=true`.
+
 **Alunos não logam** — identificados por nome e matrícula. Não têm conta `Usuario`.
 
 **Sem middleware de tenant por enquanto** — o isolamento é feito por queryset escopado (`EscopoEscolaMixin`). Middleware, Postgres RLS e billing são trabalho de um PR focado quando/se o sistema virar SaaS.
 
-**JWT com claims customizados** — `access` carrega `escola_id` e `perfil` para que o frontend não precise de request adicional após o login. Como o `TokenRefreshView` propaga claims do refresh, mudanças de escola/perfil só refletem após o `REFRESH_TOKEN_LIFETIME` (7 dias) expirar — trade-off aceito no MVP.
+**JWT com claims customizados** — `access` carrega `escola_id`, `perfil`, `username`, `first_name`, `last_name` para que o frontend não precise de request adicional após o login. Como o `TokenRefreshView` propaga claims do refresh, mudanças nesses dados só refletem após o `REFRESH_TOKEN_LIFETIME` (7 dias) expirar — trade-off aceito no MVP.
+
+**Dark mode permanente no frontend** — sem toggle. O `<html class="dark">` é fixado no `index.html` para evitar flash de tema light no carregamento. Decisão de UI; pode ser revertida adicionando um theme provider quando houver demanda.
+
+**Optimistic update na chamada de presença** — clicar P/A/J/R num aluno muda a UI imediatamente; em caso de erro, o cache é revertido via snapshot. Sensação de fluidez sem esperar round-trip do backend.
+
+---
+
+## Backlog (não implementado)
+
+- Dashboard com métricas reais (ocorrências por status, alunos ativos, presença média).
+- Frontend de Disciplinas e Professores (CRUD; backend já existe).
+- Filtros de período (range de data) em Ocorrências e Presença.
+- `repositories.py` e `services.py` em cada app.
+- drf-spectacular (Swagger/OpenAPI) — destrava client TypeScript gerado automaticamente.
+- Paginação no backend (DRF `PageNumberPagination`).
+- Linting unificado: `ruff` no backend, ESLint integrado ao fluxo.
+- CI no GitHub Actions (rodar `manage.py test` + `npm run build` em cada PR).
+- Anexos em ocorrências (storage + upload + UI).
+- Audit log (`django-simple-history`).
+- Docker + docker-compose.
+- Deploy (backend em Render/Fly, frontend em Vercel/Cloudflare Pages) + Sentry.
+- Token blacklist server-side para invalidação imediata de JWT.
