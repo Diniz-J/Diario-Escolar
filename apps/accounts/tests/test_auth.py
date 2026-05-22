@@ -26,6 +26,8 @@ class TokenObtainTests(TestCase):
             password="senha-super-segura-123",
             perfil=Usuario.Perfil.DIRETOR,
             escola=cls.escola,
+            first_name="Rodrigo",
+            last_name="Diniz",
         )
 
     def setUp(self) -> None:
@@ -73,6 +75,21 @@ class TokenObtainTests(TestCase):
         self.assertEqual(payload["escola_id"], self.escola.id)
         self.assertEqual(payload["perfil"], Usuario.Perfil.DIRETOR)
 
+    def test_payload_contem_dados_de_identidade(self):
+        """Claims de identidade: username + first_name + last_name no JWT."""
+        resp = self.client.post(
+            self.url,
+            {"username": "diretor1", "password": "senha-super-segura-123"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        payload = jwt.decode(
+            resp.data["access"], options={"verify_signature": False}
+        )
+        self.assertEqual(payload["username"], "diretor1")
+        self.assertEqual(payload["first_name"], "Rodrigo")
+        self.assertEqual(payload["last_name"], "Diniz")
+
     def test_payload_admin_sem_escola_tem_escola_id_none(self):
         """Admin sem escola vinculada (bypass legítimo) reflete no claim."""
         admin = Usuario.objects.create_user(
@@ -98,6 +115,8 @@ class TokenRefreshTests(TestCase):
             password="senha-super-segura-123",
             perfil=Usuario.Perfil.PROFESSOR,
             escola=cls.escola,
+            first_name="Maria",
+            last_name="Silva",
         )
 
     def setUp(self) -> None:
@@ -152,6 +171,10 @@ class TokenRefreshTests(TestCase):
         payload = jwt.decode(novo_access, options={"verify_signature": False})
         self.assertEqual(payload["escola_id"], self.escola.id)
         self.assertEqual(payload["perfil"], Usuario.Perfil.PROFESSOR)
+        # Claims de identidade também devem persistir.
+        self.assertEqual(payload["username"], "prof1")
+        self.assertEqual(payload["first_name"], "Maria")
+        self.assertEqual(payload["last_name"], "Silva")
 
 
 class ApiV1RoutingTests(TestCase):

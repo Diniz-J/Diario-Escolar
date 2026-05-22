@@ -7,18 +7,20 @@ from .models import Usuario
 
 
 class UsuarioTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """Inclui `escola_id` e `perfil` no payload do JWT.
+    """Inclui claims customizados no payload do JWT.
 
-    Permite que o frontend leia o escopo de tenancy e o perfil de acesso
-    direto do token, sem precisar fazer GET extra em `/usuarios/me/` após
-    o login.
+    Claims expostos:
+    - `escola_id`, `perfil` — escopo de tenancy e perfil de acesso.
+    - `username`, `first_name`, `last_name` — identificação humana, para
+      o frontend exibir "Olá, Fulano" sem precisar de request extra.
 
-    Trade-off conhecido: se admin trocar `escola` ou `perfil` do usuário,
-    os JWTs já emitidos continuam refletindo o estado anterior. Como
-    `TokenRefreshView` (SimpleJWT 5.x) propaga claims do refresh para o
-    novo access, a janela real de staleness é o `REFRESH_TOKEN_LIFETIME`
-    (7 dias por default), não o `ACCESS_TOKEN_LIFETIME` (1h). Invalidação
-    imediata exige blacklist server-side — fora do escopo do MVP.
+    Trade-off conhecido: se admin trocar `escola`/`perfil`/`nome` do
+    usuário, os JWTs já emitidos continuam refletindo o estado anterior.
+    Como `TokenRefreshView` (SimpleJWT 5.x) propaga claims do refresh
+    para o novo access, a janela real de staleness é o
+    `REFRESH_TOKEN_LIFETIME` (7 dias por default), não o
+    `ACCESS_TOKEN_LIFETIME` (1h). Invalidação imediata exige blacklist
+    server-side — fora do escopo do MVP.
     """
 
     @classmethod
@@ -26,6 +28,9 @@ class UsuarioTokenObtainPairSerializer(TokenObtainPairSerializer):
         token = super().get_token(user)
         token["escola_id"] = user.escola_id
         token["perfil"] = user.perfil
+        token["username"] = user.username
+        token["first_name"] = user.first_name
+        token["last_name"] = user.last_name
         return token
 
 
