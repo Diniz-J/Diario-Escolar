@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Cache de transpilação do Vite — regenerado em dev, nunca commitar.
+.vite
+
 # Variáveis de ambiente — apenas .env.example fica versionado.
 .env
 .env.*
