@@ -1,5 +1,14 @@
 // Tipos que casam com os serializers do backend.
 
+export interface Escola {
+  id: number;
+  nome: string;
+  cnpj: string | null;
+  ativa: boolean;
+  criado_em: string;
+  atualizado_em: string;
+}
+
 export type Turno = "matutino" | "vespertino" | "noturno" | "integral";
 
 export interface Turma {
@@ -14,6 +23,11 @@ export interface Turma {
   atualizado_em: string;
 }
 
+export type TurmaInput = Omit<
+  Turma,
+  "id" | "turno_display" | "criado_em" | "atualizado_em"
+>;
+
 export interface Aluno {
   id: number;
   escola: number;
@@ -26,8 +40,6 @@ export interface Aluno {
   atualizado_em: string;
 }
 
-// Payload de criação/edição. `id`, `criado_em`, `atualizado_em` são
-// devolvidos pelo backend, não enviados.
 export type AlunoInput = Omit<
   Aluno,
   "id" | "criado_em" | "atualizado_em"
