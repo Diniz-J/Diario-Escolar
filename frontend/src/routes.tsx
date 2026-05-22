@@ -8,6 +8,8 @@ import { LoginPage } from "@/pages/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { OcorrenciaDetalhePage } from "@/pages/OcorrenciaDetalhePage";
 import { OcorrenciasPage } from "@/pages/OcorrenciasPage";
+import { PresencaDetalhePage } from "@/pages/PresencaDetalhePage";
+import { PresencaPage } from "@/pages/PresencaPage";
 import { TurmaDetalhePage } from "@/pages/TurmaDetalhePage";
 import { TurmasPage } from "@/pages/TurmasPage";
 
@@ -29,6 +31,11 @@ export function AppRoutes() {
           <Route
             path="/ocorrencias/:id"
             element={<OcorrenciaDetalhePage />}
+          />
+          <Route path="/presenca" element={<PresencaPage />} />
+          <Route
+            path="/presenca/:id"
+            element={<PresencaDetalhePage />}
           />
         </Route>
       </Route>
