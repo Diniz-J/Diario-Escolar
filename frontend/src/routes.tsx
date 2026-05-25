@@ -3,7 +3,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AlunosPage } from "@/pages/AlunosPage";
+import { BoletimPage } from "@/pages/BoletimPage";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { DisciplinasPage } from "@/pages/DisciplinasPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { OcorrenciaDetalhePage } from "@/pages/OcorrenciaDetalhePage";
@@ -29,6 +31,7 @@ export function AppRoutes() {
           <Route path="/alunos" element={<AlunosPage />} />
           <Route path="/turmas" element={<TurmasPage />} />
           <Route path="/turmas/:id" element={<TurmaDetalhePage />} />
+          <Route path="/disciplinas" element={<DisciplinasPage />} />
           <Route path="/ocorrencias" element={<OcorrenciasPage />} />
           <Route
             path="/ocorrencias/:id"
@@ -41,6 +44,7 @@ export function AppRoutes() {
           />
           <Route path="/tarefas" element={<TarefasPage />} />
           <Route path="/tarefas/:id" element={<TarefaDetalhePage />} />
+          <Route path="/boletim/:alunoId" element={<BoletimPage />} />
         </Route>
       </Route>
 

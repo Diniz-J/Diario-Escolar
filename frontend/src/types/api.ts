@@ -9,6 +9,20 @@ export interface Escola {
   atualizado_em: string;
 }
 
+export interface Disciplina {
+  id: number;
+  escola: number;
+  nome: string;
+  ativa: boolean;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export type DisciplinaInput = Omit<
+  Disciplina,
+  "id" | "criado_em" | "atualizado_em"
+>;
+
 export type Turno = "matutino" | "vespertino" | "noturno" | "integral";
 
 export interface Turma {
@@ -151,4 +165,53 @@ export interface EntregaTarefa {
   status: EntregaStatus;
   criado_em: string;
   atualizado_em: string;
+}
+
+// Boletim do aluno — agregação calculada pelo backend (sem persistência).
+// Decimal serializado como string.
+export interface BoletimFrequencia {
+  total: number;
+  presentes: number;
+  ausentes: number;
+  justificados: number;
+  retardatarios: number;
+  presencas_efetivas: number;
+  percentual_presenca: string;
+}
+
+export interface BoletimOcorrencias {
+  total: number;
+  abertas: number;
+  em_andamento: number;
+  resolvidas: number;
+  arquivadas: number;
+}
+
+export interface BoletimTarefaItem {
+  tarefa_id: number;
+  titulo: string;
+  nota: string;
+  nota_maxima: string | null;
+  peso: string;
+  data_lancamento: string;
+}
+
+export interface BoletimDisciplina {
+  disciplina: { id: number; nome: string };
+  tarefas: BoletimTarefaItem[];
+  media_ponderada: string;
+}
+
+export interface Boletim {
+  aluno: {
+    id: number;
+    nome_completo: string;
+    matricula: string;
+    ativo: boolean;
+  };
+  turma: { id: number | null; nome: string | null };
+  periodo: { data_inicio: string | null; data_fim: string | null };
+  frequencia: BoletimFrequencia;
+  notas_por_disciplina: BoletimDisciplina[];
+  ocorrencias: BoletimOcorrencias;
 }
