@@ -44,7 +44,6 @@ export function DisciplinaFormDialog({
 
   const [nome, setNome] = useState("");
   const [escolaId, setEscolaId] = useState("");
-  const [ativa, setAtiva] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
@@ -53,12 +52,10 @@ export function DisciplinaFormDialog({
       if (disciplina) {
         setNome(disciplina.nome);
         setEscolaId(String(disciplina.escola));
-        setAtiva(disciplina.ativa);
       } else {
         setNome("");
         const escolas = escolasQuery.data;
         setEscolaId(escolas?.length === 1 ? String(escolas[0].id) : "");
-        setAtiva(true);
       }
     }
   }, [open, disciplina, escolasQuery.data]);
@@ -74,10 +71,11 @@ export function DisciplinaFormDialog({
       return;
     }
 
+    // `ativa` é omitido: no create o backend usa default=True; no edit
+    // mantém o valor atual porque o endpoint é PATCH parcial.
     const payload: DisciplinaInput = {
       escola: parseInt(escolaId, 10),
       nome,
-      ativa,
     };
 
     try {
@@ -148,19 +146,6 @@ export function DisciplinaFormDialog({
               </Select>
             </div>
           )}
-
-          <div className="flex items-center gap-2">
-            <input
-              id="ativa"
-              type="checkbox"
-              checked={ativa}
-              onChange={(e) => setAtiva(e.target.checked)}
-              className="rounded border-input"
-            />
-            <Label htmlFor="ativa" className="cursor-pointer">
-              Disciplina ativa
-            </Label>
-          </div>
 
           {erro && (
             <Alert variant="destructive">
