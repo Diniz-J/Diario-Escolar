@@ -110,3 +110,45 @@ export interface ItemPresenca {
   criado_em: string;
   atualizado_em: string;
 }
+
+// Status calculado no backend (serializer) — read-only no frontend.
+export type EntregaStatus =
+  | "pendente"
+  | "atrasada"
+  | "entregue_no_prazo"
+  | "entregue_com_atraso";
+
+export interface Tarefa {
+  id: number;
+  escola: number;
+  turma: number;
+  disciplina: number;
+  professor: number | null;
+  titulo: string;
+  descricao: string;
+  data_lancamento: string;
+  prazo: string | null;
+  vale_nota: boolean;
+  nota_maxima: string | null; // DecimalField → string
+  peso: string;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export type TarefaInput = Omit<
+  Tarefa,
+  "id" | "criado_em" | "atualizado_em"
+>;
+
+export interface EntregaTarefa {
+  id: number;
+  tarefa: number;
+  aluno: number;
+  entregue: boolean;
+  data_entrega: string | null;
+  nota: string | null;
+  observacao: string;
+  status: EntregaStatus;
+  criado_em: string;
+  atualizado_em: string;
+}

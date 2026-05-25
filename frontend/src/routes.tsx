@@ -10,6 +10,8 @@ import { OcorrenciaDetalhePage } from "@/pages/OcorrenciaDetalhePage";
 import { OcorrenciasPage } from "@/pages/OcorrenciasPage";
 import { PresencaDetalhePage } from "@/pages/PresencaDetalhePage";
 import { PresencaPage } from "@/pages/PresencaPage";
+import { TarefaDetalhePage } from "@/pages/TarefaDetalhePage";
+import { TarefasPage } from "@/pages/TarefasPage";
 import { TurmaDetalhePage } from "@/pages/TurmaDetalhePage";
 import { TurmasPage } from "@/pages/TurmasPage";
 
@@ -37,6 +39,8 @@ export function AppRoutes() {
             path="/presenca/:id"
             element={<PresencaDetalhePage />}
           />
+          <Route path="/tarefas" element={<TarefasPage />} />
+          <Route path="/tarefas/:id" element={<TarefaDetalhePage />} />
         </Route>
       </Route>
 
