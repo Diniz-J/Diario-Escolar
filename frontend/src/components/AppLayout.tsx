@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard" },
   { to: "/alunos", label: "Alunos" },
   { to: "/turmas", label: "Turmas" },
+  { to: "/disciplinas", label: "Disciplinas" },
   { to: "/ocorrencias", label: "Ocorrências" },
   { to: "/presenca", label: "Presença" },
   { to: "/tarefas", label: "Tarefas" },

@@ -1,20 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { api } from "@/lib/api";
-
-interface Disciplina {
-  id: number;
-  escola: number;
-  nome: string;
-  ativa: boolean;
-  criado_em: string;
-  atualizado_em: string;
-}
+import type { Disciplina, DisciplinaInput } from "@/types/api";
 
 const DISCIPLINAS_KEY = ["disciplinas"] as const;
 
-// Listagem read-only — usada para popular selects (form de tarefa).
-// CRUD ainda não existe no frontend (gerenciado pelo Django admin).
 export function useDisciplinas() {
   return useQuery({
     queryKey: DISCIPLINAS_KEY,
@@ -22,5 +13,58 @@ export function useDisciplinas() {
       const { data } = await api.get<Disciplina[]>("/disciplinas/");
       return data;
     },
+  });
+}
+
+export function useCreateDisciplina() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: DisciplinaInput): Promise<Disciplina> => {
+      const { data } = await api.post<Disciplina>("/disciplinas/", input);
+      return data;
+    },
+    onSuccess: (d) => {
+      qc.invalidateQueries({ queryKey: DISCIPLINAS_KEY });
+      toast.success(`Disciplina ${d.nome} criada.`);
+    },
+    onError: () => toast.error("Não foi possível criar a disciplina."),
+  });
+}
+
+export function useUpdateDisciplina() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      patch,
+    }: {
+      id: number;
+      patch: Partial<DisciplinaInput>;
+    }): Promise<Disciplina> => {
+      const { data } = await api.patch<Disciplina>(
+        `/disciplinas/${id}/`,
+        patch,
+      );
+      return data;
+    },
+    onSuccess: (d) => {
+      qc.invalidateQueries({ queryKey: DISCIPLINAS_KEY });
+      toast.success(`Disciplina ${d.nome} atualizada.`);
+    },
+    onError: () => toast.error("Não foi possível atualizar a disciplina."),
+  });
+}
+
+export function useDeleteDisciplina() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number): Promise<void> => {
+      await api.delete(`/disciplinas/${id}/`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: DISCIPLINAS_KEY });
+      toast.success("Disciplina excluída.");
+    },
+    onError: () => toast.error("Não foi possível excluir a disciplina."),
   });
 }

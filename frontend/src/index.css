@@ -131,3 +131,28 @@
     @apply font-sans;
     }
 }
+
+/* Regras de impressão — usadas principalmente pelo boletim.
+   - Esconde sidebar / botões via `print:hidden` no JSX, complementado aqui.
+   - Força esquema claro: dark mode na tela continua, mas impressão sai
+     com fundo branco e texto preto pra economizar tinta. */
+@media print {
+  html.dark {
+    color-scheme: light;
+  }
+  html,
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  /* Cards/tabelas/etc. herdam variáveis. Reset rápido pra impressão. */
+  [data-slot="card"] {
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    border: 1px solid #e5e5e5 !important;
+  }
+  aside {
+    display: none !important;
+  }
+}

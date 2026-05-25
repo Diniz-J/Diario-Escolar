@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -18,41 +17,27 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { AlunoDeleteDialog } from "@/features/alunos/AlunoDeleteDialog";
-import { AlunoFormDialog } from "@/features/alunos/AlunoFormDialog";
-import { useAlunos } from "@/features/alunos/hooks";
-import { useTurmas } from "@/features/turmas/hooks";
-import type { Aluno } from "@/types/api";
+import { DisciplinaDeleteDialog } from "@/features/disciplinas/DisciplinaDeleteDialog";
+import { DisciplinaFormDialog } from "@/features/disciplinas/DisciplinaFormDialog";
+import { useDisciplinas } from "@/features/disciplinas/hooks";
+import type { Disciplina } from "@/types/api";
 
-export function AlunosPage() {
-  const navigate = useNavigate();
-  const alunosQuery = useAlunos();
-  const turmasQuery = useTurmas();
+export function DisciplinasPage() {
+  const disciplinasQuery = useDisciplinas();
   const [busca, setBusca] = useState("");
   const [formOpen, setFormOpen] = useState(false);
-  // Aluno em edição: null fecha o dialog; objeto abre em modo edição.
-  const [editando, setEditando] = useState<Aluno | null>(null);
-  const [excluindo, setExcluindo] = useState<Aluno | null>(null);
+  const [editando, setEditando] = useState<Disciplina | null>(null);
+  const [excluindo, setExcluindo] = useState<Disciplina | null>(null);
 
-  const turmasPorId = useMemo(() => {
-    const map = new Map<number, string>();
-    turmasQuery.data?.forEach((t) => map.set(t.id, t.nome));
-    return map;
-  }, [turmasQuery.data]);
-
-  const alunosFiltrados = useMemo(() => {
-    if (!alunosQuery.data) return [];
+  const disciplinasFiltradas = useMemo(() => {
+    if (!disciplinasQuery.data) return [];
     const q = busca.trim().toLowerCase();
-    if (!q) return alunosQuery.data;
-    return alunosQuery.data.filter(
-      (a) =>
-        a.nome_completo.toLowerCase().includes(q) ||
-        a.matricula.toLowerCase().includes(q),
+    if (!q) return disciplinasQuery.data;
+    return disciplinasQuery.data.filter((d) =>
+      d.nome.toLowerCase().includes(q),
     );
-  }, [alunosQuery.data, busca]);
+  }, [disciplinasQuery.data, busca]);
 
-  // Unifica criação e edição no mesmo dialog: `editando=null` + `formOpen`
-  // = modo criar; `editando=aluno` = modo editar.
   const dialogAberto = formOpen || editando !== null;
   function fecharDialog(open: boolean) {
     if (!open) {
@@ -64,22 +49,22 @@ export function AlunosPage() {
   return (
     <div className="p-8 space-y-6">
       <header className="flex items-center justify-between">
-        <h1 className="text-3xl font-semibold">Alunos</h1>
-        <Button onClick={() => setFormOpen(true)}>Novo aluno</Button>
+        <h1 className="text-3xl font-semibold">Disciplinas</h1>
+        <Button onClick={() => setFormOpen(true)}>Nova disciplina</Button>
       </header>
 
-      <AlunoFormDialog
+      <DisciplinaFormDialog
         open={dialogAberto}
         onOpenChange={fecharDialog}
-        aluno={editando}
+        disciplina={editando}
       />
-      <AlunoDeleteDialog
-        aluno={excluindo}
+      <DisciplinaDeleteDialog
+        disciplina={excluindo}
         onOpenChange={(open) => !open && setExcluindo(null)}
       />
 
       <Input
-        placeholder="Buscar por nome ou matrícula..."
+        placeholder="Buscar por nome..."
         value={busca}
         onChange={(e) => setBusca(e.target.value)}
         className="max-w-sm"
@@ -89,25 +74,17 @@ export function AlunosPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Matrícula</TableHead>
-              <TableHead>Nome completo</TableHead>
-              <TableHead>Turma</TableHead>
+              <TableHead>Nome</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {alunosQuery.isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
+            {disciplinasQuery.isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i}>
                   <TableCell>
-                    <Skeleton className="h-4 w-24" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-48" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-4 w-40" />
                   </TableCell>
                   <TableCell>
                     <Skeleton className="h-4 w-16" />
@@ -115,44 +92,38 @@ export function AlunosPage() {
                   <TableCell></TableCell>
                 </TableRow>
               ))
-            ) : alunosQuery.isError ? (
+            ) : disciplinasQuery.isError ? (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={3}
                   className="text-center text-destructive py-8"
                 >
-                  Erro ao carregar alunos.
+                  Erro ao carregar disciplinas.
                 </TableCell>
               </TableRow>
-            ) : alunosFiltrados.length === 0 ? (
+            ) : disciplinasFiltradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={3}
                   className="text-center text-muted-foreground py-8"
                 >
                   {busca
-                    ? "Nenhum aluno encontrado para essa busca."
-                    : "Nenhum aluno cadastrado."}
+                    ? "Nenhuma disciplina encontrada."
+                    : "Nenhuma disciplina cadastrada."}
                 </TableCell>
               </TableRow>
             ) : (
-              alunosFiltrados.map((aluno) => (
-                <TableRow key={aluno.id}>
-                  <TableCell className="font-mono text-xs">
-                    {aluno.matricula}
-                  </TableCell>
-                  <TableCell>{aluno.nome_completo}</TableCell>
+              disciplinasFiltradas.map((d) => (
+                <TableRow key={d.id}>
+                  <TableCell>{d.nome}</TableCell>
                   <TableCell>
-                    {turmasPorId.get(aluno.turma) ?? "—"}
-                  </TableCell>
-                  <TableCell>
-                    {aluno.ativo ? (
+                    {d.ativa ? (
                       <span className="text-xs text-green-700 bg-green-50 dark:bg-green-950 dark:text-green-300 px-2 py-0.5 rounded">
-                        Ativo
+                        Ativa
                       </span>
                     ) : (
                       <span className="text-xs text-muted-foreground">
-                        Inativo
+                        Inativa
                       </span>
                     )}
                   </TableCell>
@@ -164,16 +135,11 @@ export function AlunosPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => navigate(`/boletim/${aluno.id}`)}
-                        >
-                          Ver boletim
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setEditando(aluno)}>
+                        <DropdownMenuItem onClick={() => setEditando(d)}>
                           Editar
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={() => setExcluindo(aluno)}
+                          onClick={() => setExcluindo(d)}
                           className="text-destructive focus:text-destructive"
                         >
                           Excluir
