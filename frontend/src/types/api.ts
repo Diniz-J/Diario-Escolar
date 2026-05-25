@@ -167,6 +167,34 @@ export interface EntregaTarefa {
   atualizado_em: string;
 }
 
+// Plano de ensino anual — documento programático por turma+disciplina+ano.
+// Todos os campos textuais começam vazios; preenchimento é livre.
+export interface PlanoEnsino {
+  id: number;
+  escola: number;
+  turma: number;
+  disciplina: number;
+  professor: number | null;
+  ano_letivo: number;
+  ementa: string;
+  conteudo_programatico: string;
+  objetivos_gerais: string;
+  objetivos_especificos: string;
+  habilidades_bncc: string;
+  carga_horaria: number | null;
+  metodologia: string;
+  recursos: string;
+  avaliacao: string;
+  ativo: boolean;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export type PlanoEnsinoInput = Omit<
+  PlanoEnsino,
+  "id" | "criado_em" | "atualizado_em"
+>;
+
 // Boletim do aluno — agregação calculada pelo backend (sem persistência).
 // Decimal serializado como string.
 export interface BoletimFrequencia {
