@@ -15,6 +15,7 @@ import {
 import { RegistroFormDialog } from "@/features/presenca/RegistroFormDialog";
 import { useRegistros } from "@/features/presenca/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
+import { brToIso, isoToBr } from "@/lib/dates";
 
 export function PresencaPage() {
   const navigate = useNavigate();
@@ -41,9 +42,18 @@ export function PresencaPage() {
   const registrosFiltrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
     if (!q) return registrosOrdenados;
+    // O usuário pode digitar a data no formato pt-BR (dd/mm ou
+    // dd/mm/aaaa). Convertendo pra ISO antes da comparação, a busca
+    // funciona sem expor o formato cru "YYYY-MM-DD" no placeholder.
+    const isoQuery = brToIso(q);
     return registrosOrdenados.filter((r) => {
       const nomeTurma = turmasPorId.get(r.turma)?.toLowerCase() ?? "";
-      return nomeTurma.includes(q) || r.data.includes(q);
+      const dataBr = isoToBr(r.data);
+      return (
+        nomeTurma.includes(q) ||
+        dataBr.includes(q) ||
+        (isoQuery !== null && r.data.startsWith(isoQuery))
+      );
     });
   }, [registrosOrdenados, busca, turmasPorId]);
 
@@ -61,7 +71,7 @@ export function PresencaPage() {
       />
 
       <Input
-        placeholder="Buscar por turma ou data (YYYY-MM-DD)..."
+        placeholder="Buscar por turma ou data..."
         value={busca}
         onChange={(e) => setBusca(e.target.value)}
         className="max-w-sm"
