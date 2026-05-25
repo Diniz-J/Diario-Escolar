@@ -30,13 +30,13 @@ export function BoletimPage() {
   const boletim = boletimQuery.data;
 
   return (
-    <div className="p-8 space-y-6 max-w-4xl mx-auto print:p-0 print:max-w-none">
+    <div className="p-4 md:p-8 space-y-6 max-w-4xl mx-auto print:p-0 print:max-w-none">
       <header className="space-y-2 print:hidden">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/alunos">← Voltar</Link>
         </Button>
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-semibold">Boletim</h1>
+          <h1 className="text-2xl md:text-3xl font-semibold">Boletim</h1>
           <Button variant="outline" onClick={() => window.print()}>
             Imprimir
           </Button>

@@ -97,14 +97,14 @@ export function PresencaDetalhePage() {
   }
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6">
       <header className="space-y-2">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/presenca">← Voltar</Link>
         </Button>
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-semibold">Chamada</h1>
+            <h1 className="text-2xl md:text-3xl font-semibold">Chamada</h1>
             {registro && (
               <p className="text-sm text-muted-foreground mt-1">
                 {turma?.nome ?? `Turma #${registro.turma}`} —{" "}

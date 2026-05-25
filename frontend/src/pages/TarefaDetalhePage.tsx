@@ -104,14 +104,14 @@ export function TarefaDetalhePage() {
   }
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6">
       <header className="space-y-2">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/tarefas">← Voltar</Link>
         </Button>
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-semibold">
+            <h1 className="text-2xl md:text-3xl font-semibold">
               {tarefa?.titulo ?? "Tarefa"}
             </h1>
             {tarefa && (
