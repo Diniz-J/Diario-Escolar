@@ -35,6 +35,7 @@ api_v1_patterns = [
     path("", include("apps.ocorrencias.urls")),
     path("", include("apps.presenca.urls")),
     path("", include("apps.tarefas.urls")),
+    path("", include("apps.boletins.urls")),
 ]
 
 urlpatterns = [
