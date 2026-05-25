@@ -75,7 +75,6 @@ export function DisciplinasPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Nome</TableHead>
-              <TableHead>Status</TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
           </TableHeader>
@@ -86,16 +85,13 @@ export function DisciplinasPage() {
                   <TableCell>
                     <Skeleton className="h-4 w-40" />
                   </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-16" />
-                  </TableCell>
                   <TableCell></TableCell>
                 </TableRow>
               ))
             ) : disciplinasQuery.isError ? (
               <TableRow>
                 <TableCell
-                  colSpan={3}
+                  colSpan={2}
                   className="text-center text-destructive py-8"
                 >
                   Erro ao carregar disciplinas.
@@ -104,7 +100,7 @@ export function DisciplinasPage() {
             ) : disciplinasFiltradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={3}
+                  colSpan={2}
                   className="text-center text-muted-foreground py-8"
                 >
                   {busca
@@ -116,17 +112,6 @@ export function DisciplinasPage() {
               disciplinasFiltradas.map((d) => (
                 <TableRow key={d.id}>
                   <TableCell>{d.nome}</TableCell>
-                  <TableCell>
-                    {d.ativa ? (
-                      <span className="text-xs text-green-700 bg-green-50 dark:bg-green-950 dark:text-green-300 px-2 py-0.5 rounded">
-                        Ativa
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        Inativa
-                      </span>
-                    )}
-                  </TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>

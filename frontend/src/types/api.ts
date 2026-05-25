@@ -18,10 +18,12 @@ export interface Disciplina {
   atualizado_em: string;
 }
 
+// `ativa` é opcional porque o backend tem default=True no modelo e o
+// form da UI deixou de expor o campo — disciplina nasce ativa.
 export type DisciplinaInput = Omit<
   Disciplina,
-  "id" | "criado_em" | "atualizado_em"
->;
+  "id" | "ativa" | "criado_em" | "atualizado_em"
+> & { ativa?: boolean };
 
 export type Turno = "matutino" | "vespertino" | "noturno" | "integral";
 
