@@ -19,6 +19,7 @@ const NAV_ITEMS = [
   { to: "/turmas", label: "Turmas" },
   { to: "/ocorrencias", label: "Ocorrências" },
   { to: "/presenca", label: "Presença" },
+  { to: "/tarefas", label: "Tarefas" },
 ];
 
 const PERFIL_LABEL: Record<string, string> = {
