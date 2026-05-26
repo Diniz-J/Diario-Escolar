@@ -1,12 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { api } from "@/lib/api";
-import type { Professor } from "@/types/api";
+import type { Professor, ProfessorInput } from "@/types/api";
 
 const PROFESSORES_KEY = ["professores"] as const;
 
-// Listagem read-only — usada pra popular selects em forms (ex.: quem
-// registrou a ocorrência). CRUD de professor entra em fase futura.
 export function useProfessores() {
   return useQuery({
     queryKey: PROFESSORES_KEY,
@@ -14,5 +13,69 @@ export function useProfessores() {
       const { data } = await api.get<Professor[]>("/professores/");
       return data;
     },
+  });
+}
+
+function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: PROFESSORES_KEY });
+}
+
+export function useCreateProfessor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ProfessorInput): Promise<Professor> => {
+      const { data } = await api.post<Professor>("/professores/", input);
+      return data;
+    },
+    onSuccess: (p) => {
+      invalidateAll(qc);
+      toast.success(`Professor ${p.nome_completo || ""} criado.`.trim());
+    },
+    onError: () => toast.error("Não foi possível criar o professor."),
+  });
+}
+
+export function useUpdateProfessor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      patch,
+    }: {
+      id: number;
+      patch: Partial<ProfessorInput>;
+    }): Promise<Professor> => {
+      const { data } = await api.patch<Professor>(
+        `/professores/${id}/`,
+        patch,
+      );
+      return data;
+    },
+    onSuccess: () => {
+      invalidateAll(qc);
+      toast.success("Professor atualizado.");
+    },
+    onError: () => toast.error("Não foi possível atualizar o professor."),
+  });
+}
+
+// "Excluir" professor é soft delete: marca `ativo=False` em vez de DELETE
+// real, porque Tarefa/Ocorrencia/PlanoEnsino apontam pro Professor com
+// `on_delete=PROTECT` e o histórico precisa ser preservado. Mesmo padrão
+// adotado em Aluno (task #19).
+export function useDeactivateProfessor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number): Promise<Professor> => {
+      const { data } = await api.patch<Professor>(`/professores/${id}/`, {
+        ativo: false,
+      });
+      return data;
+    },
+    onSuccess: () => {
+      invalidateAll(qc);
+      toast.success("Professor desativado.");
+    },
+    onError: () => toast.error("Não foi possível desativar o professor."),
   });
 }

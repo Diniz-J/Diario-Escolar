@@ -1,5 +1,32 @@
 // Tipos que casam com os serializers do backend.
 
+import type { Perfil } from "@/features/auth/types";
+
+export interface Usuario {
+  id: number;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  perfil: Perfil;
+  escola: number | null;
+  is_active: boolean;
+}
+
+// Input pra criação de Usuario. `password` é write-only (não vem de
+// volta nas respostas). `escola` é obrigatório porque o validate cruzado
+// do Professor exige que o usuário pertença à mesma escola.
+export type UsuarioInput = {
+  username: string;
+  email?: string;
+  first_name: string;
+  last_name: string;
+  perfil: Perfil;
+  escola: number;
+  is_active?: boolean;
+  password?: string;
+};
+
 export interface Escola {
   id: number;
   nome: string;
@@ -71,6 +98,15 @@ export interface Professor {
   criado_em: string;
   atualizado_em: string;
 }
+
+// `usuario` é obrigatório pra criar (FK existente); na edição em geral
+// não muda (você edita o Usuario por baixo, não a vinculação).
+export type ProfessorInput = {
+  escola: number;
+  usuario: number;
+  disciplinas: number[];
+  ativo?: boolean;
+};
 
 export type OcorrenciaStatus =
   | "aberta"

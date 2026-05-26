@@ -26,6 +26,7 @@ const NAV_ITEMS = [
   { to: "/alunos", label: "Alunos" },
   { to: "/turmas", label: "Turmas" },
   { to: "/disciplinas", label: "Disciplinas" },
+  { to: "/professores", label: "Professores" },
   { to: "/planos-ensino", label: "Planos de ensino" },
   { to: "/ocorrencias", label: "Ocorrências" },
   { to: "/presenca", label: "Presença" },
