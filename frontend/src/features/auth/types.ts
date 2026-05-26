@@ -27,6 +27,9 @@ export interface JwtPayload {
   // Claims customizados injetados pelo UsuarioTokenObtainPairSerializer.
   escola_id: number | null;
   perfil: Perfil;
+  username: string;
+  first_name: string;
+  last_name: string;
   // Claims padrão do SimpleJWT.
   user_id: number;
   exp: number; // unix timestamp em segundos
