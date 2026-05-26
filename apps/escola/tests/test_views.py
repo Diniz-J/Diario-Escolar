@@ -11,11 +11,19 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from django.test import TestCase
 
 from apps.accounts.models import Usuario
-from apps.escola.models import Aluno, Disciplina, Escola, Professor, Turma
+from apps.escola.models import (
+    Aluno,
+    Disciplina,
+    Escola,
+    Lecionamento,
+    Professor,
+    Turma,
+)
 from apps.escola.views import (
     AlunoViewSet,
     DisciplinaViewSet,
     EscolaViewSet,
+    LecionamentoViewSet,
     ProfessorViewSet,
     TurmaViewSet,
 )
@@ -259,7 +267,6 @@ class ProfessorPermissionAndValidationTests(_PermissionSetup):
         payload = {
             "escola": self.escola.id,
             "usuario": self.usuario_docente.id,
-            "disciplinas": [self.disciplina.id],
         }
         resp = self._request(ProfessorViewSet, "create", "diretor", payload)
         self.assertEqual(resp.status_code, 201)
@@ -290,17 +297,6 @@ class ProfessorPermissionAndValidationTests(_PermissionSetup):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("usuario", resp.data)
 
-    def test_create_falha_quando_disciplina_de_outra_escola(self):
-        outra_escola = Escola.objects.create(nome="Outra")
-        disc_outra = Disciplina.objects.create(escola=outra_escola, nome="Hist")
-        payload = {
-            "escola": self.escola.id,
-            "usuario": self.usuario_docente.id,
-            "disciplinas": [disc_outra.id],
-        }
-        resp = self._request(ProfessorViewSet, "create", "diretor", payload)
-        self.assertEqual(resp.status_code, 400)
-        self.assertIn("disciplinas", resp.data)
 
 
 class EscopoQuerysetTests(TestCase):
@@ -506,3 +502,100 @@ class AlunoSoftDeleteTests(TestCase):
         self.assertEqual(resp.status_code, 204)
         self.aluno.refresh_from_db()
         self.assertFalse(self.aluno.ativo)
+
+
+class LecionamentoTests(TestCase):
+    """Cobre criação, validação cruzada de escola e unique de Lecionamento."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.escola = Escola.objects.create(nome="Modelo")
+        cls.outra_escola = Escola.objects.create(nome="Outra")
+
+        cls.diretor = Usuario.objects.create_user(
+            username="dir",
+            password="x",
+            perfil=Usuario.Perfil.DIRETOR,
+            escola=cls.escola,
+        )
+        usuario_docente = Usuario.objects.create_user(
+            username="docente",
+            password="x",
+            perfil=Usuario.Perfil.PROFESSOR,
+            escola=cls.escola,
+        )
+        cls.professor = Professor.objects.create(
+            escola=cls.escola, usuario=usuario_docente
+        )
+
+        cls.turma = Turma.objects.create(
+            escola=cls.escola,
+            nome="1A",
+            turno=Turma.Turno.MATUTINO,
+            ano_letivo=2026,
+        )
+        cls.disciplina = Disciplina.objects.create(escola=cls.escola, nome="Mat")
+
+        cls.factory = APIRequestFactory()
+
+    def _create(self, payload):
+        req = self.factory.post("/", payload, format="json")
+        force_authenticate(req, user=self.diretor)
+        return LecionamentoViewSet.as_view({"post": "create"})(req)
+
+    def test_create_aceito(self):
+        resp = self._create({
+            "escola": self.escola.id,
+            "professor": self.professor.id,
+            "turma": self.turma.id,
+            "disciplina": self.disciplina.id,
+        })
+        self.assertEqual(resp.status_code, 201, resp.data)
+        # ano_letivo é derivado da turma e devolvido read-only.
+        self.assertEqual(resp.data["ano_letivo"], 2026)
+
+    def test_create_falha_turma_de_outra_escola(self):
+        turma_outra = Turma.objects.create(
+            escola=self.outra_escola,
+            nome="X",
+            turno=Turma.Turno.MATUTINO,
+            ano_letivo=2026,
+        )
+        resp = self._create({
+            "escola": self.escola.id,
+            "professor": self.professor.id,
+            "turma": turma_outra.id,
+            "disciplina": self.disciplina.id,
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("turma", resp.data)
+
+    def test_create_falha_disciplina_de_outra_escola(self):
+        disc_outra = Disciplina.objects.create(
+            escola=self.outra_escola, nome="Hist"
+        )
+        resp = self._create({
+            "escola": self.escola.id,
+            "professor": self.professor.id,
+            "turma": self.turma.id,
+            "disciplina": disc_outra.id,
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("disciplina", resp.data)
+
+    def test_unique_trio_professor_turma_disciplina(self):
+        Lecionamento.objects.create(
+            escola=self.escola,
+            professor=self.professor,
+            turma=self.turma,
+            disciplina=self.disciplina,
+        )
+        resp = self._create({
+            "escola": self.escola.id,
+            "professor": self.professor.id,
+            "turma": self.turma.id,
+            "disciplina": self.disciplina.id,
+        })
+        # Unique constraint deve barrar; o backend pode devolver 400 com
+        # mensagem genérica do DRF — checamos só o status code.
+        self.assertEqual(resp.status_code, 400)

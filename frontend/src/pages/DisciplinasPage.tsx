@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { usePermissoes } from "@/features/auth/usePermissoes";
 import { DisciplinaDeleteDialog } from "@/features/disciplinas/DisciplinaDeleteDialog";
 import { DisciplinaFormDialog } from "@/features/disciplinas/DisciplinaFormDialog";
 import { useDisciplinas } from "@/features/disciplinas/hooks";
@@ -24,6 +25,7 @@ import type { Disciplina } from "@/types/api";
 
 export function DisciplinasPage() {
   const disciplinasQuery = useDisciplinas();
+  const { podeModificarCadastros } = usePermissoes();
   const [busca, setBusca] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editando, setEditando] = useState<Disciplina | null>(null);
@@ -50,7 +52,9 @@ export function DisciplinasPage() {
     <div className="p-4 md:p-8 space-y-6">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl md:text-3xl font-semibold">Disciplinas</h1>
-        <Button onClick={() => setFormOpen(true)}>Nova disciplina</Button>
+        {podeModificarCadastros && (
+          <Button onClick={() => setFormOpen(true)}>Nova disciplina</Button>
+        )}
       </header>
 
       <DisciplinaFormDialog
@@ -113,24 +117,26 @@ export function DisciplinasPage() {
                 <TableRow key={d.id}>
                   <TableCell>{d.nome}</TableCell>
                   <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm">
-                          ⋯
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setEditando(d)}>
-                          Editar
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => setExcluindo(d)}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          Excluir
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {podeModificarCadastros && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon-sm">
+                            ⋯
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setEditando(d)}>
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setExcluindo(d)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            Excluir
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </TableCell>
                 </TableRow>
               ))

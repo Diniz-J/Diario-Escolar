@@ -10,11 +10,12 @@ from rest_framework import filters, viewsets
 from apps.common.permissions import IsAdmin, IsAdminOrDiretor
 from apps.common.views import EscopoEscolaMixin, ReadWritePermissionMixin
 
-from .models import Aluno, Disciplina, Escola, Professor, Turma
+from .models import Aluno, Disciplina, Escola, Lecionamento, Professor, Turma
 from .serializers import (
     AlunoSerializer,
     DisciplinaSerializer,
     EscolaSerializer,
+    LecionamentoSerializer,
     ProfessorSerializer,
     TurmaSerializer,
 )
@@ -88,14 +89,26 @@ class ProfessorViewSet(EscopoEscolaMixin, ReadWritePermissionMixin, viewsets.Mod
 
     queryset = (
         Professor.objects.select_related("usuario", "escola")
-        .prefetch_related("disciplinas")
         .order_by("usuario__first_name", "usuario__last_name")
     )
     serializer_class = ProfessorSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ["ativo", "disciplinas"]
+    filterset_fields = ["ativo"]
     search_fields = [
         "usuario__first_name",
         "usuario__last_name",
         "usuario__username",
     ]
+
+
+class LecionamentoViewSet(EscopoEscolaMixin, ReadWritePermissionMixin, viewsets.ModelViewSet):
+    """CRUD de lecionamentos (vínculo professor × turma × disciplina)."""
+
+    queryset = (
+        Lecionamento.objects.select_related(
+            "professor__usuario", "turma", "disciplina", "escola"
+        ).order_by("turma__ano_letivo", "turma__nome", "disciplina__nome")
+    )
+    serializer_class = LecionamentoSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["professor", "turma", "disciplina", "ativo"]
