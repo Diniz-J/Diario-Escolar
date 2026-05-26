@@ -31,12 +31,12 @@ export function TurmaDetalhePage() {
   const alunosQuery = useAlunos({ turma: turmaId });
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6">
       <header className="space-y-2">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/turmas">← Voltar</Link>
         </Button>
-        <h1 className="text-3xl font-semibold">
+        <h1 className="text-2xl md:text-3xl font-semibold">
           {turmaQuery.isLoading ? (
             <Skeleton className="h-8 w-64" />
           ) : turmaQuery.data ? (

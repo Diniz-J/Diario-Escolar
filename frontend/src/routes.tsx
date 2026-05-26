@@ -3,13 +3,19 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AlunosPage } from "@/pages/AlunosPage";
+import { BoletimPage } from "@/pages/BoletimPage";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { DisciplinasPage } from "@/pages/DisciplinasPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { OcorrenciaDetalhePage } from "@/pages/OcorrenciaDetalhePage";
 import { OcorrenciasPage } from "@/pages/OcorrenciasPage";
+import { PlanoEnsinoDetalhePage } from "@/pages/PlanoEnsinoDetalhePage";
+import { PlanosEnsinoPage } from "@/pages/PlanosEnsinoPage";
 import { PresencaDetalhePage } from "@/pages/PresencaDetalhePage";
 import { PresencaPage } from "@/pages/PresencaPage";
+import { TarefaDetalhePage } from "@/pages/TarefaDetalhePage";
+import { TarefasPage } from "@/pages/TarefasPage";
 import { TurmaDetalhePage } from "@/pages/TurmaDetalhePage";
 import { TurmasPage } from "@/pages/TurmasPage";
 
@@ -27,6 +33,12 @@ export function AppRoutes() {
           <Route path="/alunos" element={<AlunosPage />} />
           <Route path="/turmas" element={<TurmasPage />} />
           <Route path="/turmas/:id" element={<TurmaDetalhePage />} />
+          <Route path="/disciplinas" element={<DisciplinasPage />} />
+          <Route path="/planos-ensino" element={<PlanosEnsinoPage />} />
+          <Route
+            path="/planos-ensino/:id"
+            element={<PlanoEnsinoDetalhePage />}
+          />
           <Route path="/ocorrencias" element={<OcorrenciasPage />} />
           <Route
             path="/ocorrencias/:id"
@@ -37,6 +49,9 @@ export function AppRoutes() {
             path="/presenca/:id"
             element={<PresencaDetalhePage />}
           />
+          <Route path="/tarefas" element={<TarefasPage />} />
+          <Route path="/tarefas/:id" element={<TarefaDetalhePage />} />
+          <Route path="/boletim/:alunoId" element={<BoletimPage />} />
         </Route>
       </Route>
 

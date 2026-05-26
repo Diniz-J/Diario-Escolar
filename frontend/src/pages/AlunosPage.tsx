@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +25,7 @@ import { useTurmas } from "@/features/turmas/hooks";
 import type { Aluno } from "@/types/api";
 
 export function AlunosPage() {
+  const navigate = useNavigate();
   const alunosQuery = useAlunos();
   const turmasQuery = useTurmas();
   const [busca, setBusca] = useState("");
@@ -60,9 +62,9 @@ export function AlunosPage() {
   }
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6">
       <header className="flex items-center justify-between">
-        <h1 className="text-3xl font-semibold">Alunos</h1>
+        <h1 className="text-2xl md:text-3xl font-semibold">Alunos</h1>
         <Button onClick={() => setFormOpen(true)}>Novo aluno</Button>
       </header>
 
@@ -135,7 +137,11 @@ export function AlunosPage() {
               </TableRow>
             ) : (
               alunosFiltrados.map((aluno) => (
-                <TableRow key={aluno.id}>
+                <TableRow
+                  key={aluno.id}
+                  className="cursor-pointer"
+                  onClick={() => navigate(`/boletim/${aluno.id}`)}
+                >
                   <TableCell className="font-mono text-xs">
                     {aluno.matricula}
                   </TableCell>
@@ -154,7 +160,11 @@ export function AlunosPage() {
                       </span>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell
+                    // Bloqueia bubble-up: clicar no menu de ações não
+                    // dispara a navegação pro boletim.
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon-sm">

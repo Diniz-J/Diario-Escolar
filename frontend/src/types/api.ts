@@ -9,6 +9,22 @@ export interface Escola {
   atualizado_em: string;
 }
 
+export interface Disciplina {
+  id: number;
+  escola: number;
+  nome: string;
+  ativa: boolean;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+// `ativa` é opcional porque o backend tem default=True no modelo e o
+// form da UI deixou de expor o campo — disciplina nasce ativa.
+export type DisciplinaInput = Omit<
+  Disciplina,
+  "id" | "ativa" | "criado_em" | "atualizado_em"
+> & { ativa?: boolean };
+
 export type Turno = "matutino" | "vespertino" | "noturno" | "integral";
 
 export interface Turma {
@@ -109,4 +125,123 @@ export interface ItemPresenca {
   observacao: string;
   criado_em: string;
   atualizado_em: string;
+}
+
+// Status calculado no backend (serializer) — read-only no frontend.
+export type EntregaStatus =
+  | "pendente"
+  | "atrasada"
+  | "entregue_no_prazo"
+  | "entregue_com_atraso";
+
+export interface Tarefa {
+  id: number;
+  escola: number;
+  turma: number;
+  disciplina: number;
+  professor: number | null;
+  titulo: string;
+  descricao: string;
+  data_lancamento: string;
+  prazo: string | null;
+  vale_nota: boolean;
+  nota_maxima: string | null; // DecimalField → string
+  peso: string;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export type TarefaInput = Omit<
+  Tarefa,
+  "id" | "criado_em" | "atualizado_em"
+>;
+
+export interface EntregaTarefa {
+  id: number;
+  tarefa: number;
+  aluno: number;
+  entregue: boolean;
+  data_entrega: string | null;
+  nota: string | null;
+  observacao: string;
+  status: EntregaStatus;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+// Plano de ensino anual — documento programático por turma+disciplina+ano.
+// Todos os campos textuais começam vazios; preenchimento é livre.
+export interface PlanoEnsino {
+  id: number;
+  escola: number;
+  turma: number;
+  disciplina: number;
+  professor: number | null;
+  ano_letivo: number;
+  ementa: string;
+  conteudo_programatico: string;
+  objetivos_gerais: string;
+  objetivos_especificos: string;
+  habilidades_bncc: string;
+  carga_horaria: number | null;
+  metodologia: string;
+  recursos: string;
+  avaliacao: string;
+  ativo: boolean;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export type PlanoEnsinoInput = Omit<
+  PlanoEnsino,
+  "id" | "criado_em" | "atualizado_em"
+>;
+
+// Boletim do aluno — agregação calculada pelo backend (sem persistência).
+// Decimal serializado como string.
+export interface BoletimFrequencia {
+  total: number;
+  presentes: number;
+  ausentes: number;
+  justificados: number;
+  retardatarios: number;
+  presencas_efetivas: number;
+  percentual_presenca: string;
+}
+
+export interface BoletimOcorrencias {
+  total: number;
+  abertas: number;
+  em_andamento: number;
+  resolvidas: number;
+  arquivadas: number;
+}
+
+export interface BoletimTarefaItem {
+  tarefa_id: number;
+  titulo: string;
+  nota: string;
+  nota_maxima: string | null;
+  peso: string;
+  data_lancamento: string;
+}
+
+export interface BoletimDisciplina {
+  disciplina: { id: number; nome: string };
+  tarefas: BoletimTarefaItem[];
+  media_ponderada: string;
+}
+
+export interface Boletim {
+  aluno: {
+    id: number;
+    nome_completo: string;
+    matricula: string;
+    ativo: boolean;
+  };
+  turma: { id: number | null; nome: string | null };
+  periodo: { data_inicio: string | null; data_fim: string | null };
+  frequencia: BoletimFrequencia;
+  notas_por_disciplina: BoletimDisciplina[];
+  ocorrencias: BoletimOcorrencias;
 }

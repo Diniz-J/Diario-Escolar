@@ -83,9 +83,9 @@ export function OcorrenciasPage() {
   }, [ocorrenciasOrdenadas, busca, alunosPorId, turmasPorId]);
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6">
       <header className="flex items-center justify-between">
-        <h1 className="text-3xl font-semibold">Ocorrências</h1>
+        <h1 className="text-2xl md:text-3xl font-semibold">Ocorrências</h1>
         <Button onClick={() => setFormOpen(true)}>Nova ocorrência</Button>
       </header>
 
