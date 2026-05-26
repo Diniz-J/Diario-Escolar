@@ -19,6 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAlunos } from "@/features/alunos/hooks";
+import { usePermissoes } from "@/features/auth/usePermissoes";
 import { TurmaDeleteDialog } from "@/features/turmas/TurmaDeleteDialog";
 import { TurmaFormDialog } from "@/features/turmas/TurmaFormDialog";
 import { useTurmas } from "@/features/turmas/hooks";
@@ -31,6 +32,7 @@ export function TurmasPage() {
   // N+1 requests (um por turma). TanStack Query compartilha esse cache
   // com a página de Alunos, então não há custo adicional na navegação.
   const alunosQuery = useAlunos();
+  const { podeModificarCadastros } = usePermissoes();
   const [busca, setBusca] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editando, setEditando] = useState<Turma | null>(null);
@@ -67,7 +69,9 @@ export function TurmasPage() {
     <div className="p-4 md:p-8 space-y-6">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl md:text-3xl font-semibold">Turmas</h1>
-        <Button onClick={() => setFormOpen(true)}>Nova turma</Button>
+        {podeModificarCadastros && (
+          <Button onClick={() => setFormOpen(true)}>Nova turma</Button>
+        )}
       </header>
 
       <TurmaFormDialog
@@ -166,24 +170,26 @@ export function TurmasPage() {
                     // dispara a navegação da linha inteira.
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm">
-                          ⋯
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setEditando(turma)}>
-                          Editar
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => setExcluindo(turma)}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          Excluir
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {podeModificarCadastros && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon-sm">
+                            ⋯
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setEditando(turma)}>
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setExcluindo(turma)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            Excluir
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </TableCell>
                 </TableRow>
               ))

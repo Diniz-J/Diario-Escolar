@@ -22,6 +22,7 @@ import { useLecionamentos } from "@/features/lecionamentos/hooks";
 import { ProfessorDeactivateDialog } from "@/features/professores/ProfessorDeactivateDialog";
 import { ProfessorFormDialog } from "@/features/professores/ProfessorFormDialog";
 import { useProfessores } from "@/features/professores/hooks";
+import { usePermissoes } from "@/features/auth/usePermissoes";
 import { useTurmas } from "@/features/turmas/hooks";
 import type { Professor } from "@/types/api";
 
@@ -36,6 +37,7 @@ export function ProfessoresPage() {
   // Carregamos todos os lecionamentos de uma vez e agrupamos por
   // professor no front — evita N+1 (um GET por professor).
   const lecionamentosQuery = useLecionamentos();
+  const { podeModificarCadastros } = usePermissoes();
 
   const [busca, setBusca] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -90,7 +92,9 @@ export function ProfessoresPage() {
     <div className="p-4 md:p-8 space-y-6">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl md:text-3xl font-semibold">Professores</h1>
-        <Button onClick={() => setFormOpen(true)}>Novo professor</Button>
+        {podeModificarCadastros && (
+          <Button onClick={() => setFormOpen(true)}>Novo professor</Button>
+        )}
       </header>
 
       <ProfessorFormDialog
@@ -219,25 +223,27 @@ export function ProfessoresPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm">
-                          ⋯
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setEditando(p)}>
-                          Editar
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => setDesativando(p)}
-                          className="text-destructive focus:text-destructive"
-                          disabled={!p.ativo}
-                        >
-                          Excluir
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {podeModificarCadastros && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon-sm">
+                            ⋯
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setEditando(p)}>
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setDesativando(p)}
+                            className="text-destructive focus:text-destructive"
+                            disabled={!p.ativo}
+                          >
+                            Excluir
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </TableCell>
                 </TableRow>
                 );
