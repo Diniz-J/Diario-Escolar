@@ -18,17 +18,24 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useDisciplinas } from "@/features/disciplinas/hooks";
+import { useLecionamentos } from "@/features/lecionamentos/hooks";
 import { ProfessorDeactivateDialog } from "@/features/professores/ProfessorDeactivateDialog";
 import { ProfessorFormDialog } from "@/features/professores/ProfessorFormDialog";
 import { useProfessores } from "@/features/professores/hooks";
+import { useTurmas } from "@/features/turmas/hooks";
 import type { Professor } from "@/types/api";
 
-// CRUD de Professores. Lista com nome, disciplinas (badges), status,
-// e dropdown ⋯ para editar/desativar. Criação envolve dois POSTs em
-// sequência (Usuario + Professor) — ver ProfessorFormDialog.
+// CRUD de Professores. Lista com nome, turmas e disciplinas (badges
+// agregadas a partir dos lecionamentos), status e dropdown ⋯.
+// Criação envolve POSTs em sequência (Usuario + Professor + Lecionamentos)
+// — ver ProfessorFormDialog.
 export function ProfessoresPage() {
   const professoresQuery = useProfessores();
   const disciplinasQuery = useDisciplinas();
+  const turmasQuery = useTurmas();
+  // Carregamos todos os lecionamentos de uma vez e agrupamos por
+  // professor no front — evita N+1 (um GET por professor).
+  const lecionamentosQuery = useLecionamentos();
 
   const [busca, setBusca] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -40,6 +47,27 @@ export function ProfessoresPage() {
     disciplinasQuery.data?.forEach((d) => m.set(d.id, d.nome));
     return m;
   }, [disciplinasQuery.data]);
+
+  const turmasPorId = useMemo(() => {
+    const m = new Map<number, string>();
+    turmasQuery.data?.forEach((t) => m.set(t.id, t.nome));
+    return m;
+  }, [turmasQuery.data]);
+
+  // Mapa professor → { turmas distintas, disciplinas distintas } —
+  // usado pra montar os badges na listagem sem chamadas extras.
+  const agregadoPorProfessor = useMemo(() => {
+    const m = new Map<number, { turmas: number[]; disciplinas: number[] }>();
+    for (const l of lecionamentosQuery.data ?? []) {
+      const atual = m.get(l.professor) ?? { turmas: [], disciplinas: [] };
+      if (!atual.turmas.includes(l.turma)) atual.turmas.push(l.turma);
+      if (!atual.disciplinas.includes(l.disciplina)) {
+        atual.disciplinas.push(l.disciplina);
+      }
+      m.set(l.professor, atual);
+    }
+    return m;
+  }, [lecionamentosQuery.data]);
 
   const professoresFiltrados = useMemo(() => {
     if (!professoresQuery.data) return [];
@@ -87,9 +115,10 @@ export function ProfessoresPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Nome</TableHead>
-              {/* Disciplinas só a partir de md — em mobile cabe só nome
-                  e ações. Edita pra ver/mudar disciplinas. */}
-              <TableHead className="hidden md:table-cell">Disciplinas</TableHead>
+              {/* Turmas e Disciplinas só a partir de md — em mobile cabe
+                  só nome e ações. Detalhe via "Editar" mostra tudo. */}
+              <TableHead className="hidden md:table-cell">Turmas</TableHead>
+              <TableHead className="hidden lg:table-cell">Disciplinas</TableHead>
               <TableHead className="hidden sm:table-cell">Status</TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
@@ -102,6 +131,9 @@ export function ProfessoresPage() {
                     <Skeleton className="h-4 w-40" />
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
+                    <Skeleton className="h-4 w-32" />
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell">
                     <Skeleton className="h-4 w-48" />
                   </TableCell>
                   <TableCell className="hidden sm:table-cell">
@@ -113,7 +145,7 @@ export function ProfessoresPage() {
             ) : professoresQuery.isError ? (
               <TableRow>
                 <TableCell
-                  colSpan={4}
+                  colSpan={5}
                   className="text-center text-destructive py-8"
                 >
                   Erro ao carregar professores.
@@ -122,7 +154,7 @@ export function ProfessoresPage() {
             ) : professoresFiltrados.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={4}
+                  colSpan={5}
                   className="text-center text-muted-foreground py-8"
                 >
                   {busca
@@ -131,17 +163,40 @@ export function ProfessoresPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              professoresFiltrados.map((p) => (
+              professoresFiltrados.map((p) => {
+                const agg = agregadoPorProfessor.get(p.id) ?? {
+                  turmas: [],
+                  disciplinas: [],
+                };
+                return (
                 <TableRow key={p.id}>
                   <TableCell>{p.nome_completo || "—"}</TableCell>
                   <TableCell className="hidden md:table-cell">
-                    {p.disciplinas.length === 0 ? (
+                    {agg.turmas.length === 0 ? (
                       <span className="text-xs text-muted-foreground">
                         Nenhuma
                       </span>
                     ) : (
                       <div className="flex flex-wrap gap-1">
-                        {p.disciplinas.map((dId) => (
+                        {agg.turmas.map((tId) => (
+                          <span
+                            key={tId}
+                            className="text-xs bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 px-2 py-0.5 rounded"
+                          >
+                            {turmasPorId.get(tId) ?? `#${tId}`}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell">
+                    {agg.disciplinas.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">
+                        Nenhuma
+                      </span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {agg.disciplinas.map((dId) => (
                           <span
                             key={dId}
                             className="text-xs bg-muted px-2 py-0.5 rounded"
@@ -185,7 +240,8 @@ export function ProfessoresPage() {
                     </DropdownMenu>
                   </TableCell>
                 </TableRow>
-              ))
+                );
+              })
             )}
           </TableBody>
         </Table>

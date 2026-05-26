@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -15,28 +15,43 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDisciplinas } from "@/features/disciplinas/hooks";
 import { useEscolas } from "@/features/escolas/hooks";
+import {
+  useCreateLecionamento,
+  useDeleteLecionamento,
+  useLecionamentos,
+} from "@/features/lecionamentos/hooks";
+import { useTurmas } from "@/features/turmas/hooks";
 import { useCreateUsuario, useUpdateUsuario } from "@/features/usuarios/hooks";
 import type { Professor } from "@/types/api";
 
-import { useCreateProfessor, useProfessores, useUpdateProfessor } from "./hooks";
+import { useCreateProfessor } from "./hooks";
 
 interface ProfessorFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  // `null` ou ausente = modo criar. Objeto = modo editar.
   professor?: Professor | null;
 }
 
-// Form unificado para criar/editar professor.
+// Linha temporária de lecionamento no formulário. `id` só existe quando
+// já foi persistido (vindo do servidor) — usado pra diff de exclusão.
+interface LinhaLecionamento {
+  id: number | null;
+  turmaId: string;
+  disciplinaId: string;
+}
+
+// Form unificado para criar/editar professor. Fluxo:
 //
-// Criar: dispara 2 requests em sequência:
-//   1. POST /usuarios/ com perfil=professor + escola + password
-//   2. POST /professores/ com usuario.id + disciplinas
-// Se o segundo falhar, o Usuario órfão fica no banco (cleanup manual via
-// Admin é aceitável pra um app escolar interno).
+// Criar:
+//   1. POST /usuarios/ (perfil=professor, escola, password)
+//   2. POST /professores/ (escola, usuario)
+//   3. Para cada linha de lecionamento: POST /lecionamentos/
 //
-// Editar: também 2 requests, agora PATCH em /usuarios/:id (nome/email) e
-// PATCH em /professores/:id (disciplinas, ativo).
+// Editar:
+//   1. PATCH /usuarios/:id (first_name, last_name)
+//   2. Diff dos lecionamentos:
+//      - Novos (sem id) → POST
+//      - Removidos (estavam no servidor mas saíram da UI) → DELETE
 export function ProfessorFormDialog({
   open,
   onOpenChange,
@@ -44,12 +59,16 @@ export function ProfessorFormDialog({
 }: ProfessorFormDialogProps) {
   const escolasQuery = useEscolas();
   const disciplinasQuery = useDisciplinas();
-  const professoresQuery = useProfessores();
+  const turmasQuery = useTurmas();
+  const lecionamentosQuery = useLecionamentos(
+    professor ? { professor: professor.id } : {},
+  );
 
   const createUsuario = useCreateUsuario();
   const createProfessor = useCreateProfessor();
   const updateUsuario = useUpdateUsuario();
-  const updateProfessor = useUpdateProfessor();
+  const createLec = useCreateLecionamento();
+  const deleteLec = useDeleteLecionamento();
 
   const editando = professor != null;
 
@@ -59,17 +78,15 @@ export function ProfessorFormDialog({
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [disciplinasSel, setDisciplinasSel] = useState<number[]>([]);
+  const [linhas, setLinhas] = useState<LinhaLecionamento[]>([]);
   const [erro, setErro] = useState<string | null>(null);
 
-  // Hidrata o form quando abre. No modo edição precisamos pegar o Usuario
-  // vinculado — mas o Professor não traz username/email, só `nome_completo`.
-  // Estratégia: pegamos first_name/last_name via split do nome_completo. O
-  // username/email só aparecem editáveis se o backend devolver — por
-  // simplicidade nessa fase, edição mexe só em disciplinas e ativo.
+  // Hidrata o form quando abre. Em edição, espera os lecionamentos do
+  // professor carregarem pra popular as linhas.
   useEffect(() => {
     if (!open) return;
     setErro(null);
+
     if (professor) {
       const partes = professor.nome_completo.split(" ");
       setFirstName(partes[0] ?? "");
@@ -78,7 +95,15 @@ export function ProfessorFormDialog({
       setUsername("");
       setEmail("");
       setPassword("");
-      setDisciplinasSel([...professor.disciplinas]);
+      // Linhas vêm dos lecionamentos persistidos. Se ainda carregando,
+      // outro `useEffect` abaixo sincroniza quando chegar.
+      setLinhas(
+        (lecionamentosQuery.data ?? []).map((l) => ({
+          id: l.id,
+          turmaId: String(l.turma),
+          disciplinaId: String(l.disciplina),
+        })),
+      );
     } else {
       const escolas = escolasQuery.data;
       setEscolaId(escolas?.length === 1 ? String(escolas[0].id) : "");
@@ -87,21 +112,67 @@ export function ProfessorFormDialog({
       setUsername("");
       setEmail("");
       setPassword("");
-      setDisciplinasSel([]);
+      setLinhas([]);
     }
+  // `lecionamentosQuery.data` propositalmente fora — sync em outro effect.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, professor, escolasQuery.data]);
+
+  // Quando os lecionamentos terminam de carregar no modo edição, popula
+  // as linhas iniciais.
+  useEffect(() => {
+    if (!open || !professor || !lecionamentosQuery.data) return;
+    setLinhas(
+      lecionamentosQuery.data.map((l) => ({
+        id: l.id,
+        turmaId: String(l.turma),
+        disciplinaId: String(l.disciplina),
+      })),
+    );
+  }, [open, professor, lecionamentosQuery.data]);
 
   const enviando =
     createUsuario.isPending ||
     createProfessor.isPending ||
     updateUsuario.isPending ||
-    updateProfessor.isPending;
+    createLec.isPending ||
+    deleteLec.isPending;
 
   const mostrarEscolaSelect = (escolasQuery.data?.length ?? 0) > 1;
 
-  function toggleDisciplina(id: number) {
-    setDisciplinasSel((prev) =>
-      prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id],
+  // Filtra turmas da escola selecionada — admin com múltiplas escolas
+  // não vê turmas de outra ao montar lecionamento.
+  const turmasDaEscola = useMemo(() => {
+    if (!escolaId) return [];
+    const escolaIdNum = parseInt(escolaId, 10);
+    return (turmasQuery.data ?? []).filter(
+      (t) => t.escola === escolaIdNum && t.ativa,
+    );
+  }, [escolaId, turmasQuery.data]);
+
+  const disciplinasDaEscola = useMemo(() => {
+    if (!escolaId) return [];
+    const escolaIdNum = parseInt(escolaId, 10);
+    return (disciplinasQuery.data ?? []).filter(
+      (d) => d.escola === escolaIdNum && d.ativa,
+    );
+  }, [escolaId, disciplinasQuery.data]);
+
+  function adicionarLinha() {
+    setLinhas((prev) => [...prev, { id: null, turmaId: "", disciplinaId: "" }]);
+  }
+
+  function removerLinha(index: number) {
+    setLinhas((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function atualizarLinha(
+    index: number,
+    campo: "turmaId" | "disciplinaId",
+    valor: string,
+  ) {
+    setLinhas((prev) =>
+      prev.map((l, i) => (i === index ? { ...l, [campo]: valor } : l)),
     );
   }
 
@@ -127,17 +198,46 @@ export function ProfessorFormDialog({
     }
     const escolaIdNum = parseInt(escolaId, 10);
 
+    // Valida linhas: turma + disciplina obrigatórios em toda linha.
+    const linhasValidas = linhas.filter(
+      (l) => l.turmaId && l.disciplinaId,
+    );
+
     try {
+      let professorIdAlvo: number;
+
       if (editando && professor) {
-        // Edição: PATCH no Usuario vinculado (nome) e no Professor (disciplinas/ativo).
         await updateUsuario.mutateAsync({
           id: professor.usuario,
           patch: { first_name: firstName, last_name: lastName },
         });
-        await updateProfessor.mutateAsync({
-          id: professor.id,
-          patch: { disciplinas: disciplinasSel },
-        });
+        professorIdAlvo = professor.id;
+
+        // Diff de lecionamentos:
+        const idsAtuais = new Set(
+          linhasValidas
+            .map((l) => l.id)
+            .filter((id): id is number => id !== null),
+        );
+        const persistidos = lecionamentosQuery.data ?? [];
+
+        // Removidos: estavam no servidor, sumiram da UI.
+        for (const l of persistidos) {
+          if (!idsAtuais.has(l.id)) {
+            await deleteLec.mutateAsync(l.id);
+          }
+        }
+        // Novos: linhas sem id.
+        for (const linha of linhasValidas) {
+          if (linha.id == null) {
+            await createLec.mutateAsync({
+              escola: escolaIdNum,
+              professor: professorIdAlvo,
+              turma: parseInt(linha.turmaId, 10),
+              disciplina: parseInt(linha.disciplinaId, 10),
+            });
+          }
+        }
       } else {
         if (!username.trim() || !password) {
           setErro("Preencha usuário e senha.");
@@ -152,12 +252,23 @@ export function ProfessorFormDialog({
           escola: escolaIdNum,
           password,
         });
-        await createProfessor.mutateAsync({
+        const novoProfessor = await createProfessor.mutateAsync({
           escola: escolaIdNum,
           usuario: usuario.id,
-          disciplinas: disciplinasSel,
         });
+        professorIdAlvo = novoProfessor.id;
+
+        // Cria lecionamentos depois do Professor existir.
+        for (const linha of linhasValidas) {
+          await createLec.mutateAsync({
+            escola: escolaIdNum,
+            professor: professorIdAlvo,
+            turma: parseInt(linha.turmaId, 10),
+            disciplina: parseInt(linha.disciplinaId, 10),
+          });
+        }
       }
+
       onOpenChange(false);
     } catch (err) {
       setErro(extrairPrimeiraMsgErro(err));
@@ -165,31 +276,17 @@ export function ProfessorFormDialog({
     }
   }
 
-  // Username conflict hint: avisa antes de submeter quando o usuário já
-  // existe entre os professores listados. Só uma camada de UX — o backend
-  // tem o unique constraint real.
-  const usernameJaUsado =
-    !editando &&
-    username.trim().length > 0 &&
-    (professoresQuery.data ?? []).some(
-      (p) =>
-        // Não temos username no Professor; só impedimos colisão óbvia
-        // pelo `nome_completo` exato com mesmo primeiro/último nome.
-        p.nome_completo.toLowerCase() ===
-        `${firstName} ${lastName}`.trim().toLowerCase(),
-    );
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
             {editando ? "Editar professor" : "Novo professor"}
           </DialogTitle>
           <DialogDescription>
             {editando
-              ? "Atualize nome e disciplinas que leciona."
-              : "Cadastre o professor e seu acesso ao sistema."}
+              ? "Atualize nome e o que leciona."
+              : "Cadastre o professor, seu acesso ao sistema e o que leciona."}
           </DialogDescription>
         </DialogHeader>
 
@@ -226,12 +323,6 @@ export function ProfessorFormDialog({
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="ex.: maria.silva"
                 />
-                {usernameJaUsado && (
-                  <p className="text-xs text-amber-700 dark:text-amber-400">
-                    Já existe um professor com esse nome — confirme se é o mesmo
-                    antes de prosseguir.
-                  </p>
-                )}
               </div>
 
               <div className="space-y-2">
@@ -280,31 +371,68 @@ export function ProfessorFormDialog({
           )}
 
           <div className="space-y-2">
-            <Label>Disciplinas que leciona</Label>
-            <div className="max-h-48 overflow-y-auto rounded-md border border-input p-3 space-y-1.5">
-              {disciplinasQuery.isLoading ? (
-                <p className="text-sm text-muted-foreground">Carregando...</p>
-              ) : (disciplinasQuery.data?.length ?? 0) === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Nenhuma disciplina cadastrada.
-                </p>
-              ) : (
-                disciplinasQuery.data?.map((d) => (
-                  <label
-                    key={d.id}
-                    className="flex items-center gap-2 text-sm cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={disciplinasSel.includes(d.id)}
-                      onChange={() => toggleDisciplina(d.id)}
-                      className="rounded border-input"
-                    />
-                    {d.nome}
-                  </label>
-                ))
-              )}
+            <div className="flex items-center justify-between">
+              <Label>Lecionamentos (turma + disciplina)</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={adicionarLinha}
+                disabled={!escolaId}
+              >
+                + Adicionar
+              </Button>
             </div>
+            {linhas.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Nenhum lecionamento. Clique em "+ Adicionar" para vincular o
+                professor a uma turma + disciplina.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {linhas.map((linha, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <select
+                      value={linha.turmaId}
+                      onChange={(e) =>
+                        atualizarLinha(idx, "turmaId", e.target.value)
+                      }
+                      className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Turma</option>
+                      {turmasDaEscola.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.nome} — {t.ano_letivo}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={linha.disciplinaId}
+                      onChange={(e) =>
+                        atualizarLinha(idx, "disciplinaId", e.target.value)
+                      }
+                      className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Disciplina</option>
+                      {disciplinasDaEscola.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.nome}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => removerLinha(idx)}
+                      aria-label="Remover lecionamento"
+                    >
+                      ×
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {erro && (

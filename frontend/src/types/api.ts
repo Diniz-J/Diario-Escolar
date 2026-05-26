@@ -93,7 +93,6 @@ export interface Professor {
   escola: number;
   usuario: number;
   nome_completo: string;
-  disciplinas: number[];
   ativo: boolean;
   criado_em: string;
   atualizado_em: string;
@@ -104,7 +103,28 @@ export interface Professor {
 export type ProfessorInput = {
   escola: number;
   usuario: number;
-  disciplinas: number[];
+  ativo?: boolean;
+};
+
+// Lecionamento liga professor × turma × disciplina. `ano_letivo` vem
+// derivado da turma (read-only no serializer).
+export interface Lecionamento {
+  id: number;
+  escola: number;
+  professor: number;
+  turma: number;
+  disciplina: number;
+  ano_letivo: number;
+  ativo: boolean;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export type LecionamentoInput = {
+  escola: number;
+  professor: number;
+  turma: number;
+  disciplina: number;
   ativo?: boolean;
 };
 

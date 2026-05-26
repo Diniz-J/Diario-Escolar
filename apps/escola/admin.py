@@ -7,7 +7,7 @@ abaixo em runtime sem aviso prévio.
 """
 from django.contrib import admin
 
-from .models import Aluno, Disciplina, Escola, Professor, Turma
+from .models import Aluno, Disciplina, Escola, Lecionamento, Professor, Turma
 
 
 @admin.register(Escola)
@@ -60,5 +60,18 @@ class ProfessorAdmin(admin.ModelAdmin):
         "usuario__username",
     )
     autocomplete_fields = ("escola",)
-    filter_horizontal = ("disciplinas",)
     ordering = ("usuario__first_name", "usuario__last_name")
+
+
+@admin.register(Lecionamento)
+class LecionamentoAdmin(admin.ModelAdmin):
+    list_display = ("professor", "turma", "disciplina", "ativo")
+    list_filter = ("ativo", "escola", "turma__ano_letivo")
+    search_fields = (
+        "professor__usuario__first_name",
+        "professor__usuario__last_name",
+        "turma__nome",
+        "disciplina__nome",
+    )
+    autocomplete_fields = ("escola",)
+    ordering = ("turma__ano_letivo", "turma__nome", "disciplina__nome")
