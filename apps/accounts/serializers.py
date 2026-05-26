@@ -48,6 +48,10 @@ class UsuarioSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "perfil",
+            # `escola` precisa ser editável para que o frontend consiga
+            # criar Professor (ProfessorSerializer exige que o usuário
+            # vinculado pertença à mesma escola do professor).
+            "escola",
             "is_active",
             "password",
         ]
