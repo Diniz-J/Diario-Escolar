@@ -118,9 +118,12 @@ export function OcorrenciasPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Data</TableHead>
-              <TableHead>Turma</TableHead>
+              {/* Turma e Status só a partir de md (≥768px) — em mobile
+                  cabem só Data + Aluno; o resto fica no detalhe da
+                  ocorrência (linha clicável). */}
+              <TableHead className="hidden md:table-cell">Turma</TableHead>
               <TableHead>Aluno</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead className="hidden md:table-cell">Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -173,13 +176,13 @@ export function OcorrenciasPage() {
                       "pt-BR",
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
                     {turmasPorId.get(o.turma) ?? `#${o.turma}`}
                   </TableCell>
                   <TableCell>
                     {alunosPorId.get(o.aluno) ?? `#${o.aluno}`}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
                     <span
                       className={`text-xs px-2 py-0.5 rounded ${STATUS_BADGE[o.status]}`}
                     >

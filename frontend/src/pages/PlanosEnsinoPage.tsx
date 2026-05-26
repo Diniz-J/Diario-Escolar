@@ -86,7 +86,10 @@ export function PlanosEnsinoPage() {
             <TableRow>
               <TableHead>Turma</TableHead>
               <TableHead>Disciplina</TableHead>
-              <TableHead>Ano</TableHead>
+              {/* Ano só em sm+ — em mobile o ano já costuma estar no
+                  nome da turma. Status sempre visível porque sinaliza
+                  o que o usuário ainda precisa preencher. */}
+              <TableHead className="hidden sm:table-cell">Ano</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
@@ -134,7 +137,9 @@ export function PlanosEnsinoPage() {
                   <TableCell>
                     {disciplinasPorId.get(p.disciplina) ?? `#${p.disciplina}`}
                   </TableCell>
-                  <TableCell className="tabular-nums">{p.ano_letivo}</TableCell>
+                  <TableCell className="hidden sm:table-cell tabular-nums">
+                    {p.ano_letivo}
+                  </TableCell>
                   <TableCell>
                     {!p.ativo ? (
                       <span className="text-xs text-muted-foreground">
