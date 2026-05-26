@@ -139,9 +139,9 @@ class Professor(BaseModelEscopado):
     """Professor da escola — perfil docente vinculado a um `Usuario`.
 
     O `usuario` é a fonte de identidade (login, nome, email). Este modelo
-    adiciona os atributos de domínio escolar: a escola onde leciona e as
-    disciplinas que cobre. Um professor pode lecionar mais de uma matéria,
-    por isso `disciplinas` é M2M.
+    apenas materializa o professor dentro da escola — a granularidade de
+    "qual disciplina ele leciona em qual turma" mora no modelo
+    `Lecionamento`, que cruza professor × turma × disciplina.
 
     A invariante `usuario.escola == self.escola` é validada em `clean()`
     para impedir vincular um docente de outra escola por engano.
@@ -152,11 +152,6 @@ class Professor(BaseModelEscopado):
         on_delete=models.PROTECT,
         related_name="professor",
         limit_choices_to={"perfil": "professor"},
-    )
-    disciplinas = models.ManyToManyField(
-        Disciplina,
-        related_name="professores",
-        blank=True,
     )
     ativo = models.BooleanField(default=True)
 
@@ -181,3 +176,68 @@ class Professor(BaseModelEscopado):
                 raise ValidationError(
                     {"usuario": "O usuário deve pertencer à mesma escola do professor."}
                 )
+
+
+class Lecionamento(BaseModelEscopado):
+    """Vínculo granular: este professor leciona esta disciplina nesta turma.
+
+    Modelo intermediário que substitui a M2M antiga `Professor.disciplinas`.
+    Permite responder perguntas mais ricas do diário escolar:
+
+    - Quais turmas o professor X dá aula este ano?
+    - Quem leciona Matemática no 1º Ano A?
+    - Qual professor lança ocorrências/tarefas para o 2º Ano B?
+
+    `ano_letivo` é derivado da turma (não duplicamos no modelo). `escola`
+    vem de `BaseModelEscopado` e precisa coincidir com a escola de
+    professor, turma e disciplina — validado em `clean()`.
+
+    Unique por (professor, turma, disciplina): o mesmo trio não se repete.
+    Se o professor passar a lecionar a mesma matéria no ano seguinte para
+    a mesma turma (raro, pois turmas têm ano_letivo no nome), basta criar
+    um lecionamento novo para a turma do novo ano.
+    """
+
+    professor = models.ForeignKey(
+        Professor, on_delete=models.CASCADE, related_name="lecionamentos"
+    )
+    turma = models.ForeignKey(
+        Turma, on_delete=models.PROTECT, related_name="lecionamentos"
+    )
+    disciplina = models.ForeignKey(
+        Disciplina, on_delete=models.PROTECT, related_name="lecionamentos"
+    )
+    ativo = models.BooleanField(default=True)
+
+    escola = models.ForeignKey(
+        Escola, on_delete=models.PROTECT, related_name="lecionamentos"
+    )
+
+    class Meta:
+        verbose_name = "lecionamento"
+        verbose_name_plural = "lecionamentos"
+        ordering = ["turma__ano_letivo", "turma__nome", "disciplina__nome"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["professor", "turma", "disciplina"],
+                name="lecionamento_unique_prof_turma_disc",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.professor} — {self.disciplina} ({self.turma})"
+
+    def clean(self) -> None:
+        """Garante alinhamento de escola entre professor, turma e disciplina."""
+        super().clean()
+        ids = {
+            "professor": getattr(self.professor, "escola_id", None),
+            "turma": getattr(self.turma, "escola_id", None),
+            "disciplina": getattr(self.disciplina, "escola_id", None),
+        }
+        if self.escola_id:
+            for campo, valor in ids.items():
+                if valor and valor != self.escola_id:
+                    raise ValidationError(
+                        {campo: f"O {campo} deve pertencer à mesma escola do lecionamento."}
+                    )

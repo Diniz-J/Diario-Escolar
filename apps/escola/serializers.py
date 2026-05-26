@@ -1,7 +1,7 @@
 """Serializers da app escola."""
 from rest_framework import serializers
 
-from .models import Aluno, Disciplina, Escola, Professor, Turma
+from .models import Aluno, Disciplina, Escola, Lecionamento, Professor, Turma
 
 
 class EscolaSerializer(serializers.ModelSerializer):
@@ -97,7 +97,6 @@ class ProfessorSerializer(serializers.ModelSerializer):
             "escola",
             "usuario",
             "nome_completo",
-            "disciplinas",
             "ativo",
             "criado_em",
             "atualizado_em",
@@ -116,14 +115,57 @@ class ProfessorSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"usuario": "O usuário deve pertencer à mesma escola do professor."}
             )
+        return attrs
 
-        disciplinas = attrs.get("disciplinas")
-        if disciplinas and escola:
-            ids_outras_escolas = [
-                d.id for d in disciplinas if d.escola_id != escola.id
-            ]
-            if ids_outras_escolas:
-                raise serializers.ValidationError(
-                    {"disciplinas": "Todas as disciplinas devem pertencer à mesma escola."}
-                )
+
+class LecionamentoSerializer(serializers.ModelSerializer):
+    """Serializa o vínculo Professor × Turma × Disciplina.
+
+    `ano_letivo` é exposto read-only via fonte da turma — evita duplicar
+    informação no banco e mantém a UI capaz de filtrar por ano sem mais
+    um JOIN.
+    """
+
+    ano_letivo = serializers.IntegerField(
+        source="turma.ano_letivo", read_only=True
+    )
+
+    class Meta:
+        model = Lecionamento
+        fields = [
+            "id",
+            "escola",
+            "professor",
+            "turma",
+            "disciplina",
+            "ano_letivo",
+            "ativo",
+            "criado_em",
+            "atualizado_em",
+        ]
+        read_only_fields = ["id", "ano_letivo", "criado_em", "atualizado_em"]
+
+    def validate(self, attrs: dict) -> dict:
+        """Garante alinhamento de escola entre professor, turma e disciplina."""
+        instance = self.instance
+        professor = attrs.get("professor") or getattr(instance, "professor", None)
+        turma = attrs.get("turma") or getattr(instance, "turma", None)
+        disciplina = attrs.get("disciplina") or getattr(instance, "disciplina", None)
+        escola = attrs.get("escola") or getattr(instance, "escola", None)
+
+        if not escola:
+            return attrs
+
+        if professor and professor.escola_id != escola.id:
+            raise serializers.ValidationError(
+                {"professor": "O professor deve pertencer à mesma escola do lecionamento."}
+            )
+        if turma and turma.escola_id != escola.id:
+            raise serializers.ValidationError(
+                {"turma": "A turma deve pertencer à mesma escola do lecionamento."}
+            )
+        if disciplina and disciplina.escola_id != escola.id:
+            raise serializers.ValidationError(
+                {"disciplina": "A disciplina deve pertencer à mesma escola do lecionamento."}
+            )
         return attrs
