@@ -37,13 +37,19 @@ export function OcorrenciasPage() {
   const navigate = useNavigate();
   const [filtroStatus, setFiltroStatus] = useState<string>(FILTRO_TODOS);
   const [busca, setBusca] = useState("");
+  const [dataInicio, setDataInicio] = useState("");
+  const [dataFim, setDataFim] = useState("");
   const [formOpen, setFormOpen] = useState(false);
 
-  const ocorrenciasQuery = useOcorrencias(
-    filtroStatus !== FILTRO_TODOS
+  // Filtros server-side: status + range de datas vão pro backend.
+  // A busca por nome (aluno/turma) continua client-side.
+  const ocorrenciasQuery = useOcorrencias({
+    ...(filtroStatus !== FILTRO_TODOS
       ? { status: filtroStatus as OcorrenciaStatus }
-      : {},
-  );
+      : {}),
+    ...(dataInicio ? { data_inicio: dataInicio } : {}),
+    ...(dataFim ? { data_fim: dataFim } : {}),
+  });
   const alunosQuery = useAlunos();
   const turmasQuery = useTurmas();
 
@@ -91,7 +97,7 @@ export function OcorrenciasPage() {
 
       <OcorrenciaFormDialog open={formOpen} onOpenChange={setFormOpen} />
 
-      <div className="flex gap-3 items-center">
+      <div className="flex flex-wrap gap-3 items-end">
         <Input
           placeholder="Buscar por aluno ou turma..."
           value={busca}
@@ -111,6 +117,44 @@ export function OcorrenciasPage() {
             ))}
           </SelectContent>
         </Select>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="data-inicio" className="text-xs text-muted-foreground">
+            De
+          </label>
+          <Input
+            id="data-inicio"
+            type="date"
+            value={dataInicio}
+            max={dataFim || undefined}
+            onChange={(e) => setDataInicio(e.target.value)}
+            className="w-[160px]"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="data-fim" className="text-xs text-muted-foreground">
+            Até
+          </label>
+          <Input
+            id="data-fim"
+            type="date"
+            value={dataFim}
+            min={dataInicio || undefined}
+            onChange={(e) => setDataFim(e.target.value)}
+            className="w-[160px]"
+          />
+        </div>
+        {(dataInicio || dataFim) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setDataInicio("");
+              setDataFim("");
+            }}
+          >
+            Limpar datas
+          </Button>
+        )}
       </div>
 
       <div className="rounded-md border">
@@ -159,7 +203,7 @@ export function OcorrenciasPage() {
                   colSpan={4}
                   className="text-center text-muted-foreground py-8"
                 >
-                  {busca || filtroStatus !== FILTRO_TODOS
+                  {busca || filtroStatus !== FILTRO_TODOS || dataInicio || dataFim
                     ? "Nenhuma ocorrência encontrada."
                     : "Nenhuma ocorrência registrada."}
                 </TableCell>

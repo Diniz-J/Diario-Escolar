@@ -8,6 +8,9 @@ interface OcorrenciasFilter {
   status?: OcorrenciaStatus;
   aluno?: number;
   turma?: number;
+  // Range de datas (ISO YYYY-MM-DD), filtrado server-side via OcorrenciaFilter.
+  data_inicio?: string;
+  data_fim?: string;
 }
 
 const OCORRENCIAS_BASE_KEY = ["ocorrencias"] as const;

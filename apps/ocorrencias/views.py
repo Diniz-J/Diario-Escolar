@@ -17,6 +17,7 @@ from rest_framework import filters, viewsets
 from apps.common.permissions import IsAdminOrDiretorOrProfessor
 from apps.common.views import EscopoEscolaMixin
 
+from .filters import OcorrenciaFilter
 from .models import Ocorrencia
 from .serializers import OcorrenciaSerializer
 
@@ -37,5 +38,5 @@ class OcorrenciaViewSet(EscopoEscolaMixin, viewsets.ModelViewSet):
     serializer_class = OcorrenciaSerializer
     permission_classes = [IsAdminOrDiretorOrProfessor]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ["status", "turma", "aluno", "professor", "data_ocorrencia"]
+    filterset_class = OcorrenciaFilter
     search_fields = ["descricao"]

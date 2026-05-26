@@ -15,6 +15,9 @@ const ITENS_KEY = ["itens-presenca"] as const;
 interface RegistrosFilter {
   turma?: number;
   data?: string;
+  // Range de datas (ISO YYYY-MM-DD), filtrado server-side via RegistroPresencaFilter.
+  data_inicio?: string;
+  data_fim?: string;
 }
 
 export function useRegistros(filter: RegistrosFilter = {}) {

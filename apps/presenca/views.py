@@ -24,6 +24,7 @@ from apps.common.permissions import (
 )
 from apps.common.views import EscopoEscolaMixin, ReadWritePermissionMixin
 
+from .filters import RegistroPresencaFilter
 from .models import ItemPresenca, RegistroPresenca
 from .serializers import ItemPresencaSerializer, RegistroPresencaSerializer
 
@@ -52,7 +53,7 @@ class RegistroPresencaViewSet(
     )
     serializer_class = RegistroPresencaSerializer
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ["turma", "data", "professor"]
+    filterset_class = RegistroPresencaFilter
 
     def perform_create(self, serializer) -> None:
         """Cria o registro e popula `ItemPresenca` para cada aluno ativo.
