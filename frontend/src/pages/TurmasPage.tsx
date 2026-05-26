@@ -92,8 +92,11 @@ export function TurmasPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Nome</TableHead>
-              <TableHead>Turno</TableHead>
-              <TableHead>Ano letivo</TableHead>
+              {/* Turno e Ano letivo só em telas maiores. O nome da turma
+                  geralmente já carrega o ano ("1º Ano A"); detalhe da
+                  turma mostra tudo. */}
+              <TableHead className="hidden md:table-cell">Turno</TableHead>
+              <TableHead className="hidden sm:table-cell">Ano letivo</TableHead>
               <TableHead>Alunos</TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
@@ -145,8 +148,12 @@ export function TurmasPage() {
                   onClick={() => navigate(`/turmas/${turma.id}`)}
                 >
                   <TableCell>{turma.nome}</TableCell>
-                  <TableCell>{turma.turno_display}</TableCell>
-                  <TableCell>{turma.ano_letivo}</TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    {turma.turno_display}
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell">
+                    {turma.ano_letivo}
+                  </TableCell>
                   <TableCell className="tabular-nums">
                     {alunosQuery.isLoading ? (
                       <Skeleton className="h-4 w-8" />

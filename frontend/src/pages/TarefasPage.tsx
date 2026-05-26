@@ -71,10 +71,13 @@ export function TarefasPage() {
             <TableRow>
               <TableHead>Título</TableHead>
               <TableHead>Turma</TableHead>
-              <TableHead>Disciplina</TableHead>
-              <TableHead>Lançamento</TableHead>
-              <TableHead>Prazo</TableHead>
-              <TableHead>Vale nota</TableHead>
+              {/* Em mobile escondemos colunas pra evitar o scroll horizontal
+                  grosso do Windows. As infos completas continuam acessíveis
+                  ao clicar na linha (rota de detalhe). */}
+              <TableHead className="hidden md:table-cell">Disciplina</TableHead>
+              <TableHead className="hidden md:table-cell">Lançamento</TableHead>
+              <TableHead className="hidden lg:table-cell">Prazo</TableHead>
+              <TableHead className="hidden lg:table-cell">Vale nota</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -114,20 +117,20 @@ export function TarefasPage() {
                 >
                   <TableCell>{t.titulo}</TableCell>
                   <TableCell>{turmasPorId.get(t.turma) ?? `#${t.turma}`}</TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
                     {disciplinasPorId.get(t.disciplina) ?? `#${t.disciplina}`}
                   </TableCell>
-                  <TableCell className="tabular-nums whitespace-nowrap">
+                  <TableCell className="hidden md:table-cell tabular-nums whitespace-nowrap">
                     {new Date(t.data_lancamento + "T00:00:00").toLocaleDateString(
                       "pt-BR",
                     )}
                   </TableCell>
-                  <TableCell className="tabular-nums whitespace-nowrap">
+                  <TableCell className="hidden lg:table-cell tabular-nums whitespace-nowrap">
                     {t.prazo
                       ? new Date(t.prazo + "T00:00:00").toLocaleDateString("pt-BR")
                       : "—"}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden lg:table-cell">
                     {t.vale_nota ? (
                       <span className="text-xs text-blue-700 bg-blue-50 dark:bg-blue-950 dark:text-blue-300 px-2 py-0.5 rounded">
                         {t.nota_maxima ? `Vale ${t.nota_maxima}` : "Sim"}

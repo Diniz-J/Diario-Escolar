@@ -43,7 +43,17 @@ export function PresencaPage() {
     if (!q) return registrosOrdenados;
     return registrosOrdenados.filter((r) => {
       const nomeTurma = turmasPorId.get(r.turma)?.toLowerCase() ?? "";
-      return nomeTurma.includes(q) || r.data.includes(q);
+      // Casamos tanto contra a data crua (ISO YYYY-MM-DD) quanto contra
+      // a versão pt-BR (DD/MM/YYYY) — assim o usuário pode buscar como
+      // "22/05" ou "22/05/2026" sem precisar saber o formato interno.
+      const dataBR = new Date(r.data + "T00:00:00").toLocaleDateString(
+        "pt-BR",
+      );
+      return (
+        nomeTurma.includes(q) ||
+        r.data.includes(q) ||
+        dataBR.includes(q)
+      );
     });
   }, [registrosOrdenados, busca, turmasPorId]);
 
@@ -61,7 +71,7 @@ export function PresencaPage() {
       />
 
       <Input
-        placeholder="Buscar por turma ou data (YYYY-MM-DD)..."
+        placeholder="Buscar por turma ou data..."
         value={busca}
         onChange={(e) => setBusca(e.target.value)}
         className="max-w-sm"

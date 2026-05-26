@@ -132,6 +132,31 @@
     }
 }
 
+/* Scrollbar mais discreta dentro de wrappers de tabela e outros
+   containers que possam crescer lateralmente. O scrollbar padrão do
+   Windows fica grosso e visualmente pesado quando aparece sob uma
+   tabela em viewports estreitos.
+   - Firefox: `scrollbar-width: thin` é o padrão de fininha.
+   - Chrome/Edge/Webkit: customizamos via pseudo-elementos. */
+[data-slot="table-container"] {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+[data-slot="table-container"]::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+[data-slot="table-container"]::-webkit-scrollbar-track {
+  background: transparent;
+}
+[data-slot="table-container"]::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+[data-slot="table-container"]::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
 /* Regras de impressão — usadas principalmente pelo boletim.
    - Esconde sidebar / botões via `print:hidden` no JSX, complementado aqui.
    - Força esquema claro: dark mode na tela continua, mas impressão sai

@@ -89,10 +89,13 @@ export function AlunosPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Matrícula</TableHead>
+              {/* Em mobile mostramos só Nome + Turma + ⋯; o resto fica
+                  no boletim (linha clicável). Matrícula volta em sm,
+                  Status em md. */}
+              <TableHead className="hidden sm:table-cell">Matrícula</TableHead>
               <TableHead>Nome completo</TableHead>
               <TableHead>Turma</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead className="hidden md:table-cell">Status</TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
           </TableHeader>
@@ -142,14 +145,14 @@ export function AlunosPage() {
                   className="cursor-pointer"
                   onClick={() => navigate(`/boletim/${aluno.id}`)}
                 >
-                  <TableCell className="font-mono text-xs">
+                  <TableCell className="hidden sm:table-cell font-mono text-xs">
                     {aluno.matricula}
                   </TableCell>
                   <TableCell>{aluno.nome_completo}</TableCell>
                   <TableCell>
                     {turmasPorId.get(aluno.turma) ?? "—"}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
                     {aluno.ativo ? (
                       <span className="text-xs text-green-700 bg-green-50 dark:bg-green-950 dark:text-green-300 px-2 py-0.5 rounded">
                         Ativo
