@@ -128,14 +128,14 @@ export function PlanoEnsinoDetalhePage() {
   }
 
   return (
-    <div className="p-8 space-y-6 max-w-4xl mx-auto">
+    <div className="p-4 md:p-8 space-y-6 max-w-4xl mx-auto">
       <header className="space-y-2">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/planos-ensino">← Voltar</Link>
         </Button>
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-semibold">Plano de ensino</h1>
+            <h1 className="text-2xl md:text-3xl font-semibold">Plano de ensino</h1>
             {plano && (
               <p className="text-sm text-muted-foreground mt-1">
                 {turma?.nome ?? `Turma #${plano.turma}`} ·{" "}

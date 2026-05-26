@@ -86,14 +86,14 @@ export function OcorrenciaDetalhePage() {
   }
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6">
       <header className="space-y-2">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/ocorrencias">← Voltar</Link>
         </Button>
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-semibold">Ocorrência</h1>
+            <h1 className="text-2xl md:text-3xl font-semibold">Ocorrência</h1>
             {ocorrencia && (
               <span
                 className={`text-xs px-2 py-0.5 rounded ${STATUS_BADGE[ocorrencia.status]}`}

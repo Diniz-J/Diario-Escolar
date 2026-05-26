@@ -7,8 +7,8 @@ interface PlaceholderPageProps {
 
 export function PlaceholderPage({ titulo }: PlaceholderPageProps) {
   return (
-    <div className="p-8 space-y-2">
-      <h1 className="text-3xl font-semibold">{titulo}</h1>
+    <div className="p-4 md:p-8 space-y-2">
+      <h1 className="text-2xl md:text-3xl font-semibold">{titulo}</h1>
       <p className="text-sm text-muted-foreground">
         Tela em construção. Em breve.
       </p>
