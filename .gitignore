@@ -29,6 +29,9 @@ db.sqlite3-journal
 media/
 staticfiles/
 
+# Dumps de backup do banco — nunca versionar (dados sensíveis + tamanho).
+backups/
+
 # IDEs
 .vscode/
 .idea/
