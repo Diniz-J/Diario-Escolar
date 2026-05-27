@@ -37,9 +37,9 @@ RUN SECRET_KEY=build-only-collectstatic \
     DB_NAME=build DB_USER=build DB_PASSWORD=build \
     python manage.py collectstatic --noinput
 
-# Concorrência configurável por env (shell form pra expandir as variáveis).
-# Default enxuto: 1 worker + 4 threads (worker class gthread) — cabe em
-# free tier de 256-512 MB. CRUD é I/O-bound (espera o banco), então threads
-# dão concorrência sem o custo de RAM de múltiplos processos. Em servidor
-# maior, basta setar GUNICORN_WORKERS no .env.prod (sem mexer no código).
-CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-1} --threads ${GUNICORN_THREADS:-4} --worker-class ${GUNICORN_WORKER_CLASS:-gthread}"]
+# Sobe via entrypoint: aplica migrations (+ superusuário opcional via env)
+# e então o gunicorn. Necessário no free tier do Render, que não tem
+# Pre-Deploy Command nem Shell. Concorrência e porta vêm de env
+# (GUNICORN_*, PORT) — ver entrypoint.sh. O compose local não usa este
+# CMD (lá o `command:` do compose sobrescreve e faz o migrate).
+CMD ["sh", "entrypoint.sh"]
