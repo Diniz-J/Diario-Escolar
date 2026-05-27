@@ -108,6 +108,12 @@ class Aluno(BaseModelEscopado):
     )
     ativo = models.BooleanField(default=True)
 
+    # Responsável que recebe notificações (ex.: email de ocorrência).
+    # `blank=True` no banco para não quebrar alunos já cadastrados sem
+    # responsável; a obrigatoriedade no cadastro é imposta no serializer.
+    nome_responsavel = models.CharField(max_length=200, blank=True)
+    email_responsavel = models.EmailField(blank=True)
+
     escola = models.ForeignKey(
         Escola, on_delete=models.PROTECT, related_name="alunos"
     )

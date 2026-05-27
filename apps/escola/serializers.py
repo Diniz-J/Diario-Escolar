@@ -54,6 +54,12 @@ class DisciplinaSerializer(serializers.ModelSerializer):
 
 
 class AlunoSerializer(serializers.ModelSerializer):
+    # Obrigatórios no cadastro pela API, mesmo sendo blank=True no modelo.
+    # O blank existe só para os alunos antigos sem responsável; novos e
+    # edições precisam preencher para a notificação de ocorrência funcionar.
+    nome_responsavel = serializers.CharField(required=True, allow_blank=False)
+    email_responsavel = serializers.EmailField(required=True, allow_blank=False)
+
     class Meta:
         model = Aluno
         fields = [
@@ -64,6 +70,8 @@ class AlunoSerializer(serializers.ModelSerializer):
             "data_nascimento",
             "turma",
             "ativo",
+            "nome_responsavel",
+            "email_responsavel",
             "criado_em",
             "atualizado_em",
         ]

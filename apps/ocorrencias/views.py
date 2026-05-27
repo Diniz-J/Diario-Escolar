@@ -20,6 +20,7 @@ from apps.common.views import EscopoEscolaMixin
 from .filters import OcorrenciaFilter
 from .models import Ocorrencia
 from .serializers import OcorrenciaSerializer
+from .services import notificar_responsavel_ocorrencia
 
 
 class OcorrenciaViewSet(EscopoEscolaMixin, viewsets.ModelViewSet):
@@ -29,6 +30,9 @@ class OcorrenciaViewSet(EscopoEscolaMixin, viewsets.ModelViewSet):
     escopado pela escola do usuário autenticado via `EscopoEscolaMixin`.
     Filtros declarativos por status, turma, aluno e professor; busca livre
     em `descricao`.
+
+    Ao criar uma ocorrência, notifica o responsável do aluno por email
+    (síncrono e protegido — falha de email não impede o registro).
     """
 
     queryset = (
@@ -40,3 +44,8 @@ class OcorrenciaViewSet(EscopoEscolaMixin, viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_class = OcorrenciaFilter
     search_fields = ["descricao"]
+
+    def perform_create(self, serializer) -> None:
+        ocorrencia = serializer.save()
+        # Notificação por email — não levanta exceção (ver service).
+        notificar_responsavel_ocorrencia(ocorrencia)

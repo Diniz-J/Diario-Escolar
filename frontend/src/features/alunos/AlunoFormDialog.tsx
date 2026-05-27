@@ -51,6 +51,8 @@ export function AlunoFormDialog({
   const [dataNascimento, setDataNascimento] = useState("");
   const [turmaId, setTurmaId] = useState<string>("");
   const [ativo, setAtivo] = useState(true);
+  const [nomeResponsavel, setNomeResponsavel] = useState("");
+  const [emailResponsavel, setEmailResponsavel] = useState("");
   const [erro, setErro] = useState<string | null>(null);
 
   // Repreenche o formulário quando abre em modo edição.
@@ -63,12 +65,16 @@ export function AlunoFormDialog({
         setDataNascimento(aluno.data_nascimento ?? "");
         setTurmaId(String(aluno.turma));
         setAtivo(aluno.ativo);
+        setNomeResponsavel(aluno.nome_responsavel ?? "");
+        setEmailResponsavel(aluno.email_responsavel ?? "");
       } else {
         setMatricula("");
         setNomeCompleto("");
         setDataNascimento("");
         setTurmaId("");
         setAtivo(true);
+        setNomeResponsavel("");
+        setEmailResponsavel("");
       }
     }
   }, [open, aluno]);
@@ -92,6 +98,8 @@ export function AlunoFormDialog({
       nome_completo: nomeCompleto,
       data_nascimento: dataNascimento || null,
       ativo,
+      nome_responsavel: nomeResponsavel,
+      email_responsavel: emailResponsavel,
     };
 
     try {
@@ -176,6 +184,28 @@ export function AlunoFormDialog({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="nome_responsavel">Nome do responsável</Label>
+            <Input
+              id="nome_responsavel"
+              required
+              value={nomeResponsavel}
+              onChange={(e) => setNomeResponsavel(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="email_responsavel">E-mail do responsável</Label>
+            <Input
+              id="email_responsavel"
+              type="email"
+              required
+              value={emailResponsavel}
+              onChange={(e) => setEmailResponsavel(e.target.value)}
+              placeholder="recebe as notificações de ocorrência"
+            />
           </div>
 
           <div className="flex items-center gap-2">

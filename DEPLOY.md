@@ -113,6 +113,33 @@ Depois que o frontend tiver URL no Vercel:
 - [ ] Login no frontend funciona (token vem do backend).
 - [ ] Criar/listar dados funciona (CORS ok).
 
+## Email de ocorrência (Resend)
+
+Quando uma ocorrência é criada, o sistema envia um email ao responsável do
+aluno. Sem config de SMTP, o backend só registra no log (não envia). Para
+ativar o envio real com o Resend:
+
+1. Crie conta em **resend.com** → gere uma **API key** (`re_...`).
+2. **Verifique um domínio** no Resend (Settings → Domains). Sem domínio
+   verificado, o Resend só entrega para o email da própria conta (modo teste)
+   e usa o remetente `onboarding@resend.dev`.
+3. No Render, adicione as envs (ver `.env.prod.example`):
+   ```
+   EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+   EMAIL_HOST=smtp.resend.com
+   EMAIL_PORT=587
+   EMAIL_USE_TLS=True
+   EMAIL_HOST_USER=resend
+   EMAIL_HOST_PASSWORD=<sua API key>
+   DEFAULT_FROM_EMAIL=Diário Escolar <ocorrencias@seudominio.com.br>
+   ```
+4. Cada aluno precisa ter **email do responsável** cadastrado (campo
+   obrigatório no cadastro de aluno). Alunos antigos sem responsável não
+   recebem — edite-os para preencher.
+
+> O envio é síncrono e protegido: se o email falhar, a ocorrência é salva
+> mesmo assim (o erro vai pro log, não trava o registro).
+
 ## Quando migrar pra produção de verdade (cliente pagante)
 
 - Postgres pago (Render, ou Neon/Supabase, ou RDS na AWS) — sem expiração.
