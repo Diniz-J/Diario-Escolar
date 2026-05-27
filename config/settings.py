@@ -211,3 +211,25 @@ SIMPLE_JWT = {
 
 # CORS
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=Csv())
+
+# Email — usado pra notificar o responsável quando uma ocorrência é criada.
+# Default = console backend (imprime o email no log; não envia de verdade),
+# pra dev funcionar sem SMTP. Em produção, defina EMAIL_BACKEND como SMTP e
+# preencha as credenciais (ex.: Resend — ver DEPLOY.md).
+EMAIL_BACKEND = config(
+    "EMAIL_BACKEND",
+    default="django.core.mail.backends.console.EmailBackend",
+)
+EMAIL_HOST = config("EMAIL_HOST", default="")
+EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+DEFAULT_FROM_EMAIL = config(
+    "DEFAULT_FROM_EMAIL", default="Diário Escolar <onboarding@resend.dev>"
+)
+
+# Em testes, usa o backend em memória pra inspecionar `mail.outbox` sem
+# enviar nada de verdade.
+if TESTING:
+    EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"

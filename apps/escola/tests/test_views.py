@@ -208,6 +208,8 @@ class AlunoPermissionAndFilterTests(_PermissionSetup):
             "matricula": "C001",
             "nome_completo": "Aluno Novo",
             "turma": self.turma.id,
+            "nome_responsavel": "Responsável Teste",
+            "email_responsavel": "responsavel@example.com",
         }
         self.assertEqual(
             self._request(AlunoViewSet, "create", "diretor", payload).status_code, 201
@@ -235,6 +237,8 @@ class AlunoPermissionAndFilterTests(_PermissionSetup):
             "matricula": "C003",
             "nome_completo": "Aluno Y",
             "turma": outra_turma.id,
+            "nome_responsavel": "Responsável Teste",
+            "email_responsavel": "responsavel@example.com",
         }
         resp = self._request(AlunoViewSet, "create", "diretor", payload)
         self.assertEqual(resp.status_code, 400)

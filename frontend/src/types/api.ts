@@ -79,6 +79,8 @@ export interface Aluno {
   data_nascimento: string | null;
   turma: number;
   ativo: boolean;
+  nome_responsavel: string;
+  email_responsavel: string;
   criado_em: string;
   atualizado_em: string;
 }
