@@ -17,7 +17,7 @@ from django.contrib import admin
 from django.urls import include, path
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from apps.accounts.views import UsuarioTokenObtainPairView
+from apps.accounts.views import LogoutView, UsuarioTokenObtainPairView
 
 api_v1_patterns = [
     path(
@@ -29,6 +29,11 @@ api_v1_patterns = [
         "auth/token/refresh/",
         TokenRefreshView.as_view(),
         name="token_refresh",
+    ),
+    path(
+        "auth/logout/",
+        LogoutView.as_view(),
+        name="logout",
     ),
     path("", include("apps.accounts.urls")),
     path("", include("apps.escola.urls")),
