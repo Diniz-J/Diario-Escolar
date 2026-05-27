@@ -5,3 +5,8 @@ django-cors-headers>=4.4,<5.0
 django-filter>=24.3,<26.0
 psycopg[binary]>=3.2,<4.0
 python-decouple>=3.8,<4.0
+# Produção: gunicorn é o servidor de aplicação (substitui o runserver);
+# whitenoise serve os estáticos do Django (admin/DRF) sem depender de nginx
+# para esses arquivos.
+gunicorn>=22,<24
+whitenoise>=6.7,<7

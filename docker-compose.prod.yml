@@ -1,0 +1,58 @@
+# docker-compose de PRODUÇÃO (prod-like).
+#
+# Diferenças pro dev: backend roda via gunicorn (sem hot reload, sem
+# código montado), frontend é buildado e servido por nginx, e a config
+# sensível vem de um arquivo .env.prod (NÃO versionado — veja
+# .env.prod.example). Uso:
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Acesso: http://localhost (nginx na porta 80 serve o site e roteia /api).
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      target: prod
+    # Aplica migrations e sobe o gunicorn (o CMD do Dockerfile já tem o
+    # gunicorn, mas aqui prefixamos o migrate pra garantir schema atualizado).
+    command: sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3"
+    env_file: .env.prod
+    environment:
+      # Dentro da rede do compose o banco é o serviço `db`.
+      DB_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      target: prod
+      args:
+        # Caminho relativo: o nginx faz proxy de /api/ pro backend.
+        VITE_API_URL: /api/v1
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pgdata_prod:

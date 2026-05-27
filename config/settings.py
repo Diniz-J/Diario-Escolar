@@ -45,6 +45,10 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    # WhiteNoise serve os estáticos do Django em produção. Em DEBUG o
+    # runserver continua servindo via finders — este middleware fica
+    # inerte no dev, então não atrapalha o fluxo local.
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -103,6 +107,18 @@ USE_TZ = True
 # Arquivos estáticos
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Storage dos estáticos: WhiteNoise comprime os arquivos no collectstatic.
+# Versão sem manifest (não exige hash nos nomes) — mais tolerante a um
+# primeiro deploy do que CompressedManifestStaticFilesStorage.
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+    },
+}
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

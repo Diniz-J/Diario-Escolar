@@ -1,0 +1,77 @@
+# docker-compose de DESENVOLVIMENTO.
+#
+# Sobe as 3 peças com hot reload e config embutida (não depende de .env
+# externo — facilita pra quem clona o repo). Uso:
+#
+#   docker compose up        (sobe e mostra logs)
+#   docker compose up -d     (sobe em segundo plano)
+#   docker compose down      (derruba; -v também apaga o volume do banco)
+#
+# Acessos:
+#   Frontend  http://localhost:5173
+#   Backend   http://localhost:8000/api/v1
+#   Admin     http://localhost:8000/admin
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: diario_escolar
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d diario_escolar"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      target: dev
+    # Espera o banco, aplica migrations e sobe o runserver (hot reload).
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      # Código montado: editar em .py recarrega o runserver automaticamente.
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      SECRET_KEY: dev-secret-key-nao-usar-em-producao
+      DEBUG: "True"
+      ALLOWED_HOSTS: localhost,127.0.0.1,backend
+      DB_NAME: diario_escolar
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_HOST: db
+      DB_PORT: "5432"
+      CORS_ALLOWED_ORIGINS: http://localhost:5173
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    # Instala deps (se ainda não tiver no volume) e sobe o Vite acessível
+    # de fora do container (--host).
+    command: sh -c "npm install && npm run dev -- --host"
+    volumes:
+      - ./frontend:/app
+      # Volume anônimo protege o node_modules do container de ser
+      # sobrescrito pelo bind mount do host (que pode não ter a pasta).
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      # O navegador do dev acessa o backend via localhost (porta publicada).
+      VITE_API_URL: http://localhost:8000/api/v1
+    depends_on:
+      - backend
+
+volumes:
+  pgdata_dev:
