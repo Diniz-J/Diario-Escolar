@@ -32,7 +32,8 @@ class OcorrenciaViewSet(EscopoEscolaMixin, viewsets.ModelViewSet):
     em `descricao`.
 
     Ao criar uma ocorrência, notifica o responsável do aluno por email
-    (síncrono e protegido — falha de email não impede o registro).
+    (em background e protegido — falha de email não impede o registro nem
+    pendura a resposta HTTP).
     """
 
     queryset = (
