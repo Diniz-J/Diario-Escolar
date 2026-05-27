@@ -1,6 +1,6 @@
 # Diário Escolar
 
-Aplicação web para registro escolar — gestão disciplinar (ocorrências), presença, tarefas, planos de ensino, boletim e cadastros (alunos, turmas, disciplinas, professores).
+Aplicação web para registro escolar — gestão disciplinar (ocorrências, com notificação por email ao responsável), presença, tarefas, planos de ensino, boletim e cadastros (alunos, turmas, disciplinas, professores).
 
 Monorepo:
 
@@ -8,6 +8,8 @@ Monorepo:
 - **Frontend** — React 19 + Vite + TypeScript, Tailwind 4 + shadcn/ui, TanStack Query.
 
 Arquitetura single-tenant com base abstrata desenhada para escalar a row-level multi-tenancy (SaaS) sem retrofit doloroso.
+
+**Status:** publicado em ambiente de demonstração — backend (Docker) no Render, frontend no Vercel, Postgres gerenciado. Dockerizado, com CI (GitHub Actions), backup do banco e deploy reproduzível. Ver [`DEPLOY.md`](./DEPLOY.md).
 
 ---
 
@@ -48,7 +50,7 @@ Diario-Escolar/
 │   ├── common/              — base abstrata, validators, permissões, mixins reutilizáveis
 │   ├── accounts/            — Usuario (AbstractUser) + perfis + JWT customizado
 │   ├── escola/              — Escola, Turma, Disciplina, Aluno, Professor, Lecionamento
-│   ├── ocorrencias/         — Ocorrencia
+│   ├── ocorrencias/         — Ocorrencia + services.py (email ao responsável)
 │   ├── presenca/            — RegistroPresenca + ItemPresenca
 │   ├── tarefas/             — Tarefa + EntregaTarefa
 │   ├── planos_ensino/       — PlanoEnsino
@@ -69,13 +71,24 @@ Diario-Escolar/
 │   │   ├── types/api.ts     — interfaces que casam com os serializers do backend
 │   │   ├── App.tsx          — providers globais (Query, Auth, Toaster)
 │   │   └── main.tsx         — entry point + BrowserRouter
+│   ├── Dockerfile           — build do front (Node) → nginx
+│   ├── nginx.conf           — serve o SPA + proxy /api, /admin, /static
+│   ├── vercel.json          — rewrite de SPA (deploy no Vercel)
 │   ├── components.json      — config do shadcn/ui CLI
 │   ├── package.json
 │   └── vite.config.ts
+├── .github/workflows/ci.yml — CI: testes do backend + build do frontend
+├── scripts/                 — backup.sh / restore.sh do Postgres + README
+├── Dockerfile               — backend multi-stage (dev/prod), gunicorn
+├── entrypoint.sh            — prod: migrate + superusuário no boot, depois gunicorn
+├── docker-compose.yml       — ambiente de desenvolvimento (hot reload)
+├── docker-compose.prod.yml  — ambiente de produção (gunicorn + nginx)
+├── DEPLOY.md                — guia de deploy (Render + Vercel) + Resend
 ├── CLAUDE.md                — guia pra agentes de IA (guardrails + mapa + roadmap)
 ├── manage.py
 ├── requirements.txt
-└── .env.example
+├── .env.example
+└── .env.prod.example        — modelo do env de produção
 ```
 
 ---
@@ -105,17 +118,18 @@ Single-tenant hoje. A base abstrata `BaseModelEscopado` (FK `escola` + timestamp
 
 ### Autenticação JWT
 
-Endpoints públicos:
+Endpoints de autenticação:
 
-- `POST /api/v1/auth/token/` — troca username/password por par `access` + `refresh`.
-- `POST /api/v1/auth/token/refresh/` — gera novo `access` a partir de um `refresh` válido.
+- `POST /api/v1/auth/token/` — troca username/password por par `access` + `refresh`. **Rate limit de 5/min por IP** (anti-brute-force, via `ScopedRateThrottle`).
+- `POST /api/v1/auth/token/refresh/` — gera novo `access` a partir de um `refresh` válido (rotação ativada: emite refresh novo e blacklista o anterior).
+- `POST /api/v1/auth/logout/` — invalida (blacklist) o refresh enviado. Logout efetivo.
 
 O `access` carrega claims customizados para o frontend ler sem requests extras:
 
 - `escola_id`, `perfil` — escopo de tenancy e perfil de acesso.
 - `username`, `first_name`, `last_name` — identificação humana (saudação na UI).
 
-**Trade-off conhecido:** se admin trocar escola/perfil/nome do usuário, os JWTs já emitidos continuam refletindo o estado anterior. Como `TokenRefreshView` propaga claims do refresh para o novo access, a janela real de staleness é o `REFRESH_TOKEN_LIFETIME` (7 dias por default), não o `ACCESS_TOKEN_LIFETIME` (1h). Invalidação imediata exige token blacklist server-side — fora do escopo do MVP.
+`ROTATE_REFRESH_TOKENS` + `BLACKLIST_AFTER_ROTATION` (app `token_blacklist`) reduzem a janela de um refresh roubado. A staleness de claims (se admin troca escola/perfil) ainda dura até o `REFRESH_TOKEN_LIFETIME` (7 dias), pois o refresh propaga claims pro novo access.
 
 ### Apps do backend
 
@@ -137,7 +151,7 @@ Cada app de domínio segue o mesmo layout (`models.py`, `serializers.py`, `views
 - `Escola` — tenant root; CNPJ validado; remoção protegida.
 - `Turma` — turno + ano letivo; única por `(escola, nome, ano_letivo)`.
 - `Disciplina` — única por `(escola, nome)`; campo `ativa`. Migration semeia 14 disciplinas BNCC comuns por escola (idempotente via `get_or_create`).
-- `Aluno` — não loga; identificado por matrícula única por escola; invariante turma/escola validada. **`DELETE` faz soft delete** (marca `ativo=False`) para preservar histórico de ocorrências/presença.
+- `Aluno` — não loga; identificado por matrícula única por escola; invariante turma/escola validada. Tem `nome_responsavel` + `email_responsavel` (obrigatórios no cadastro via serializer; `blank` no banco pra não quebrar alunos antigos) — usados pra notificar o responsável de ocorrências. **`DELETE` faz soft delete** (marca `ativo=False`) para preservar histórico de ocorrências/presença.
 - `Professor` — OneToOne com `Usuario` (`perfil=professor`); campo `ativo`; invariante `usuario.escola == professor.escola`. **`DELETE` faz soft delete** (`ativo=False`).
 - `Lecionamento` — vínculo granular **professor × turma × disciplina** (substituiu a antiga M2M `Professor.disciplinas`). Permite responder "quais turmas o prof X dá?" e "quem leciona Mat no 1º A?". `ano_letivo` derivado da turma; unique `(professor, turma, disciplina)`; `clean()` valida escola alinhada nos três.
 - CRUD completo para todos via API, filtros declarativos + busca por nome/matrícula.
@@ -158,6 +172,7 @@ Cada app de domínio segue o mesmo layout (`models.py`, `serializers.py`, `views
 - Invariantes em `clean()` e serializer: `aluno.escola == escola`, `aluno.turma == turma` (snapshot atual), `professor.escola == escola`, `data <= hoje`.
 - Permissão uniforme `admin/diretor/professor` — colegas auxiliam a resolver registros uns dos outros.
 - Guard de IDOR no payload `escola`.
+- **Notificação por email** (`services.py`): ao criar uma ocorrência (`perform_create`), envia email ao `email_responsavel` do aluno com os dados. Síncrono e protegido (try/except) — se o email falhar, a ocorrência é salva mesmo assim; aluno sem responsável é pulado (log). Provedor: SMTP via env (Resend em produção) — ver `DEPLOY.md`.
 
 **`apps/presenca`**
 - `RegistroPresenca` — chamada de uma turma num dia; única por `(escola, turma, data)`; `professor` opcional.
@@ -170,8 +185,9 @@ Cada app de domínio segue o mesmo layout (`models.py`, `serializers.py`, `views
 ### Endpoints
 
 ```
-POST   /api/v1/auth/token/          — obter JWT (access + refresh)
-POST   /api/v1/auth/token/refresh/  — renovar JWT
+POST   /api/v1/auth/token/          — obter JWT (access + refresh); rate limit 5/min
+POST   /api/v1/auth/token/refresh/  — renovar JWT (rotaciona o refresh)
+POST   /api/v1/auth/logout/         — blacklist do refresh (logout efetivo)
 
 GET|POST        /api/v1/usuarios/
 GET|PUT|PATCH|DELETE /api/v1/usuarios/{id}/
@@ -354,14 +370,21 @@ feature/* → develop → main
 
 ---
 
+## Já entregue (infra, segurança e comunicação)
+
+- **Infra:** Docker (dev + prod), deploy no ar (Render + Vercel), backup do PostgreSQL (`scripts/`), CI no GitHub Actions.
+- **Segurança:** rate limit no login, JWT blacklist + rotação de refresh, hardening de produção (CSRF trusted origins, proxy SSL, cookies secure/HSTS).
+- **Comunicação:** notificação por email ao responsável quando uma ocorrência é criada (síncrono, via Resend).
+
 ## Backlog (não implementado)
 
 A lista priorizada por fases vive em [`CLAUDE.md`](./CLAUDE.md) (seção Roadmap). Resumo do que ainda falta:
 
-- **Infra:** Docker + docker-compose, deploy (Render/Fly + Vercel/Cloudflare), backup automatizado do PostgreSQL, CI no GitHub Actions.
-- **Robustez:** paginação no backend (DRF `PageNumberPagination`), audit log (`django-simple-history`), observabilidade (logging estruturado + Sentry).
-- **Produto:** filtros de período (range de data) em Ocorrências/Presença, exportação de relatórios (PDF/CSV/Excel), dashboard com métricas avançadas (reincidência, presença média).
-- **Comunicação:** cadastro de responsáveis, notificações por e-mail (fila assíncrona), timeline do aluno.
+- **Robustez:** paginação no backend (DRF `PageNumberPagination`), audit log (`django-simple-history`), observabilidade (Sentry + logging estruturado).
+- **Produto:** exportação de relatórios (PDF/CSV/Excel), métricas avançadas no dashboard (reincidência, presença média).
+- **Comunicação:** múltiplos responsáveis por aluno, fila assíncrona de email (Celery/Redis) quando o volume crescer, timeline do aluno.
 - **Senhas:** trocar a própria senha, reset por e-mail, admin resetar senha de terceiro pela UI.
-- **Dev experience:** drf-spectacular (gera client TypeScript), `repositories.py`/`services.py` por app, linting unificado (`ruff` + ESLint no fluxo).
-- **SaaS futuro:** multi-tenancy real (middleware + RLS + billing), token blacklist, LGPD formal.
+- **Dev experience:** drf-spectacular (gera client TypeScript), `repositories.py` por app, linting unificado (`ruff` + ESLint no fluxo).
+- **SaaS futuro:** multi-tenancy real (middleware + RLS + billing), httpOnly cookies, LGPD formal.
+
+> Pra enviar email pros responsáveis de verdade (não só modo teste), falta **verificar um domínio no Resend** e trocar o `DEFAULT_FROM_EMAIL`.
