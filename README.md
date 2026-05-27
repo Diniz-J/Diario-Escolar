@@ -1,6 +1,6 @@
 # Diário Escolar
 
-Aplicação web para registro escolar — controle de ocorrências, presença e gestão de turmas.
+Aplicação web para registro escolar — gestão disciplinar (ocorrências), presença, tarefas, planos de ensino, boletim e cadastros (alunos, turmas, disciplinas, professores).
 
 Monorepo:
 
@@ -47,17 +47,24 @@ Diario-Escolar/
 ├── apps/
 │   ├── common/              — base abstrata, validators, permissões, mixins reutilizáveis
 │   ├── accounts/            — Usuario (AbstractUser) + perfis + JWT customizado
-│   ├── escola/              — Escola, Turma, Disciplina, Aluno, Professor
+│   ├── escola/              — Escola, Turma, Disciplina, Aluno, Professor, Lecionamento
 │   ├── ocorrencias/         — Ocorrencia
-│   └── presenca/            — RegistroPresenca + ItemPresenca
+│   ├── presenca/            — RegistroPresenca + ItemPresenca
+│   ├── tarefas/             — Tarefa + EntregaTarefa
+│   ├── planos_ensino/       — PlanoEnsino
+│   └── boletins/            — agregação on-the-fly (sem modelo; services.py)
 ├── frontend/                — app React (Vite + TypeScript)
 │   ├── src/
-│   │   ├── components/      — AppLayout, ProtectedRoute, ui/* (shadcn)
+│   │   ├── components/      — AppLayout (sidebar + drawer mobile), ProtectedRoute, ui/* (shadcn)
 │   │   ├── features/        — domínio por pasta: auth, alunos, turmas, escolas,
-│   │   │                     professores, ocorrencias, presenca
+│   │   │                     professores, lecionamentos, disciplinas, dashboard,
+│   │   │                     ocorrencias, presenca, tarefas, planos-ensino,
+│   │   │                     boletins, usuarios
 │   │   ├── lib/             — api (axios + interceptors), queryClient, utils
 │   │   ├── pages/           — Login, Dashboard, Alunos, Turmas (+ detalhe),
-│   │   │                     Ocorrencias (+ detalhe), Presenca (+ detalhe), 404
+│   │   │                     Disciplinas, Professores, PlanosEnsino (+ detalhe),
+│   │   │                     Ocorrencias (+ detalhe), Presenca (+ detalhe),
+│   │   │                     Tarefas (+ detalhe), Boletim, 404
 │   │   ├── routes.tsx       — mapa central de rotas
 │   │   ├── types/api.ts     — interfaces que casam com os serializers do backend
 │   │   ├── App.tsx          — providers globais (Query, Auth, Toaster)
@@ -65,6 +72,7 @@ Diario-Escolar/
 │   ├── components.json      — config do shadcn/ui CLI
 │   ├── package.json
 │   └── vite.config.ts
+├── CLAUDE.md                — guia pra agentes de IA (guardrails + mapa + roadmap)
 ├── manage.py
 ├── requirements.txt
 └── .env.example
@@ -86,6 +94,8 @@ Quatro classes granulares em `apps/common/permissions.py`, combinadas por ViewSe
 | `IsAdminOrDiretorOrProfessorOrInspetor` | Acima + `perfil=inspetor` (leitura em domínios de monitoramento) |
 
 `ReadWritePermissionMixin` (em `apps/common/views.py`) padroniza separação read/write por ação: `list`/`retrieve` usam `READ_PERMISSION`; o restante usa `WRITE_PERMISSION`. Apps com regra uniforme (ex.: `ocorrencias`) declaram `permission_classes` direto.
+
+Por padrão, **escrita em cadastros** (Aluno, Turma, Disciplina, Professor, Lecionamento) é restrita a admin/diretor — professor tem leitura mas não cria/edita/exclui. O frontend espelha isso via hook `usePermissoes` (esconde botões "Novo/Editar/Excluir" pra perfil professor), evitando 403 visível.
 
 Todos os querysets são escopados à `escola` do usuário autenticado via `EscopoEscolaMixin`. Defesa contra IDOR na escrita: serializers de `ocorrencias` e `presenca` recusam payload com `escola` divergente da do usuário (admin/superuser bypassam).
 
@@ -120,16 +130,28 @@ Cada app de domínio segue o mesmo layout (`models.py`, `serializers.py`, `views
 
 **`apps/accounts`**
 - `Usuario` estendendo `AbstractUser` com `perfil` (admin/diretor/professor/secretaria/inspetor) + FK opcional para `Escola`.
-- CRUD via `/api/v1/usuarios/` (admin e diretor).
+- CRUD via `/api/v1/usuarios/` (admin e diretor). O serializer expõe `escola` (necessário para o frontend criar Professor com escola alinhada).
 - `UsuarioTokenObtainPairView` + `UsuarioTokenObtainPairSerializer` injetando os claims customizados.
 
 **`apps/escola`**
 - `Escola` — tenant root; CNPJ validado; remoção protegida.
 - `Turma` — turno + ano letivo; única por `(escola, nome, ano_letivo)`.
-- `Disciplina` — única por `(escola, nome)`.
+- `Disciplina` — única por `(escola, nome)`; campo `ativa`. Migration semeia 14 disciplinas BNCC comuns por escola (idempotente via `get_or_create`).
 - `Aluno` — não loga; identificado por matrícula única por escola; invariante turma/escola validada. **`DELETE` faz soft delete** (marca `ativo=False`) para preservar histórico de ocorrências/presença.
-- `Professor` — OneToOne com `Usuario` (`perfil=professor`); M2M com `Disciplina`; invariante `usuario.escola == professor.escola`.
+- `Professor` — OneToOne com `Usuario` (`perfil=professor`); campo `ativo`; invariante `usuario.escola == professor.escola`. **`DELETE` faz soft delete** (`ativo=False`).
+- `Lecionamento` — vínculo granular **professor × turma × disciplina** (substituiu a antiga M2M `Professor.disciplinas`). Permite responder "quais turmas o prof X dá?" e "quem leciona Mat no 1º A?". `ano_letivo` derivado da turma; unique `(professor, turma, disciplina)`; `clean()` valida escola alinhada nos três.
 - CRUD completo para todos via API, filtros declarativos + busca por nome/matrícula.
+
+**`apps/tarefas`**
+- `Tarefa` — turma + disciplina + professor + título + descrição + `data_lancamento` + `prazo` opcional + `vale_nota` + `nota_maxima` + `peso`.
+- `EntregaTarefa` — `entregue` + `data_entrega` + `nota` + `observacao` por aluno.
+- Status calculado server-side (pendente/atrasada/entregue). Leitura inclui inspetor; escrita admin/diretor/professor.
+
+**`apps/planos_ensino`**
+- `PlanoEnsino` — ementa, conteúdo programático, objetivos gerais/específicos, habilidades BNCC, carga horária, metodologia, recursos, avaliação, `ativo`. Único por `(escola, turma, disciplina, ano_letivo)` com invariantes cruzadas. Casca criada num dialog enxuto; campos longos preenchidos na tela de detalhe.
+
+**`apps/boletins`**
+- Sem modelo próprio. `services.py` agrega frequência + notas + ocorrências on-the-fly; `BoletimAlunoView` (APIView) expõe `GET /boletins/aluno/<id>/`. Justificado (J) conta como presença efetiva no cálculo de frequência.
 
 **`apps/ocorrencias`**
 - `Ocorrencia` — turma + aluno + professor opcional + descrição + data + status (`aberta`/`em_andamento`/`resolvida`/`arquivada`).
@@ -166,17 +188,31 @@ GET|PUT|PATCH|DELETE /api/v1/disciplinas/{id}/
 GET|POST        /api/v1/alunos/                          (DELETE faz soft delete)
 GET|PUT|PATCH|DELETE /api/v1/alunos/{id}/
 
-GET|POST        /api/v1/professores/
+GET|POST        /api/v1/professores/                     (DELETE faz soft delete)
 GET|PUT|PATCH|DELETE /api/v1/professores/{id}/
+
+GET|POST        /api/v1/lecionamentos/
+GET|PUT|PATCH|DELETE /api/v1/lecionamentos/{id}/
 
 GET|POST        /api/v1/ocorrencias/
 GET|PUT|PATCH|DELETE /api/v1/ocorrencias/{id}/
+
+GET|POST        /api/v1/planos-ensino/
+GET|PUT|PATCH|DELETE /api/v1/planos-ensino/{id}/
 
 GET|POST        /api/v1/registros-presenca/
 GET|PUT|PATCH|DELETE /api/v1/registros-presenca/{id}/
 
 GET             /api/v1/itens-presenca/
 GET|PATCH|PUT   /api/v1/itens-presenca/{id}/
+
+GET|POST        /api/v1/tarefas/
+GET|PUT|PATCH|DELETE /api/v1/tarefas/{id}/
+
+GET|POST        /api/v1/entregas-tarefa/
+GET|PUT|PATCH|DELETE /api/v1/entregas-tarefa/{id}/
+
+GET             /api/v1/boletins/aluno/{aluno_id}/        (agregação read-only)
 ```
 
 > Todos os endpoints (exceto `/auth/token/` e `/auth/token/refresh/`) exigem `Authorization: Bearer <access_token>`. O queryset retornado é sempre escopado à escola do usuário autenticado.
@@ -192,14 +228,23 @@ Single-Page Application em React 19 + TypeScript que consome a API REST do backe
 | Rota | Descrição |
 |---|---|
 | `/login` | Autenticação contra `/auth/token/` |
-| `/dashboard` | Página inicial autenticada (atualmente exibe perfil e expiração; métricas planejadas) |
-| `/alunos` | CRUD de alunos com busca por nome/matrícula |
+| `/dashboard` | Saudação personalizada + filtro por turma + cards de métricas (ocorrências em aberto, alunos ativos, última chamada por turma, últimas ocorrências). Cada card é clicável |
+| `/alunos` | CRUD de alunos com busca por nome/matrícula; linha clicável abre o boletim |
 | `/turmas` | CRUD de turmas com contagem de alunos por turma |
 | `/turmas/:id` | Detalhe da turma com lista de alunos vinculados |
+| `/disciplinas` | CRUD de disciplinas |
+| `/professores` | CRUD de professores (cria Usuario + Professor + Lecionamentos); soft delete; badges de turmas e disciplinas |
+| `/planos-ensino` | Lista de planos com status (preenchido/em branco/inativo) |
+| `/planos-ensino/:id` | Editor longo em seções (Programação / Execução / Situação) |
 | `/ocorrencias` | Lista ordenada por status (abertas → arquivadas) + data desc; filtro por status |
 | `/ocorrencias/:id` | Detalhe com botões rápidos de mudança de status; editar/excluir num dropdown discreto |
 | `/presenca` | Lista de chamadas por turma e data |
 | `/presenca/:id` | Tela da chamada com resumo P/A/J/R e edição inline por aluno (optimistic update) |
+| `/tarefas` | Lista de tarefas com busca |
+| `/tarefas/:id` | Detalhe com resumo de entregas e marcação por aluno |
+| `/boletim/:alunoId` | Boletim agregado do aluno (frequência + notas + ocorrências) com layout de impressão |
+
+Botões de criação/edição/exclusão em cadastros (Alunos, Turmas, Disciplinas, Professores) só aparecem para admin/diretor — controlado por `usePermissoes`.
 
 ### Camadas
 
@@ -209,9 +254,11 @@ Single-Page Application em React 19 + TypeScript que consome a API REST do backe
 - **`features/<dominio>/hooks.ts`** — `useXxx`, `useCreate`, `useUpdate`, `useDelete` com invalidação automática de cache + toasts via sonner.
 - **`components/ui/`** — código copiado pelo shadcn CLI (Button, Input, Card, Dialog, Table, Select, DropdownMenu, Sonner, AlertDialog, etc.). Editável livremente.
 
-### Tema
+### Tema e responsividade
 
 Dark mode permanente (`<html class="dark">`), com paleta um pouco mais clara que o default do shadcn-nova. Toggle de light/dark não exposto (decisão de UI).
+
+Layout responsivo: a sidebar fixa (≥768px) vira um drawer (`Sheet`) com botão hamburguer abaixo de 768px. Padding e tipografia ajustam por breakpoint (`p-4 md:p-8`, `text-2xl md:text-3xl`). Tabelas escondem colunas secundárias em telas estreitas (`hidden sm:table-cell` / `md:` / `lg:`) em vez de scroll horizontal — os dados completos ficam acessíveis clicando na linha (vai pro detalhe). Funciona em celular (chamada de presença em sala) e tablet.
 
 ---
 
@@ -301,20 +348,20 @@ feature/* → develop → main
 
 **Optimistic update na chamada de presença** — clicar P/A/J/R num aluno muda a UI imediatamente; em caso de erro, o cache é revertido via snapshot. Sensação de fluidez sem esperar round-trip do backend.
 
+**`Lecionamento` em vez de M2M direta** — a relação professor↔disciplina virou um modelo intermediário `Lecionamento(professor, turma, disciplina)` em vez da M2M simples `Professor.disciplinas`. Isso permite saber *qual disciplina o professor dá em qual turma*, não só "quais matérias ele cobre". Granularidade necessária pra perguntas reais do diário ("quem dá Mat no 1º A?").
+
+**Permissões refletidas na UI** — o backend é a fonte de verdade (cada ViewSet tem suas permission classes); o frontend só espelha via `usePermissoes` pra não mostrar botões que dariam 403. Escrita em cadastros é admin/diretor; professor tem leitura.
+
 ---
 
 ## Backlog (não implementado)
 
-- Dashboard com métricas reais (ocorrências por status, alunos ativos, presença média).
-- Frontend de Disciplinas e Professores (CRUD; backend já existe).
-- Filtros de período (range de data) em Ocorrências e Presença.
-- `repositories.py` e `services.py` em cada app.
-- drf-spectacular (Swagger/OpenAPI) — destrava client TypeScript gerado automaticamente.
-- Paginação no backend (DRF `PageNumberPagination`).
-- Linting unificado: `ruff` no backend, ESLint integrado ao fluxo.
-- CI no GitHub Actions (rodar `manage.py test` + `npm run build` em cada PR).
-- Anexos em ocorrências (storage + upload + UI).
-- Audit log (`django-simple-history`).
-- Docker + docker-compose.
-- Deploy (backend em Render/Fly, frontend em Vercel/Cloudflare Pages) + Sentry.
-- Token blacklist server-side para invalidação imediata de JWT.
+A lista priorizada por fases vive em [`CLAUDE.md`](./CLAUDE.md) (seção Roadmap). Resumo do que ainda falta:
+
+- **Infra:** Docker + docker-compose, deploy (Render/Fly + Vercel/Cloudflare), backup automatizado do PostgreSQL, CI no GitHub Actions.
+- **Robustez:** paginação no backend (DRF `PageNumberPagination`), audit log (`django-simple-history`), observabilidade (logging estruturado + Sentry).
+- **Produto:** filtros de período (range de data) em Ocorrências/Presença, exportação de relatórios (PDF/CSV/Excel), dashboard com métricas avançadas (reincidência, presença média).
+- **Comunicação:** cadastro de responsáveis, notificações por e-mail (fila assíncrona), timeline do aluno.
+- **Senhas:** trocar a própria senha, reset por e-mail, admin resetar senha de terceiro pela UI.
+- **Dev experience:** drf-spectacular (gera client TypeScript), `repositories.py`/`services.py` por app, linting unificado (`ruff` + ESLint no fluxo).
+- **SaaS futuro:** multi-tenancy real (middleware + RLS + billing), token blacklist, LGPD formal.
