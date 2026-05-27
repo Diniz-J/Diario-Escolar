@@ -11,6 +11,38 @@ SECRET_KEY = config("SECRET_KEY")
 DEBUG = config("DEBUG", default=False, cast=bool)
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="", cast=Csv())
 
+# Origens confiáveis pro CSRF — obrigatório com o admin atrás de proxy
+# (nginx/HTTPS). Sem isso, POSTs do admin/forms falham com erro de CSRF
+# em produção. Lista separada por vírgula, COM esquema. Ex.:
+#   CSRF_TRUSTED_ORIGINS=https://diario.onrender.com,https://diario.com.br
+CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="", cast=Csv())
+
+# O app roda atrás de um proxy (nginx/Render) que termina o TLS. Este
+# header faz o Django confiar no X-Forwarded-Proto enviado pelo proxy ao
+# decidir se a requisição é https — sem isso, redirects e URLs absolutas
+# saem como http em produção.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Hardening só em produção (DEBUG=False). Em dev atrapalharia (redirect
+# https no localhost, cookies que o navegador recusa em http).
+if not DEBUG:
+    # HSTS e nosniff são inofensivos mesmo sem TLS (o navegador só aplica
+    # HSTS sob https), então ficam sempre ligados em produção.
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=2592000, cast=int)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+    # Redirect pra https + cookies "secure" dependem de TLS estar ativo na
+    # frente. Ligados por env (`SECURE_SSL=True`) pra não quebrar cenários
+    # sem TLS — ex.: testar o docker-compose.prod localmente em http puro,
+    # onde SECURE_SSL_REDIRECT viraria loop e os cookies seriam recusados.
+    # No Render/produção com HTTPS: defina SECURE_SSL=True.
+    _usar_ssl = config("SECURE_SSL", default=False, cast=bool)
+    SECURE_SSL_REDIRECT = _usar_ssl
+    SESSION_COOKIE_SECURE = _usar_ssl
+    CSRF_COOKIE_SECURE = _usar_ssl
+
 # Apps
 DJANGO_APPS = [
     "django.contrib.admin",
