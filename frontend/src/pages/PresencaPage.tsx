@@ -18,7 +18,13 @@ import { useTurmas } from "@/features/turmas/hooks";
 
 export function PresencaPage() {
   const navigate = useNavigate();
-  const registrosQuery = useRegistros();
+  const [dataInicio, setDataInicio] = useState("");
+  const [dataFim, setDataFim] = useState("");
+  // Range de datas filtrado server-side; busca por turma continua client-side.
+  const registrosQuery = useRegistros({
+    ...(dataInicio ? { data_inicio: dataInicio } : {}),
+    ...(dataFim ? { data_fim: dataFim } : {}),
+  });
   const turmasQuery = useTurmas();
   const [busca, setBusca] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -70,12 +76,52 @@ export function PresencaPage() {
         onCreated={(id) => navigate(`/presenca/${id}`)}
       />
 
-      <Input
-        placeholder="Buscar por turma ou data..."
-        value={busca}
-        onChange={(e) => setBusca(e.target.value)}
-        className="max-w-sm"
-      />
+      <div className="flex flex-wrap gap-3 items-end">
+        <Input
+          placeholder="Buscar por turma ou data..."
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          className="max-w-sm"
+        />
+        <div className="flex flex-col gap-1">
+          <label htmlFor="data-inicio" className="text-xs text-muted-foreground">
+            De
+          </label>
+          <Input
+            id="data-inicio"
+            type="date"
+            value={dataInicio}
+            max={dataFim || undefined}
+            onChange={(e) => setDataInicio(e.target.value)}
+            className="w-[160px]"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="data-fim" className="text-xs text-muted-foreground">
+            Até
+          </label>
+          <Input
+            id="data-fim"
+            type="date"
+            value={dataFim}
+            min={dataInicio || undefined}
+            onChange={(e) => setDataFim(e.target.value)}
+            className="w-[160px]"
+          />
+        </div>
+        {(dataInicio || dataFim) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setDataInicio("");
+              setDataFim("");
+            }}
+          >
+            Limpar datas
+          </Button>
+        )}
+      </div>
 
       <div className="rounded-md border">
         <Table>
