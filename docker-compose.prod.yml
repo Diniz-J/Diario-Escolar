@@ -29,9 +29,16 @@ services:
     build:
       context: .
       target: prod
-    # Aplica migrations e sobe o gunicorn (o CMD do Dockerfile já tem o
-    # gunicorn, mas aqui prefixamos o migrate pra garantir schema atualizado).
-    command: sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3"
+    # Aplica migrations e sobe o gunicorn. Concorrência via env (defaults
+    # enxutos pra free tier). O `$$` escapa a substituição do compose: quem
+    # expande as variáveis é o shell DENTRO do container (lendo o .env.prod),
+    # não o compose ao ler este arquivo.
+    command: >
+      sh -c "python manage.py migrate &&
+      gunicorn config.wsgi:application --bind 0.0.0.0:8000
+      --workers $${GUNICORN_WORKERS:-1}
+      --threads $${GUNICORN_THREADS:-4}
+      --worker-class $${GUNICORN_WORKER_CLASS:-gthread}"
     env_file: .env.prod
     environment:
       # Dentro da rede do compose o banco é o serviço `db`.
