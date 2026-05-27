@@ -20,6 +20,7 @@ ENV/
 .env
 .env.*
 !.env.example
+!.env.prod.example
 
 # Django
 *.log
