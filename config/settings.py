@@ -1,10 +1,17 @@
 """Configurações do projeto Diário Escolar."""
+import sys
 from datetime import timedelta
 from pathlib import Path
 
 from decouple import Csv, config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# True quando rodando a suíte (`manage.py test`). Usado para desligar o
+# rate limit de login nos testes — senão os vários logins da suíte
+# estourariam o limite e quebrariam testes não relacionados. O throttle
+# em si é testado isoladamente reativando o rate via override_settings.
+TESTING = "test" in sys.argv
 
 # Segurança
 SECRET_KEY = config("SECRET_KEY")
@@ -56,6 +63,8 @@ DJANGO_APPS = [
 THIRD_PARTY_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
+    # Permite invalidar refresh tokens (logout efetivo + rotação segura).
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "django_filters",
 ]
@@ -165,6 +174,16 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
+    # ScopedRateThrottle só limita views que definem `throttle_scope`
+    # (ex.: o login). Não afeta os endpoints normais da API.
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.ScopedRateThrottle",
+    ),
+    "DEFAULT_THROTTLE_RATES": {
+        # Anti-brute-force no login: 5 tentativas por minuto por IP.
+        # Desligado sob testes (rate None) — ver TESTING acima.
+        "login": None if TESTING else "5/min",
+    },
 }
 
 # SimpleJWT
@@ -172,6 +191,11 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "AUTH_HEADER_TYPES": ("Bearer",),
+    # A cada refresh, emite um novo refresh e invalida o anterior
+    # (blacklist). Reduz a janela de um refresh roubado e habilita logout
+    # efetivo via /auth/logout/.
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
 }
 
 # CORS
