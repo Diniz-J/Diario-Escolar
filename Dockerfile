@@ -42,4 +42,8 @@ RUN SECRET_KEY=build-only-collectstatic \
 # free tier de 256-512 MB. CRUD é I/O-bound (espera o banco), então threads
 # dão concorrência sem o custo de RAM de múltiplos processos. Em servidor
 # maior, basta setar GUNICORN_WORKERS no .env.prod (sem mexer no código).
-CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-1} --threads ${GUNICORN_THREADS:-4} --worker-class ${GUNICORN_WORKER_CLASS:-gthread}"]
+#
+# `${PORT:-8000}`: PaaS (Render, Fly, etc.) injetam a porta via $PORT. Sem
+# essa variável (ex.: compose local, onde o `command` sobrescreve este CMD)
+# cai em 8000.
+CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${GUNICORN_WORKERS:-1} --threads ${GUNICORN_THREADS:-4} --worker-class ${GUNICORN_WORKER_CLASS:-gthread}"]
