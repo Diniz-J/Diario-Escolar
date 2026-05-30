@@ -1,5 +1,6 @@
 """Registro da app presenca no Django admin."""
 from django.contrib import admin
+from simple_history.admin import SimpleHistoryAdmin
 
 from .models import ItemPresenca, RegistroPresenca
 
@@ -19,7 +20,7 @@ class ItemPresencaInline(admin.TabularInline):
 
 
 @admin.register(RegistroPresenca)
-class RegistroPresencaAdmin(admin.ModelAdmin):
+class RegistroPresencaAdmin(SimpleHistoryAdmin):
     list_display = ("turma", "data", "professor", "escola")
     list_filter = ("data", "escola", "turma")
     search_fields = ("turma__nome", "observacao")
@@ -30,7 +31,7 @@ class RegistroPresencaAdmin(admin.ModelAdmin):
 
 
 @admin.register(ItemPresenca)
-class ItemPresencaAdmin(admin.ModelAdmin):
+class ItemPresencaAdmin(SimpleHistoryAdmin):
     list_display = ("registro", "aluno", "status", "escola")
     list_filter = ("status", "escola")
     search_fields = ("aluno__nome_completo", "aluno__matricula", "observacao")

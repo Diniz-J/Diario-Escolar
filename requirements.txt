@@ -13,3 +13,7 @@ whitenoise>=6.7,<7
 # Lê a config do banco de uma única DATABASE_URL (padrão em Render, Fly,
 # AWS, etc.). No dev/Docker local continuamos usando DB_NAME/DB_USER/...
 dj-database-url>=2.2,<3
+# Audit log: cria uma tabela *_historical por modelo registrado e captura
+# `history_user` automaticamente via middleware. Integra no admin com diff
+# lado a lado (SimpleHistoryAdmin).
+django-simple-history>=3.7,<4

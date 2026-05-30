@@ -1,11 +1,12 @@
 """Registro da app planos_ensino no Django admin."""
 from django.contrib import admin
+from simple_history.admin import SimpleHistoryAdmin
 
 from .models import PlanoEnsino
 
 
 @admin.register(PlanoEnsino)
-class PlanoEnsinoAdmin(admin.ModelAdmin):
+class PlanoEnsinoAdmin(SimpleHistoryAdmin):
     list_display = (
         "turma",
         "disciplina",

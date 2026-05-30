@@ -15,6 +15,7 @@ from datetime import date
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from simple_history.models import HistoricalRecords
 
 from apps.common.models import BaseModelEscopado
 from apps.escola.models import Aluno, Escola, Professor, Turma
@@ -54,6 +55,8 @@ class Ocorrencia(BaseModelEscopado):
     escola = models.ForeignKey(
         Escola, on_delete=models.PROTECT, related_name="ocorrencias"
     )
+
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = "ocorrência"

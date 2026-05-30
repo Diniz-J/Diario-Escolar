@@ -1,11 +1,12 @@
 """Registro da app ocorrencias no Django admin."""
 from django.contrib import admin
+from simple_history.admin import SimpleHistoryAdmin
 
 from .models import Ocorrencia
 
 
 @admin.register(Ocorrencia)
-class OcorrenciaAdmin(admin.ModelAdmin):
+class OcorrenciaAdmin(SimpleHistoryAdmin):
     list_display = (
         "aluno",
         "turma",

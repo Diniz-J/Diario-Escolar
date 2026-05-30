@@ -18,6 +18,7 @@ from datetime import date
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
+from simple_history.models import HistoricalRecords
 
 from apps.common.models import BaseModelEscopado
 from apps.escola.models import Aluno, Disciplina, Escola, Professor, Turma
@@ -64,6 +65,8 @@ class Tarefa(BaseModelEscopado):
     escola = models.ForeignKey(
         Escola, on_delete=models.PROTECT, related_name="tarefas"
     )
+
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = "tarefa"
@@ -152,6 +155,8 @@ class EntregaTarefa(BaseModelEscopado):
     escola = models.ForeignKey(
         Escola, on_delete=models.PROTECT, related_name="entregas_tarefas"
     )
+
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = "entrega de tarefa"

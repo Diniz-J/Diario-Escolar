@@ -2,6 +2,7 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from simple_history.models import HistoricalRecords
 
 from apps.common.models import BaseModelEscopado, TimeStampedModel
 from apps.common.validators import validar_cnpj
@@ -118,6 +119,8 @@ class Aluno(BaseModelEscopado):
         Escola, on_delete=models.PROTECT, related_name="alunos"
     )
 
+    history = HistoricalRecords()
+
     class Meta:
         verbose_name = "aluno"
         verbose_name_plural = "alunos"
@@ -164,6 +167,8 @@ class Professor(BaseModelEscopado):
     escola = models.ForeignKey(
         Escola, on_delete=models.PROTECT, related_name="professores"
     )
+
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = "professor"
@@ -218,6 +223,8 @@ class Lecionamento(BaseModelEscopado):
     escola = models.ForeignKey(
         Escola, on_delete=models.PROTECT, related_name="lecionamentos"
     )
+
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = "lecionamento"
