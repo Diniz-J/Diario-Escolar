@@ -91,7 +91,11 @@ export function OcorrenciaDetalhePage() {
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/ocorrencias">← Voltar</Link>
         </Button>
-        <div className="flex items-center justify-between gap-4">
+        {/* Empilha título e ações até `lg` (1024px). No iPad em portrait
+            (768-1024px) os 3 botões de status + dropdown não cabem na
+            mesma linha do título sem ficar colados; só a partir de `lg`
+            há respiro pra mostrar tudo lado a lado. */}
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl md:text-3xl font-semibold">Ocorrência</h1>
             {ocorrencia && (
@@ -104,7 +108,10 @@ export function OcorrenciaDetalhePage() {
           </div>
 
           {ocorrencia && (
-            <div className="flex items-center gap-2">
+            // `flex-wrap` cobre o pior caso (telas estreitas tipo iPhone SE):
+            // se os botões + dropdown ainda não couberem na linha, o `⋯`
+            // pula sozinho pra próxima — sem overflow horizontal.
+            <div className="flex flex-wrap items-center gap-2">
               {ACOES_POR_STATUS[ocorrencia.status].map((acao) => (
                 <Button
                   key={acao.para}
