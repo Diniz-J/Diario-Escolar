@@ -113,32 +113,65 @@ Depois que o frontend tiver URL no Vercel:
 - [ ] Login no frontend funciona (token vem do backend).
 - [ ] Criar/listar dados funciona (CORS ok).
 
-## Email de ocorrência (Resend)
+## Email de ocorrência (Brevo via HTTP API)
 
 Quando uma ocorrência é criada, o sistema envia um email ao responsável do
-aluno. Sem config de SMTP, o backend só registra no log (não envia). Para
-ativar o envio real com o Resend:
+aluno. O envio roda em **thread daemon** (fire-and-forget) — a request HTTP
+volta na hora; o email é melhor-esforço protegido (falha não trava o
+registro). Sem credencial nenhuma, o backend usa o console backend e só
+loga o conteúdo do email — útil pra dev local.
 
-1. Crie conta em **resend.com** → gere uma **API key** (`re_...`).
-2. **Verifique um domínio** no Resend (Settings → Domains). Sem domínio
-   verificado, o Resend só entrega para o email da própria conta (modo teste)
-   e usa o remetente `onboarding@resend.dev`.
-3. No Render, adicione as envs (ver `.env.prod.example`):
-   ```
-   EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-   EMAIL_HOST=smtp.resend.com
-   EMAIL_PORT=587
-   EMAIL_USE_TLS=True
-   EMAIL_HOST_USER=resend
-   EMAIL_HOST_PASSWORD=<sua API key>
-   DEFAULT_FROM_EMAIL=Diário Escolar <ocorrencias@seudominio.com.br>
-   ```
-4. Cada aluno precisa ter **email do responsável** cadastrado (campo
-   obrigatório no cadastro de aluno). Alunos antigos sem responsável não
-   recebem — edite-os para preencher.
+### Por que Brevo (e não SMTP)?
 
-> O envio é síncrono e protegido: se o email falhar, a ocorrência é salva
-> mesmo assim (o erro vai pro log, não trava o registro).
+O free tier do Render **bloqueia outbound SMTP** nas portas 25/465/587
+desde setembro de 2025. Qualquer tentativa com Gmail/SendGrid/Mailgun via
+SMTP retorna `Network is unreachable`. A saída é usar HTTP API (porta
+443, sempre liberada) — `django-anymail` faz essa ponte mantendo o
+`send_mail` do Django igual no código.
+
+Por que Brevo (ex-Sendinblue):
+
+- 300 emails/dia grátis pra sempre.
+- **Não exige domínio próprio** — basta verificar um endereço de email
+  como remetente (ex.: o próprio Gmail pessoal).
+- API key é tudo que precisa.
+
+Se um dia quiser trocar pra SendGrid/Mailgun/Postmark, é só mudar a env
+`EMAIL_BACKEND` pro backend correspondente do anymail e a chave — o
+código de envio não muda.
+
+### Setup passo-a-passo
+
+1. Crie conta em **brevo.com** com o email que vai ser o remetente.
+2. Confirme o email (link enviado pelo Brevo).
+3. **Senders, Domains & Dedicated IPs → Senders**: clica **Add a sender**,
+   preenche nome + email, confirma pelo link que chega.
+4. **SMTP & API → API Keys**: clica **Generate a new API key**, dá um nome
+   (ex.: `Diário Escolar`) e copia o valor (`xkeysib-...`). **Não dá pra
+   ver de novo depois**; se perder, gere outra.
+5. No Render, defina/atualize as envs:
+   ```
+   EMAIL_BACKEND=anymail.backends.brevo.EmailBackend
+   ANYMAIL_BREVO_API_KEY=xkeysib-<sua chave>
+   DEFAULT_FROM_EMAIL=Diário Escolar <seu-email-verificado@gmail.com>
+   ```
+   Pode remover as envs antigas de SMTP (`EMAIL_HOST`, `EMAIL_PORT`,
+   `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`) — anymail
+   ignora.
+6. Cada aluno precisa ter **email do responsável** cadastrado (campo
+   obrigatório no cadastro). Alunos antigos sem responsável não recebem —
+   edite-os pra preencher.
+
+> O envio é em background com `EMAIL_TIMEOUT=10s` por segurança. Se o
+> email falhar, o erro vai pro log do Render como
+> `Ocorrência N: falha ao enviar email para X.` e a ocorrência fica salva.
+
+### Quando vale SMTP de novo
+
+Se um dia for pra plano pago do Render (`Starter`+, $7/mês), as portas
+465/587 voltam a funcionar. Aí dá pra usar Gmail, Resend (com domínio),
+Mailgun, etc., via SMTP — mas o caminho via anymail HTTP API continua
+funcionando do mesmo jeito, então não há urgência em mudar.
 
 ## Quando migrar pra produção de verdade (cliente pagante)
 

@@ -17,3 +17,9 @@ dj-database-url>=2.2,<3
 # `history_user` automaticamente via middleware. Integra no admin com diff
 # lado a lado (SimpleHistoryAdmin).
 django-simple-history>=3.7,<4
+# Email via HTTP API (Brevo) em vez de SMTP. Necessário porque o free tier
+# do Render bloqueia outbound SMTP nas portas 25/465/587 desde set/2025;
+# anymail empacota o `send_mail` do Django numa chamada HTTPS pra API do
+# Brevo (porta 443, sempre liberada). A lib abstrai vários providers — se
+# trocarmos pra SendGrid/Mailgun/Postmark depois, só muda a env.
+django-anymail[brevo]>=11,<14
