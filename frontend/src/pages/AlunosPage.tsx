@@ -9,7 +9,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -20,15 +22,21 @@ import {
 } from "@/components/ui/table";
 import { AlunoDeleteDialog } from "@/features/alunos/AlunoDeleteDialog";
 import { AlunoFormDialog } from "@/features/alunos/AlunoFormDialog";
-import { useAlunos } from "@/features/alunos/hooks";
+import { useAlunos, useUpdateAluno } from "@/features/alunos/hooks";
 import { usePermissoes } from "@/features/auth/usePermissoes";
 import { useTurmas } from "@/features/turmas/hooks";
 import type { Aluno } from "@/types/api";
 
 export function AlunosPage() {
   const navigate = useNavigate();
-  const alunosQuery = useAlunos();
+  const [mostrarInativos, setMostrarInativos] = useState(false);
+  // Padrão: lista só ativos. Toggle "Mostrar inativos" inverte e o
+  // backend devolve só os com `ativo=false` — soft delete deixa de
+  // poluir a listagem do dia a dia, mas permanece acessível pra
+  // pesquisar histórico ou reativar um aluno.
+  const alunosQuery = useAlunos({ ativo: !mostrarInativos });
   const turmasQuery = useTurmas();
+  const updateMutation = useUpdateAluno();
   const { podeModificarCadastros } = usePermissoes();
   const [busca, setBusca] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -63,6 +71,20 @@ export function AlunosPage() {
     }
   }
 
+  // PATCH `ativo: true` num aluno desativado. Usa o mesmo serializer da
+  // edição (DRF não exige campos `required` ausentes em PATCH parcial).
+  function reativar(aluno: Aluno) {
+    updateMutation.mutate({ id: aluno.id, patch: { ativo: true } });
+  }
+
+  // Mensagem do estado vazio considera os 3 cenários: busca sem hit,
+  // toggle de inativos sem ninguém pra mostrar, e cadastro zerado.
+  function mensagemVazia(): string {
+    if (busca) return "Nenhum aluno encontrado para essa busca.";
+    if (mostrarInativos) return "Nenhum aluno inativo.";
+    return "Nenhum aluno cadastrado.";
+  }
+
   return (
     <div className="p-4 md:p-8 space-y-6">
       <header className="flex items-center justify-between">
@@ -82,12 +104,27 @@ export function AlunosPage() {
         onOpenChange={(open) => !open && setExcluindo(null)}
       />
 
-      <Input
-        placeholder="Buscar por nome ou matrícula..."
-        value={busca}
-        onChange={(e) => setBusca(e.target.value)}
-        className="max-w-sm"
-      />
+      <div className="flex flex-wrap items-center gap-4">
+        <Input
+          placeholder="Buscar por nome ou matrícula..."
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          className="max-w-sm"
+        />
+        <div className="flex items-center gap-2">
+          <Switch
+            id="mostrar-inativos"
+            checked={mostrarInativos}
+            onCheckedChange={setMostrarInativos}
+          />
+          <Label
+            htmlFor="mostrar-inativos"
+            className="text-sm cursor-pointer select-none"
+          >
+            Mostrar inativos
+          </Label>
+        </div>
+      </div>
 
       <div className="rounded-md border">
         <Table>
@@ -137,9 +174,7 @@ export function AlunosPage() {
                   colSpan={5}
                   className="text-center text-muted-foreground py-8"
                 >
-                  {busca
-                    ? "Nenhum aluno encontrado para essa busca."
-                    : "Nenhum aluno cadastrado."}
+                  {mensagemVazia()}
                 </TableCell>
               </TableRow>
             ) : (
@@ -152,7 +187,19 @@ export function AlunosPage() {
                   <TableCell className="hidden sm:table-cell font-mono text-xs">
                     {aluno.matricula}
                   </TableCell>
-                  <TableCell>{aluno.nome_completo}</TableCell>
+                  <TableCell>
+                    <span className="inline-flex items-center gap-2">
+                      {aluno.nome_completo}
+                      {/* Reforço visual em mobile, onde a coluna Status
+                          some. Mesmo no md+ é útil pra varredura rápida
+                          ao olhar o nome diretamente. */}
+                      {!aluno.ativo && (
+                        <span className="text-[10px] uppercase tracking-wide bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                          inativo
+                        </span>
+                      )}
+                    </span>
+                  </TableCell>
                   <TableCell>
                     {turmasPorId.get(aluno.turma) ?? "—"}
                   </TableCell>
@@ -183,12 +230,23 @@ export function AlunosPage() {
                           <DropdownMenuItem onClick={() => setEditando(aluno)}>
                             Editar
                           </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setExcluindo(aluno)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            Excluir
-                          </DropdownMenuItem>
+                          {aluno.ativo ? (
+                            <DropdownMenuItem
+                              onClick={() => setExcluindo(aluno)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              Excluir
+                            </DropdownMenuItem>
+                          ) : (
+                            // Aluno inativo: oferece reativar em vez de
+                            // excluir. Mesmo endpoint da edição (PATCH).
+                            <DropdownMenuItem
+                              onClick={() => reativar(aluno)}
+                              disabled={updateMutation.isPending}
+                            >
+                              Reativar
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}

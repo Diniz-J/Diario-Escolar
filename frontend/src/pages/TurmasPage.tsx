@@ -28,10 +28,12 @@ import type { Turma } from "@/types/api";
 export function TurmasPage() {
   const navigate = useNavigate();
   const turmasQuery = useTurmas();
-  // Carregamos todos os alunos uma vez e contamos localmente — evita
-  // N+1 requests (um por turma). TanStack Query compartilha esse cache
-  // com a página de Alunos, então não há custo adicional na navegação.
-  const alunosQuery = useAlunos();
+  // Carregamos os alunos ativos uma vez e contamos localmente — evita
+  // N+1 requests (um por turma). Inativos (soft delete) não entram na
+  // contagem porque o número reflete a operação atual, não o histórico
+  // cumulativo. TanStack Query compartilha esse cache com o estado
+  // padrão da página de Alunos (que também usa `ativo: true`).
+  const alunosQuery = useAlunos({ ativo: true });
   const { podeModificarCadastros } = usePermissoes();
   const [busca, setBusca] = useState("");
   const [formOpen, setFormOpen] = useState(false);

@@ -17,8 +17,11 @@ interface AlunoDeleteDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-// Confirmação de exclusão. AlertDialog do shadcn cuida de foco e
-// acessibilidade (ESC fecha, click fora fecha, Enter confirma).
+// Confirmação de "exclusão" — na prática soft delete. O endpoint
+// DELETE do AlunoViewSet marca `ativo=False` em vez de remover a
+// linha, preservando o histórico (ocorrências, presença, tarefas).
+// AlertDialog do shadcn cuida de foco e acessibilidade (ESC fecha,
+// click fora fecha, Enter confirma).
 export function AlunoDeleteDialog({
   aluno,
   onOpenChange,
@@ -39,11 +42,14 @@ export function AlunoDeleteDialog({
     <AlertDialog open={aluno != null} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Excluir aluno?</AlertDialogTitle>
+          <AlertDialogTitle>Inativar aluno?</AlertDialogTitle>
           <AlertDialogDescription>
-            Esta ação removerá <strong>{aluno?.nome_completo}</strong>{" "}
-            permanentemente. Alunos com ocorrências ou registros de
-            presença não podem ser excluídos.
+            <strong>{aluno?.nome_completo}</strong> será marcado como
+            inativo e deixará de aparecer nas listagens e seleções do
+            dia a dia. O histórico (ocorrências, presença, tarefas)
+            permanece preservado. Você pode reativá-lo a qualquer
+            momento ligando o filtro "Mostrar inativos" na página de
+            Alunos.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -55,7 +61,7 @@ export function AlunoDeleteDialog({
             disabled={deleteMutation.isPending}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            {deleteMutation.isPending ? "Excluindo..." : "Excluir"}
+            {deleteMutation.isPending ? "Inativando..." : "Inativar"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

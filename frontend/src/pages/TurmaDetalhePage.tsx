@@ -28,7 +28,10 @@ export function TurmaDetalhePage() {
   const turmaId = params.id ? parseInt(params.id, 10) : undefined;
 
   const turmaQuery = useTurma(turmaId);
-  const alunosQuery = useAlunos({ turma: turmaId });
+  // Lista só alunos ativos da turma — alunos inativos (soft delete)
+  // ficam disponíveis pra pesquisa de histórico na página de Alunos
+  // via toggle "Mostrar inativos", não aqui.
+  const alunosQuery = useAlunos({ turma: turmaId, ativo: true });
 
   return (
     <div className="p-4 md:p-8 space-y-6">
