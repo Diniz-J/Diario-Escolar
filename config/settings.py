@@ -70,6 +70,9 @@ THIRD_PARTY_APPS = [
     # Audit log — registra histórico (snapshot + diff + history_user) dos
     # modelos que declararem `HistoricalRecords()`. Ver apps/*/models.py.
     "simple_history",
+    # Email via HTTP API (Brevo/SendGrid/Mailgun/...). Necessário pra
+    # contornar o bloqueio de SMTP outbound do free tier do Render.
+    "anymail",
 ]
 
 # Apps locais — adicionadas conforme cada domínio é implementado
@@ -220,9 +223,17 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=Csv())
 
 # Email — usado pra notificar o responsável quando uma ocorrência é criada.
+#
 # Default = console backend (imprime o email no log; não envia de verdade),
-# pra dev funcionar sem SMTP. Em produção, defina EMAIL_BACKEND como SMTP e
-# preencha as credenciais (ex.: Resend — ver DEPLOY.md).
+# pra dev funcionar sem credencial nenhuma.
+#
+# Em produção (Render free), SMTP é bloqueado nas portas 25/465/587 desde
+# set/2025 — então usamos a API HTTP do Brevo via `django-anymail`. Setar
+# as duas envs abaixo destrava o envio real:
+#   EMAIL_BACKEND=anymail.backends.brevo.EmailBackend
+#   ANYMAIL_BREVO_API_KEY=<a chave gerada no painel do Brevo>
+# As envs `EMAIL_HOST/PORT/...` viraram legado (ficam aqui caso alguém
+# queira voltar a usar SMTP em outro provedor/plano).
 EMAIL_BACKEND = config(
     "EMAIL_BACKEND",
     default="django.core.mail.backends.console.EmailBackend",
@@ -236,8 +247,15 @@ EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
 # infinita — uma conexão lenta penduraria a thread de envio pra sempre.
 EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=10, cast=int)
 DEFAULT_FROM_EMAIL = config(
-    "DEFAULT_FROM_EMAIL", default="Diário Escolar <onboarding@resend.dev>"
+    "DEFAULT_FROM_EMAIL", default="Diário Escolar <no-reply@example.com>"
 )
+
+# Config do `django-anymail` — só a chave do Brevo por enquanto. A lib
+# também leria envs nativas (`ANYMAIL_BREVO_API_KEY` direto), mas
+# centralizar aqui deixa explícito quais providers estão suportados.
+ANYMAIL = {
+    "BREVO_API_KEY": config("ANYMAIL_BREVO_API_KEY", default=""),
+}
 
 # Em testes, usa o backend em memória pra inspecionar `mail.outbox` sem
 # enviar nada de verdade.
