@@ -1,6 +1,7 @@
 """Modelos da app accounts."""
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from simple_history.models import HistoricalRecords
 
 
 class Usuario(AbstractUser):
@@ -32,6 +33,11 @@ class Usuario(AbstractUser):
         blank=True,
         related_name="usuarios",
     )
+
+    # Audit log. `last_login` é excluído por ser barulho (atualiza a cada
+    # login bem-sucedido); `password` é incluído porque o hash mudar já é
+    # informação auditável (não expõe a senha, é PBKDF2 one-way).
+    history = HistoricalRecords(excluded_fields=["last_login"])
 
     class Meta:
         verbose_name = "usuário"

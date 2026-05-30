@@ -21,6 +21,14 @@ if [ -n "${DJANGO_SUPERUSER_USERNAME:-}" ] && [ -n "${DJANGO_SUPERUSER_PASSWORD:
   python manage.py createsuperuser --noinput || true
 fi
 
+# Backfill do audit log: dá uma entrada histórica "+ created" pros registros
+# que existem ANTES de o modelo ganhar HistoricalRecords (ex.: alunos do
+# seed em prod, criados antes do PR de audit log). É idempotente — só
+# popula objetos que ainda não têm histórico — então rodar a cada boot é
+# barato. `|| true` evita derrubar o serviço se rolar um erro pontual.
+echo "[entrypoint] Backfill do audit log (populate_history)..."
+python manage.py populate_history --auto || true
+
 echo "[entrypoint] Subindo gunicorn..."
 exec gunicorn config.wsgi:application \
   --bind "0.0.0.0:${PORT:-8000}" \

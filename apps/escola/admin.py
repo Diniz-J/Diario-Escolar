@@ -6,6 +6,7 @@ de `EscolaAdmin`, `TurmaAdmin` ou `AlunoAdmin` quebra os autocompletes
 abaixo em runtime sem aviso prévio.
 """
 from django.contrib import admin
+from simple_history.admin import SimpleHistoryAdmin
 
 from .models import Aluno, Disciplina, Escola, Lecionamento, Professor, Turma
 
@@ -39,7 +40,7 @@ class DisciplinaAdmin(admin.ModelAdmin):
 
 
 @admin.register(Aluno)
-class AlunoAdmin(admin.ModelAdmin):
+class AlunoAdmin(SimpleHistoryAdmin):
     list_display = ("nome_completo", "matricula", "turma", "escola", "ativo")
     list_filter = ("ativo", "turma", "escola")
     search_fields = ("nome_completo", "matricula")
@@ -49,7 +50,7 @@ class AlunoAdmin(admin.ModelAdmin):
 
 
 @admin.register(Professor)
-class ProfessorAdmin(admin.ModelAdmin):
+class ProfessorAdmin(SimpleHistoryAdmin):
     list_display = ("usuario", "escola", "ativo")
     list_filter = ("ativo", "escola")
     # Busca pelos campos do Usuario relacionado — útil pra autocompletes
@@ -64,7 +65,7 @@ class ProfessorAdmin(admin.ModelAdmin):
 
 
 @admin.register(Lecionamento)
-class LecionamentoAdmin(admin.ModelAdmin):
+class LecionamentoAdmin(SimpleHistoryAdmin):
     list_display = ("professor", "turma", "disciplina", "ativo")
     list_filter = ("ativo", "escola", "turma__ano_letivo")
     search_fields = (

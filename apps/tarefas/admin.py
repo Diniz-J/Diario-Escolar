@@ -1,5 +1,6 @@
 """Registro da app tarefas no Django admin."""
 from django.contrib import admin
+from simple_history.admin import SimpleHistoryAdmin
 
 from .models import EntregaTarefa, Tarefa
 
@@ -16,7 +17,7 @@ class EntregaTarefaInline(admin.TabularInline):
 
 
 @admin.register(Tarefa)
-class TarefaAdmin(admin.ModelAdmin):
+class TarefaAdmin(SimpleHistoryAdmin):
     list_display = (
         "titulo",
         "turma",
@@ -35,7 +36,7 @@ class TarefaAdmin(admin.ModelAdmin):
 
 
 @admin.register(EntregaTarefa)
-class EntregaTarefaAdmin(admin.ModelAdmin):
+class EntregaTarefaAdmin(SimpleHistoryAdmin):
     list_display = ("tarefa", "aluno", "entregue", "data_entrega", "nota")
     list_filter = ("entregue", "escola")
     search_fields = ("aluno__nome_completo", "aluno__matricula", "tarefa__titulo")

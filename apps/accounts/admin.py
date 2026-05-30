@@ -1,14 +1,20 @@
 """Registro da app accounts no Django admin."""
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
+from simple_history.admin import SimpleHistoryAdmin
 
 from .forms import UsuarioChangeForm, UsuarioCreationForm
 from .models import Usuario
 
 
 @admin.register(Usuario)
-class UsuarioAdmin(UserAdmin):
-    """Admin do Usuario com o campo `perfil` adicional."""
+class UsuarioAdmin(SimpleHistoryAdmin, UserAdmin):
+    """Admin do Usuario com o campo `perfil` adicional + aba de histórico.
+
+    A ordem do MRO importa: `SimpleHistoryAdmin` precisa vir ANTES de
+    `UserAdmin` para que o template do botão "History" seja resolvido
+    pelo simple-history; ambos são subclasses de `ModelAdmin`.
+    """
 
     add_form = UsuarioCreationForm
     form = UsuarioChangeForm

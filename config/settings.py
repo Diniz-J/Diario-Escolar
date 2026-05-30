@@ -67,6 +67,9 @@ THIRD_PARTY_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "django_filters",
+    # Audit log — registra histórico (snapshot + diff + history_user) dos
+    # modelos que declararem `HistoricalRecords()`. Ver apps/*/models.py.
+    "simple_history",
 ]
 
 # Apps locais — adicionadas conforme cada domínio é implementado
@@ -96,6 +99,10 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Captura `request.user` no thread-local lido pelo simple-history;
+    # sem isto o `history_user` das entradas históricas fica nulo. Tem
+    # que vir DEPOIS do AuthenticationMiddleware (que popula request.user).
+    "simple_history.middleware.HistoryRequestMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
