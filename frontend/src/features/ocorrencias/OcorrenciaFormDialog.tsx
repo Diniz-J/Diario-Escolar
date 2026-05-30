@@ -42,7 +42,12 @@ export function OcorrenciaFormDialog({
   ocorrencia,
 }: OcorrenciaFormDialogProps) {
   const turmasQuery = useTurmas();
-  const alunosQuery = useAlunos();
+  // Só alunos ativos podem ser alvo de uma NOVA ocorrência. Alunos
+  // inativos (soft delete) preservam histórico mas saem dos seletores
+  // do dia a dia. Em modo edição, o aluno já foi escolhido e mora em
+  // `ocorrencia.aluno` — se ele estiver inativo, o nome ainda aparece
+  // via `useAlunos()` sem filtro consumido em outras telas.
+  const alunosQuery = useAlunos({ ativo: true });
   const professoresQuery = useProfessores();
   const createMutation = useCreateOcorrencia();
   const updateMutation = useUpdateOcorrencia();

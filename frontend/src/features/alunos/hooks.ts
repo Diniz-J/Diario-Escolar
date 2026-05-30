@@ -65,6 +65,9 @@ export function useUpdateAluno() {
   });
 }
 
+// O DELETE do backend faz soft delete (marca `ativo=False`). O nome
+// segue `useDeleteAluno` por consistência com os outros recursos, mas
+// o efeito é "inativar" — o aluno e seu histórico permanecem no banco.
 export function useDeleteAluno() {
   const qc = useQueryClient();
   return useMutation({
@@ -73,8 +76,8 @@ export function useDeleteAluno() {
     },
     onSuccess: () => {
       invalidateAlunos(qc);
-      toast.success("Aluno excluído.");
+      toast.success("Aluno inativado.");
     },
-    onError: () => toast.error("Não foi possível excluir o aluno."),
+    onError: () => toast.error("Não foi possível inativar o aluno."),
   });
 }
