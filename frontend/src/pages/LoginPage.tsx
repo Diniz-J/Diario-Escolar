@@ -81,7 +81,7 @@ export function LoginPage() {
           className="text-[11px] uppercase tracking-[0.25em] mb-10"
           style={{ color: PALETA.olive }}
         >
-          · diário escolar
+          · diário diniz
         </p>
 
         {/* Título serif regular (sem italic — Fraunces já tem personalidade
@@ -232,7 +232,7 @@ export function LoginPage() {
             className="inline-block w-2 h-2 rounded-full"
             style={{ background: PALETA.ferrugem }}
           />
-          <span>v1.0 · Diário Escolar</span>
+          <span>v1.0 · Diário Diniz</span>
         </div>
       </div>
     </div>
