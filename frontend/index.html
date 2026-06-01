@@ -7,6 +7,16 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Fraunces (serif variable) — usada em títulos via `font-heading`.
+         Carregada via <link> em vez de @import no CSS pra evitar conflito
+         com a ordem de @imports do Tailwind/fontsource. Preconnect acelera
+         o handshake TLS com o servidor de fontes do Google. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..900&display=swap"
+    />
     <title>Diário Escolar</title>
   </head>
   <body>
