@@ -261,3 +261,32 @@ ANYMAIL = {
 # enviar nada de verdade.
 if TESTING:
     EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+
+# Observabilidade — Sentry.
+#
+# Ativado apenas quando a env `SENTRY_DSN` está setada e não estamos em
+# testes. Sem DSN o SDK fica inerte (dev local não precisa configurar
+# nada). A `DjangoIntegration` instala signal handlers que capturam
+# exceções não tratadas + erros 5xx + erros de `logger.error/exception`
+# automaticamente; nenhum middleware adicional precisa ser ligado.
+#
+# `send_default_pii=False` (default) — não envia username/email do
+# usuário pra Sentry por respeito à LGPD e ao princípio do menor dado.
+# Se um dia precisarmos correlacionar erro com usuário pra suporte,
+# basta ligar (e revisar a política de privacidade).
+#
+# `traces_sample_rate=0` — só erro, sem APM/tracing. Tracing entra na
+# quota de "performance units" do plano free; deixamos zerado pra
+# preservar a quota pro que realmente importa (exceções).
+SENTRY_DSN = config("SENTRY_DSN", default="")
+if SENTRY_DSN and not TESTING:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[DjangoIntegration()],
+        environment=config("SENTRY_ENVIRONMENT", default="production"),
+        traces_sample_rate=0.0,
+        send_default_pii=False,
+    )
