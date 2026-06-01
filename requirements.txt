@@ -23,3 +23,10 @@ django-simple-history>=3.7,<4
 # Brevo (porta 443, sempre liberada). A lib abstrai vários providers — se
 # trocarmos pra SendGrid/Mailgun/Postmark depois, só muda a env.
 django-anymail[brevo]>=11,<14
+# Observabilidade: captura exceções não tratadas + erros 500 + erros do
+# `logger.error()`/`logger.exception()` e envia pro Sentry com stack trace
+# e contexto da request. Resolve o problema de "os logs do Render somem
+# quando o serviço hiberna" — Sentry persiste tudo do lado deles.
+# Inicialização fica em `config/settings.py`, gated pela env `SENTRY_DSN`
+# (sem a env, o SDK fica inerte — bom pra dev local e CI).
+sentry-sdk[django]>=2.20,<3

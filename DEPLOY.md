@@ -173,6 +173,52 @@ Se um dia for pra plano pago do Render (`Starter`+, $7/mês), as portas
 Mailgun, etc., via SMTP — mas o caminho via anymail HTTP API continua
 funcionando do mesmo jeito, então não há urgência em mudar.
 
+## Observabilidade (Sentry)
+
+Os logs do Render somem quando o serviço hiberna no free tier — então
+quando algo quebra em produção a gente perde o stack trace antes de
+conseguir ler. Sentry resolve isso: captura cada exceção não tratada,
+cada erro 500 e cada `logger.error()`/`logger.exception()` do app
+(inclusive o que rola no envio assíncrono de email), persiste do lado
+deles e ainda manda email/Slack quando aparece coisa nova.
+
+O free tier do Sentry (Developer) aceita 5k events/mês — bem mais do
+que um app de 1 escola gera. Não cobra mesmo se passar do limite: ele
+só para de aceitar até o reset do mês.
+
+### Setup passo-a-passo
+
+1. Crie conta em **sentry.io**.
+2. **Create Project → Django**, dê um nome (ex.: `diario-escolar-backend`).
+   Sentry mostra o **DSN** (link `https://xxxxx@oNNN.ingest.sentry.io/NNN`).
+   Copie.
+3. No Render, adicione as envs:
+   ```
+   SENTRY_DSN=https://xxxxx@oNNN.ingest.sentry.io/NNN
+   SENTRY_ENVIRONMENT=production
+   ```
+   Salva → o serviço redeploya com o SDK ativo.
+4. **Create Project → React** (outro projeto, dentro da mesma org).
+   Pegue o DSN dele (separado do backend, pra você filtrar erros front
+   vs back nos painéis).
+5. No Vercel, adicione as envs (scope: **Production**):
+   ```
+   VITE_SENTRY_DSN=<dsn do projeto React>
+   VITE_SENTRY_ENVIRONMENT=production
+   ```
+   Force um redeploy (envs `VITE_*` são build-time — não pegam só com
+   salvar; precisa de novo build).
+
+### Teste de fumaça
+
+Após o redeploy, dispare um erro 500 proposital pra confirmar que o
+SDK está capturando: bata em qualquer endpoint inexistente com path
+mal-formado ou crie uma view temporária com `raise Exception("test")`.
+Em ~10s o evento aparece no painel do Sentry. Apague a view depois.
+
+> Sem `SENTRY_DSN` no Render (ou `VITE_SENTRY_DSN` no Vercel), o SDK
+> fica inerte — dev local funciona normal sem precisar de chave.
+
 ## Quando migrar pra produção de verdade (cliente pagante)
 
 - Postgres pago (Render, ou Neon/Supabase, ou RDS na AWS) — sem expiração.
