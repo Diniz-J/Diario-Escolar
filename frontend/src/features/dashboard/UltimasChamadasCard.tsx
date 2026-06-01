@@ -1,12 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRegistros } from "@/features/presenca/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
@@ -42,6 +36,9 @@ function formatarDataBR(iso: string): string {
 // Mostra a data da chamada mais recente por turma. Quando nenhuma turma
 // está filtrada, exibe até 5 turmas ativas (priorizando as que estão a
 // mais tempo sem chamada — sinaliza turma "esquecida").
+//
+// Visualmente alinhado com MetricCard (mesmo container `bg-paper` +
+// border) mas com tipografia de lista — sem o número grande no centro.
 export function UltimasChamadasCard({
   turmaFiltrada,
 }: UltimasChamadasCardProps) {
@@ -90,51 +87,48 @@ export function UltimasChamadasCard({
   }, [turmasQuery.data, registrosQuery.data, turmaFiltrada]);
 
   return (
-    <Card className="h-full">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          Última chamada por turma
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {carregando ? (
-          <div className="space-y-2">
-            <Skeleton className="h-5 w-full" />
-            <Skeleton className="h-5 w-full" />
-            <Skeleton className="h-5 w-3/4" />
-          </div>
-        ) : linhas.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nenhuma turma ativa.
-          </p>
-        ) : (
-          <ul className="space-y-1.5 text-sm">
-            {linhas.map((l) => {
-              const alerta = l.diasAtras == null || l.diasAtras > 3;
-              return (
-                <li key={l.turmaId} className="flex items-center justify-between gap-3">
-                  <Link
-                    to={`/turmas/${l.turmaId}`}
-                    className="truncate hover:underline"
-                  >
-                    {l.turmaNome}
-                  </Link>
-                  <span
-                    className={cn(
-                      "text-xs tabular-nums shrink-0",
-                      alerta ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground",
-                    )}
-                  >
-                    {l.ultimaData
-                      ? `${formatarDataBR(l.ultimaData)} · ${l.diasAtras}d`
-                      : "sem chamada"}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
+    <div className="h-full bg-paper rounded-lg p-6 border border-border">
+      <p className="text-[11px] uppercase tracking-[0.18em] text-sepia mb-4">
+        Última chamada por turma
+      </p>
+      {carregando ? (
+        <div className="space-y-2">
+          <Skeleton className="h-5 w-full" />
+          <Skeleton className="h-5 w-full" />
+          <Skeleton className="h-5 w-3/4" />
+        </div>
+      ) : linhas.length === 0 ? (
+        <p className="text-sm text-sepia">Nenhuma turma ativa.</p>
+      ) : (
+        <ul className="space-y-2 text-sm">
+          {linhas.map((l) => {
+            const alerta = l.diasAtras == null || l.diasAtras > 3;
+            return (
+              <li
+                key={l.turmaId}
+                className="flex items-center justify-between gap-3"
+              >
+                <Link
+                  to={`/turmas/${l.turmaId}`}
+                  className="truncate text-tinta hover:text-ferrugem transition-colors"
+                >
+                  {l.turmaNome}
+                </Link>
+                <span
+                  className={cn(
+                    "text-xs tabular-nums shrink-0 font-mono",
+                    alerta ? "text-ferrugem" : "text-sepia",
+                  )}
+                >
+                  {l.ultimaData
+                    ? `${formatarDataBR(l.ultimaData)} · ${l.diasAtras}d`
+                    : "sem chamada"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }

@@ -1,11 +1,5 @@
 import { useMemo, useState } from "react";
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -37,12 +31,10 @@ const TODAS = "todas";
 // Dashboard — destino padrão após o login. Renderizado dentro do
 // AppLayout (sidebar e botão Sair ficam por conta de lá).
 //
-// Estrutura: header de boas-vindas curto + dropdown "Todas as turmas /
-// turma X" que propaga pra todos os cards + grid 2x2 de métricas.
-//
-// Os cards consomem os mesmos endpoints CRUD já existentes (zero backend
-// novo). Filtragem por perfil ainda não — admin/professor/diretor veem
-// o mesmo. A modelagem prof↔turma vira PR à parte.
+// Estrutura editorial: saudação em Fraunces + filete ferrugem
+// (consistente com Login + Sidebar), perfil/sessão em mono pequena,
+// filtro de turma como linha discreta, e grid 2x2 de cards já
+// repaginados (ver MetricCard, UltimasChamadasCard, UltimasOcorrenciasCard).
 export function DashboardPage() {
   const { user } = useAuth();
   const turmasQuery = useTurmas();
@@ -81,32 +73,38 @@ export function DashboardPage() {
     return new Set(dados.map((a) => a.turma)).size;
   }, [alunosQuery.data]);
 
-  // Os cards levam pras listagens correspondentes. Hoje as listagens
-  // não leem querystring de turma — quando virarem leitoras, basta
-  // propagar `?turma=${turmaFiltro}` aqui.
   const linkOcorrencias = "/ocorrencias";
   const linkAlunos = "/alunos";
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl md:text-3xl font-semibold">
-          {nomeUsuario ? `Olá, ${nomeUsuario}` : "Dashboard"}
+    <div className="p-4 md:p-10 space-y-8">
+      <header className="space-y-3">
+        <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
+          {nomeUsuario ? `Olá, ${nomeUsuario}.` : "Dashboard"}
         </h1>
-        <p className="text-sm text-muted-foreground">
-          {perfilLabel} ·{" "}
-          {user
-            ? `sessão expira ${new Date(user.exp * 1000).toLocaleString("pt-BR")}`
-            : "—"}
+        <div className="h-px w-10 bg-ferrugem" />
+        <p className="text-[11px] uppercase tracking-[0.2em] text-sepia">
+          {perfilLabel}
+          {user && (
+            <span className="normal-case tracking-normal text-sepia/70 ml-2">
+              · sessão ativa
+            </span>
+          )}
         </p>
       </header>
 
       <div className="flex items-center gap-3">
-        <Label htmlFor="turma-filtro" className="text-sm text-muted-foreground">
-          Visão:
+        <Label
+          htmlFor="turma-filtro"
+          className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+        >
+          Visão
         </Label>
         <Select value={turmaFiltroRaw} onValueChange={setTurmaFiltroRaw}>
-          <SelectTrigger id="turma-filtro" className="w-[260px]">
+          <SelectTrigger
+            id="turma-filtro"
+            className="w-[260px] bg-paper border-border"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -122,14 +120,15 @@ export function DashboardPage() {
         </Select>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <MetricCard
           titulo="Ocorrências em aberto"
           valor={ocorrenciasAbertas.total}
           sublinha={
             ocorrenciasAbertas.total > 0 ? (
               <span>
-                {ocorrenciasAbertas.abertas} abertas ·{" "}
+                {ocorrenciasAbertas.abertas} abertas
+                <span className="mx-1.5 text-border">·</span>
                 {ocorrenciasAbertas.emAndamento} em andamento
               </span>
             ) : (
@@ -138,6 +137,7 @@ export function DashboardPage() {
           }
           href={linkOcorrencias}
           carregando={ocorrenciasQuery.isLoading}
+          tomDestaque={ocorrenciasAbertas.total > 0}
         />
 
         <MetricCard
@@ -159,14 +159,14 @@ export function DashboardPage() {
       </div>
 
       {!turmasQuery.data?.length && !turmasQuery.isLoading && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Nenhuma turma cadastrada</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
+        <div className="bg-paper rounded-lg border border-border p-6">
+          <p className="font-heading text-lg text-tinta mb-1">
+            Nenhuma turma cadastrada
+          </p>
+          <p className="text-sm text-sepia">
             Cadastre uma turma em "Turmas" pra começar a popular o dashboard.
-          </CardContent>
-        </Card>
+          </p>
+        </div>
       )}
     </div>
   );

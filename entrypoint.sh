@@ -19,6 +19,18 @@ python manage.py migrate --noinput
 if [ -n "${DJANGO_SUPERUSER_USERNAME:-}" ] && [ -n "${DJANGO_SUPERUSER_PASSWORD:-}" ]; then
   echo "[entrypoint] Garantindo superusuário ${DJANGO_SUPERUSER_USERNAME}..."
   python manage.py createsuperuser --noinput || true
+  # `createsuperuser` cria com Usuario.perfil = default ('professor').
+  # Em produção, o superuser administrativo precisa do perfil 'admin'
+  # pra os labels da UI ("Administrador") e as permissões granulares
+  # ficarem corretas. Idempotente: setar de novo no boot não causa
+  # efeito colateral.
+  python manage.py shell -c "
+from apps.accounts.models import Usuario
+u = Usuario.objects.filter(username='${DJANGO_SUPERUSER_USERNAME}').first()
+if u and u.perfil != 'admin':
+    u.perfil = 'admin'
+    u.save(update_fields=['perfil'])
+" || true
 fi
 
 # Backfill do audit log: dá uma entrada histórica "+ created" pros registros
