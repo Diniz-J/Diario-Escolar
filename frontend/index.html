@@ -1,12 +1,17 @@
 <!doctype html>
-<!-- A classe `dark` ativa a paleta dark definida em src/index.css —
-     dark mode permanente, sem toggle. Aplicar no HTML em vez de via
-     JS evita flash de tema light durante o carregamento. -->
-<html lang="pt-BR" class="dark">
+<!-- App em light mode permanente (paleta olive/linho — ver src/index.css).
+     Sem classe `dark` no html: a paleta vive nos tokens semânticos do
+     :root, e os componentes shadcn herdam tudo automaticamente. Se um
+     dia entrarmos com tema dark, a classe volta aqui via toggle. -->
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Sinaliza pro browser que o app é light-only — desabilita o
+         "force dark mode" automático do Chrome/Opera GX/Edge que
+         inverte cores de sites sem `prefers-color-scheme`. -->
+    <meta name="color-scheme" content="light" />
     <!-- Fraunces (serif variable) — usada em títulos via `font-heading`.
          Carregada via <link> em vez de @import no CSS pra evitar conflito
          com a ordem de @imports do Tailwind/fontsource. Preconnect acelera

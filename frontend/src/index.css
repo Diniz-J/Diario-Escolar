@@ -11,9 +11,40 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ────────────────────────────────────────────────────────────────────
+ * Paleta de marca (Diário Diniz)
+ * ────────────────────────────────────────────────────────────────────
+ * Light mode permanente — não há `.dark` ativo no app. A paleta vive
+ * em torno de uma metáfora de "diário em papel": fundo linho, texto
+ * tinta, primária olive (verde-musgo escuro), accent ferrugem.
+ *
+ * Os tokens semânticos shadcn (`--background`, `--foreground`,
+ * `--primary`, etc.) são mapeados pra essa paleta logo abaixo, então
+ * todos os componentes shadcn herdam automaticamente — não precisamos
+ * reescrever cada um.
+ *
+ * Tokens próprios (--olive, --linho, --ferrugem, ...) ficam expostos
+ * como utility classes via `@theme inline` (ex.: `bg-olive`,
+ * `text-ferrugem`, `border-paper`) — pra usar onde o vocabulário
+ * shadcn não tem equivalente direto.
+ */
+
 @theme inline {
     --font-heading: 'Fraunces', 'Geist Variable', serif;
     --font-sans: 'Geist Variable', sans-serif;
+
+    /* Cores da marca expostas como utility classes Tailwind. */
+    --color-olive: var(--olive);
+    --color-olive-dark: var(--olive-dark);
+    --color-linho: var(--linho);
+    --color-paper: var(--paper);
+    --color-ferrugem: var(--ferrugem);
+    --color-tinta: var(--tinta);
+    --color-sepia: var(--sepia);
+    --color-creme: var(--creme);
+
+    /* Mapeamento shadcn → paleta da marca. Esses são os tokens que
+       Card, Button, Input, etc. consomem via classes utility. */
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -55,75 +86,61 @@
 }
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
+    /* `color-scheme` reforça pro browser que o app é light. Combina
+       com a meta tag em index.html — alguns browsers respeitam um, outros
+       outro. Em conjunto cobrem a maior parte dos "force dark mode". */
+    color-scheme: light;
+
+    /* ─── Marca ─── */
+    --olive:        #4d5a2e;  /* primária (CTAs, marca) */
+    --olive-dark:   #3a4524;  /* fundo da sidebar, hover do CTA */
+    --linho:        #ebe2d1;  /* fundo principal do app */
+    --paper:        #f5efe0;  /* fundo de cards, inputs, áreas elevadas */
+    --ferrugem:     #b07d62;  /* accent quente — links, foco, indicadores */
+    --tinta:        #2d2a24;  /* texto principal */
+    --sepia:        #6b6859;  /* texto secundário, labels */
+    --creme:        #ebe2d1;  /* texto sobre fundos escuros (sidebar) */
+
+    /* ─── Tokens shadcn mapeados ─── */
+    --background:           var(--linho);
+    --foreground:           var(--tinta);
+    --card:                 var(--paper);
+    --card-foreground:      var(--tinta);
+    --popover:              var(--paper);
+    --popover-foreground:   var(--tinta);
+    --primary:              var(--olive);
+    --primary-foreground:   var(--creme);
+    --secondary:            var(--paper);
+    --secondary-foreground: var(--tinta);
+    --muted:                #e0d6c2;     /* tom entre linho e border */
+    --muted-foreground:     var(--sepia);
+    --accent:               var(--ferrugem);
+    --accent-foreground:    var(--creme);
+    --destructive:          #b85c38;     /* terracota — combina com paleta */
+    --border:               #d9cfb8;     /* bege escuro suave */
+    --input:                #d9cfb8;
+    --ring:                 var(--ferrugem);
+    --chart-1: var(--olive);
+    --chart-2: var(--ferrugem);
+    --chart-3: var(--sepia);
+    --chart-4: var(--olive-dark);
+    --chart-5: var(--tinta);
     --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+
+    /* ─── Sidebar específica (paleta inversa: fundo escuro, texto creme) ─── */
+    --sidebar:                      var(--olive-dark);
+    --sidebar-foreground:           var(--creme);
+    --sidebar-primary:              var(--ferrugem);
+    --sidebar-primary-foreground:   var(--creme);
+    --sidebar-accent:               #4d5a2e;            /* olive */
+    --sidebar-accent-foreground:    var(--creme);
+    --sidebar-border:               rgba(235, 226, 209, 0.12);
+    --sidebar-ring:                 var(--ferrugem);
 }
 
-.dark {
-    /* Dark mode clareado em ~0.05 sobre o default do shadcn-nova,
-       mantendo a mesma hierarquia (background < card < muted). */
-    --background: oklch(0.21 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.26 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.26 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.32 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.32 0 0);
-    --muted-foreground: oklch(0.74 0 0);
-    --accent: oklch(0.32 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 12%);
-    --input: oklch(1 0 0 / 18%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.26 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.32 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 12%);
-    --sidebar-ring: oklch(0.556 0 0);
-}
+/* O bloco `.dark` foi removido — o app é light-mode permanente.
+   Se um dia adicionarmos toggle de tema, é aqui que entram as
+   variações escuras dos mesmos tokens semânticos acima. */
 
 @layer base {
   * {
@@ -163,19 +180,14 @@
 }
 
 /* Regras de impressão — usadas principalmente pelo boletim.
-   - Esconde sidebar / botões via `print:hidden` no JSX, complementado aqui.
-   - Força esquema claro: dark mode na tela continua, mas impressão sai
-     com fundo branco e texto preto pra economizar tinta. */
+   Esconde sidebar via `aside { display: none }`, força fundo branco
+   e texto preto pra economizar tinta. */
 @media print {
-  html.dark {
-    color-scheme: light;
-  }
   html,
   body {
     background: white !important;
     color: black !important;
   }
-  /* Cards/tabelas/etc. herdam variáveis. Reset rápido pra impressão. */
   [data-slot="card"] {
     background: white !important;
     color: black !important;

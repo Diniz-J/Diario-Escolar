@@ -4,35 +4,12 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/features/auth/useAuth";
 
-// Login repaginado — vibe "profissional caloroso" (B), paleta olive/linho.
+// Login — paleta olive/linho (Diário Diniz).
 //
-// Decisões visuais conscientes (vivem inline aqui em vez dos tokens
-// globais porque ainda estamos validando a direção; quando aprovada,
-// migram pra CSS variables em `index.css`):
-//
-//   olive  #4D5A2E  — cor primária (CTA, marca, filete)
-//   linho  #EBE2D1  — fundo (papel)
-//   ferrugem #B07D62 — accent quente (filete decorativo)
-//   tinta  #2D2A24  — texto principal (não preto puro)
-//   sepia  #6B6859  — texto secundário
-//
-// A tela ignora o `<html class="dark">` permanente do app — login é a
-// porta de entrada e funciona melhor com palete clara. O resto do app
-// continua dark até decidirmos repaginar.
-//
-// Tipografia: título usa `font-heading` (Fraunces variable, italic) +
-// peso 400 pra ar editorial sem peso visual; resto fica em Geist.
-
-const PALETA = {
-  olive: "#4D5A2E",
-  oliveDark: "#3D4A1F",
-  linho: "#EBE2D1",
-  ferrugem: "#B07D62",
-  tinta: "#2D2A24",
-  sepia: "#6B6859",
-  border: "#D9CFB8",
-  inputBg: "#F5EFE0",
-} as const;
+// As cores vêm dos tokens globais definidos em `index.css` (utility
+// classes `bg-linho`, `text-tinta`, `border-ferrugem` etc.). Quando
+// quisermos ajustar tom, é uma alteração de variável CSS, não vários
+// arquivos.
 
 export function LoginPage() {
   const { login, isAuthenticated } = useAuth();
@@ -71,48 +48,34 @@ export function LoginPage() {
   }
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: PALETA.linho, color: PALETA.tinta }}
-    >
+    <div className="min-h-screen flex items-center justify-center p-4 bg-linho text-tinta">
       <div className="w-full max-w-lg">
-        {/* Microtípico no topo — substitui o "logo" enquanto não há marca. */}
-        <p
-          className="text-[11px] uppercase tracking-[0.25em] mb-10"
-          style={{ color: PALETA.olive }}
-        >
+        {/* Microtípico no topo — eyebrow em olive. */}
+        <p className="text-[11px] uppercase tracking-[0.25em] mb-10 text-olive">
           · diário diniz
         </p>
 
-        {/* Título serif regular (sem italic — Fraunces já tem personalidade
-            suficiente em peso médio). Tamanho contido pra não dominar
-            visualmente a tela: o foco é o form, o título dá o tom. */}
+        {/* Título serif regular — Fraunces via font-heading. Tracking
+            apertado pra Fraunces não estourar a largura do container. */}
         <h1
           className="font-heading mb-2 leading-[1.2] text-[26px] md:text-[30px] tracking-tight"
-          style={{ color: PALETA.tinta, fontWeight: 500 }}
+          style={{ fontWeight: 500 }}
         >
           Que bom te ver de volta.
         </h1>
 
-        <p
-          className="text-sm mb-7"
-          style={{ color: PALETA.sepia }}
-        >
+        <p className="text-sm mb-7 text-sepia">
           Continue de onde parou.
         </p>
 
-        {/* Filete ferrugem — detalhe memorável (`encadernação`). */}
-        <div
-          className="h-px w-12 mb-10"
-          style={{ background: PALETA.ferrugem }}
-        />
+        {/* Filete ferrugem — detalhe memorável ("encadernação"). */}
+        <div className="h-px w-12 mb-10 bg-ferrugem" />
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
             <label
               htmlFor="username"
-              className="block text-[11px] uppercase tracking-[0.18em]"
-              style={{ color: PALETA.sepia }}
+              className="block text-[11px] uppercase tracking-[0.18em] text-sepia"
             >
               Usuário
             </label>
@@ -123,22 +86,7 @@ export function LoginPage() {
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-3 py-2.5 text-base rounded-md focus:outline-none focus:ring-2 transition"
-              style={{
-                background: PALETA.inputBg,
-                border: `1px solid ${PALETA.border}`,
-                color: PALETA.tinta,
-                // Foco em ferrugem (anel) — testando accent quente como pediu.
-                outline: "none",
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = PALETA.ferrugem;
-                e.currentTarget.style.boxShadow = `0 0 0 3px ${PALETA.ferrugem}33`;
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = PALETA.border;
-                e.currentTarget.style.boxShadow = "none";
-              }}
+              className="w-full px-3 py-2.5 text-base rounded-md bg-paper border border-border text-tinta focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
             />
           </div>
 
@@ -146,15 +94,13 @@ export function LoginPage() {
             <div className="flex items-baseline justify-between">
               <label
                 htmlFor="password"
-                className="block text-[11px] uppercase tracking-[0.18em]"
-                style={{ color: PALETA.sepia }}
+                className="block text-[11px] uppercase tracking-[0.18em] text-sepia"
               >
                 Senha
               </label>
               <button
                 type="button"
-                className="text-xs hover:underline"
-                style={{ color: PALETA.ferrugem }}
+                className="text-xs text-ferrugem hover:underline"
                 onClick={() => {
                   /* Reset por email entra depois (FASE 4); por ora vira no-op. */
                 }}
@@ -169,32 +115,12 @@ export function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2.5 text-base rounded-md focus:outline-none transition"
-              style={{
-                background: PALETA.inputBg,
-                border: `1px solid ${PALETA.border}`,
-                color: PALETA.tinta,
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = PALETA.ferrugem;
-                e.currentTarget.style.boxShadow = `0 0 0 3px ${PALETA.ferrugem}33`;
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = PALETA.border;
-                e.currentTarget.style.boxShadow = "none";
-              }}
+              className="w-full px-3 py-2.5 text-base rounded-md bg-paper border border-border text-tinta focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
             />
           </div>
 
           {erro && (
-            <p
-              className="text-sm px-3 py-2 rounded-md"
-              style={{
-                background: "#F4DAD3",
-                color: "#7C2D1A",
-                border: "1px solid #E9B8AB",
-              }}
-            >
+            <p className="text-sm px-3 py-2 rounded-md bg-destructive/15 text-destructive border border-destructive/30">
               {erro}
             </p>
           )}
@@ -202,36 +128,16 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={enviando}
-            className="w-full py-3 text-base font-medium rounded-md transition disabled:opacity-60 disabled:cursor-not-allowed"
-            style={{
-              background: PALETA.olive,
-              color: PALETA.linho,
-            }}
-            onMouseEnter={(e) => {
-              if (!enviando)
-                e.currentTarget.style.background = PALETA.oliveDark;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = PALETA.olive;
-            }}
+            className="w-full py-3 text-base font-medium rounded-md bg-olive text-creme hover:bg-olive-dark transition disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {enviando ? "Acessando..." : "Acessar →"}
           </button>
         </form>
 
-        {/* Rodapé sutil — versão + paleta. */}
-        <div
-          className="mt-12 flex items-center gap-2 text-[11px]"
-          style={{ color: PALETA.sepia }}
-        >
-          <span
-            className="inline-block w-2 h-2 rounded-full"
-            style={{ background: PALETA.olive }}
-          />
-          <span
-            className="inline-block w-2 h-2 rounded-full"
-            style={{ background: PALETA.ferrugem }}
-          />
+        {/* Rodapé sutil — paleta visível em 2 dots + versão. */}
+        <div className="mt-12 flex items-center gap-2 text-[11px] text-sepia">
+          <span className="inline-block w-2 h-2 rounded-full bg-olive" />
+          <span className="inline-block w-2 h-2 rounded-full bg-ferrugem" />
           <span>v1.0 · Diário Diniz</span>
         </div>
       </div>
