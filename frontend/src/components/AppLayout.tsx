@@ -13,13 +13,16 @@ import {
 import { useAuth } from "@/features/auth/useAuth";
 import { cn } from "@/lib/utils";
 
-// Layout para todas as rotas autenticadas.
+// Layout para todas as rotas autenticadas — paleta olive/linho (Diário
+// Diniz).
 //
-// Desktop (>=768px): sidebar fixa à esquerda como antes.
+// Desktop (>=768px): sidebar fixa à esquerda, fundo olive-dark, texto
+// creme. Conteúdo principal em fundo linho.
+//
 // Mobile (<768px): sidebar some, vira drawer (Sheet) acionado por um
-// botão hamburguer num header superior. O drawer fecha automaticamente
-// quando o usuário escolhe uma rota — evita ficar aberto sobre o
-// conteúdo após a navegação.
+// botão hamburguer num header superior também olive-dark. O drawer
+// fecha automaticamente quando o usuário escolhe uma rota — evita
+// ficar aberto sobre o conteúdo após a navegação.
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard" },
@@ -49,15 +52,32 @@ interface SidebarBodyProps {
 
 // Conteúdo da sidebar — extraído pra ser reaproveitado entre o painel
 // fixo do desktop e o Sheet do mobile.
+//
+// A sidebar inverte a paleta: fundo escuro (olive-dark) + texto creme.
+// Cria contraste forte com o conteúdo principal em linho, hierarquia
+// visual clara e dá identidade à navegação.
 function SidebarBody({ perfilLabel, onNavigate, onLogout }: SidebarBodyProps) {
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b">
-        <p className="text-sm font-semibold">Diário Escolar</p>
-        <p className="text-xs text-muted-foreground mt-0.5">{perfilLabel}</p>
+    <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
+      {/* Marca — placeholder até definirmos o logo real. Por ora, só
+          o nome em Fraunces com um pingo ferrugem discreto à esquerda
+          servindo de marcador visual. Trocar quando o logo chegar. */}
+      <div className="px-5 pt-6 pb-5">
+        <div className="flex items-baseline gap-2">
+          <span
+            className="inline-block w-1.5 h-1.5 rounded-full translate-y-[-2px]"
+            style={{ background: "var(--ferrugem)" }}
+          />
+          <span className="font-heading text-[18px] tracking-tight">
+            Diário Diniz
+          </span>
+        </div>
+        <p className="mt-3 text-[10px] uppercase tracking-[0.2em] opacity-60">
+          {perfilLabel}
+        </p>
       </div>
 
-      <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}
@@ -65,10 +85,14 @@ function SidebarBody({ perfilLabel, onNavigate, onLogout }: SidebarBodyProps) {
             onClick={onNavigate}
             className={({ isActive }) =>
               cn(
-                "block px-3 py-2 text-sm rounded-md transition-colors",
+                // Base: texto creme com opacidade reduzida; padding
+                // generoso; transição suave. Barra esquerda é o
+                // espaço pra `border-l-2` aparecer no ativo sem
+                // empurrar o texto (a base aplica `border-l-2 border-transparent`).
+                "relative block pl-4 pr-3 py-2 text-sm rounded-md transition-colors border-l-2 border-transparent",
                 isActive
-                  ? "bg-muted text-foreground font-medium"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  ? "border-l-ferrugem font-medium text-creme bg-white/[0.04]"
+                  : "text-creme/75 hover:text-creme hover:bg-white/[0.04]",
               )
             }
           >
@@ -77,15 +101,22 @@ function SidebarBody({ perfilLabel, onNavigate, onLogout }: SidebarBodyProps) {
         ))}
       </nav>
 
-      <div className="p-2 border-t">
-        <Button
-          variant="ghost"
-          size="sm"
+      {/* Filete ferrugem fininho + logout + versão. */}
+      <div className="px-5 pb-5 pt-3">
+        <div
+          className="h-px w-8 mb-4"
+          style={{ background: "var(--ferrugem)" }}
+        />
+        <button
+          type="button"
           onClick={onLogout}
-          className="w-full justify-start"
+          className="text-sm text-creme/75 hover:text-creme transition-colors"
         >
           Sair
-        </Button>
+        </button>
+        <p className="mt-3 text-[10px] uppercase tracking-[0.18em] opacity-40">
+          v1.0
+        </p>
       </div>
     </div>
   );
@@ -107,16 +138,25 @@ export function AppLayout() {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-background">
-      {/* Header mobile — só aparece abaixo de md, com hamburguer. */}
-      <header className="md:hidden flex items-center gap-3 px-3 h-12 border-b bg-background sticky top-0 z-30">
+    <div className="min-h-screen flex flex-col md:flex-row bg-background text-foreground">
+      {/* Header mobile — só aparece abaixo de md. Mesma paleta olive-dark
+          da sidebar pra dar continuidade visual ao abrir o drawer. */}
+      <header className="md:hidden flex items-center gap-3 px-3 h-12 bg-sidebar text-sidebar-foreground sticky top-0 z-30">
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="Abrir menu">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Abrir menu"
+              className="text-creme hover:bg-white/10 hover:text-creme"
+            >
               <MenuIcon className="size-5" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-64 max-w-[80vw] p-0">
+          <SheetContent
+            side="left"
+            className="w-64 max-w-[80vw] p-0 bg-sidebar border-r-0"
+          >
             <SheetHeader className="sr-only">
               <SheetTitle>Menu de navegação</SheetTitle>
             </SheetHeader>
@@ -127,11 +167,15 @@ export function AppLayout() {
             />
           </SheetContent>
         </Sheet>
-        <span className="text-sm font-semibold">Diário Escolar</span>
+        <span className="font-heading text-[15px] tracking-tight">
+          Diário Diniz
+        </span>
       </header>
 
-      {/* Sidebar desktop — só a partir de md. */}
-      <aside className="hidden md:flex w-56 border-r flex-col shrink-0">
+      {/* Sidebar desktop — só a partir de md. Largura levemente maior
+          (60 vs 56) pra acomodar o padding mais respirado da nova
+          identidade. */}
+      <aside className="hidden md:flex w-60 flex-col shrink-0">
         <SidebarBody perfilLabel={perfilLabel} onLogout={logout} />
       </aside>
 
