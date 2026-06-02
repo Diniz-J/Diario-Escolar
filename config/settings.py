@@ -221,6 +221,12 @@ SIMPLE_JWT = {
 
 # CORS
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=Csv())
+# Regex pra origens dinâmicas — útil pros previews do Vercel, que ganham
+# URL única por deploy (ex.: `diario-diniz-<hash>-<scope>.vercel.app`) e
+# nunca caberiam numa lista estática. Vazio em dev/local.
+CORS_ALLOWED_ORIGIN_REGEXES = config(
+    "CORS_ALLOWED_ORIGIN_REGEXES", default="", cast=Csv()
+)
 
 # Email — usado pra notificar o responsável quando uma ocorrência é criada.
 #
