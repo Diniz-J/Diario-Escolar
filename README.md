@@ -25,6 +25,9 @@ Arquitetura single-tenant com base abstrata desenhada para escalar a row-level m
 | Filtros | django-filter |
 | Configuração | python-decouple (`.env`) |
 | CORS | django-cors-headers |
+| Audit log | django-simple-history (snapshot + diff + history_user nos 9 modelos do núcleo) |
+| Email transacional | django-anymail (Brevo via HTTP API — porta 443) |
+| Observabilidade | sentry-sdk[django] (error tracking, gated por `SENTRY_DSN`) |
 
 ### Frontend
 
@@ -33,11 +36,13 @@ Arquitetura single-tenant com base abstrata desenhada para escalar a row-level m
 | Build / dev server | Vite 8 |
 | Framework | React 19 |
 | Linguagem | TypeScript 6 |
-| Estilo | Tailwind CSS 4 + shadcn/ui (preset radix-nova) |
+| Estilo | Tailwind CSS 4 + shadcn/ui (paleta de marca olive/linho/ferrugem em tokens) |
+| Tipografia | Geist (sans, corpo) + Fraunces (serif variável, títulos via `font-heading`) |
 | Roteamento | React Router 7 |
 | Estado de servidor | TanStack Query 5 |
 | HTTP | axios (com interceptors de Bearer + refresh) |
 | Notificações | sonner |
+| Observabilidade | @sentry/react + ErrorBoundary (gated por `VITE_SENTRY_DSN`) |
 
 ---
 
@@ -102,15 +107,19 @@ Quatro classes granulares em `apps/common/permissions.py`, combinadas por ViewSe
 | Classe | Acesso |
 |---|---|
 | `IsAdmin` | Superuser Django ou `perfil=admin` |
-| `IsAdminOrDiretor` | Admin + `perfil=diretor` |
-| `IsAdminOrDiretorOrProfessor` | Admin + diretor + `perfil=professor` |
-| `IsAdminOrDiretorOrProfessorOrInspetor` | Acima + `perfil=inspetor` (leitura em domínios de monitoramento) |
+| `IsAdminOrDiretor` | Admin + `perfil=diretor` + `perfil=secretaria` |
+| `IsAdminOrDiretorOrProfessor` | Admin + diretor + secretaria + professor + inspetor |
+| `IsAdminOrDiretorOrProfessorOrInspetor` | Mesmo grupo do anterior (ver "Aliases de perfil" abaixo) |
+
+**Aliases de perfil**: `secretaria` opera como `diretor` (faz cadastros, gerencia usuários); `inspetor` opera como `professor` (lança ocorrência e chamada). A distinção entre eles é só **rótulo de UX** — sidebar e Dashboard mostram "Secretaria"/"Inspetor" no perfil, mas o conjunto de ações é idêntico ao do par equivalente. Decisão consciente pra escala de escola pequena/média onde os papéis são fluidos no dia a dia. Quando crescer pra rede grande, os perfis já existem distintos no enum `Usuario.Perfil` — basta refinar as classes pra separar.
 
 `ReadWritePermissionMixin` (em `apps/common/views.py`) padroniza separação read/write por ação: `list`/`retrieve` usam `READ_PERMISSION`; o restante usa `WRITE_PERMISSION`. Apps com regra uniforme (ex.: `ocorrencias`) declaram `permission_classes` direto.
 
 Por padrão, **escrita em cadastros** (Aluno, Turma, Disciplina, Professor, Lecionamento) é restrita a admin/diretor — professor tem leitura mas não cria/edita/exclui. O frontend espelha isso via hook `usePermissoes` (esconde botões "Novo/Editar/Excluir" pra perfil professor), evitando 403 visível.
 
-Todos os querysets são escopados à `escola` do usuário autenticado via `EscopoEscolaMixin`. Defesa contra IDOR na escrita: serializers de `ocorrencias` e `presenca` recusam payload com `escola` divergente da do usuário (admin/superuser bypassam).
+Todos os querysets são escopados à `escola` do usuário autenticado via `EscopoEscolaMixin`. Defesa contra IDOR na escrita: cada serializer com FK `escola` aplica o helper `validate_escola_do_usuario` — admin/superuser passam qualquer escola; não-admin só pode escrever na própria mesmo que envie outra explicitamente no payload.
+
+**Auto-escopo de escola na criação** — diretor/professor/secretaria/inspetor **não precisa selecionar escola** ao criar turma, ocorrência, aluno, etc. O `AutoEscopoEscolaSerializerMixin` (em `apps/common/serializers.py`) injeta `escola` no payload via `to_internal_value` quando o usuário tem `escola_id` no JWT e o campo foi omitido. O frontend nem mostra o select de escola pra esses perfis — multi-tenant fica invisível pro cliente final. Admin global (sem escola no perfil) continua precisando especificar `escola` no payload, com 400 explícito se omitir.
 
 ### Multi-tenancy
 
@@ -172,7 +181,7 @@ Cada app de domínio segue o mesmo layout (`models.py`, `serializers.py`, `views
 - Invariantes em `clean()` e serializer: `aluno.escola == escola`, `aluno.turma == turma` (snapshot atual), `professor.escola == escola`, `data <= hoje`.
 - Permissão uniforme `admin/diretor/professor` — colegas auxiliam a resolver registros uns dos outros.
 - Guard de IDOR no payload `escola`.
-- **Notificação por email** (`services.py`): ao criar uma ocorrência (`perform_create`), envia email ao `email_responsavel` do aluno com os dados. Síncrono e protegido (try/except) — se o email falhar, a ocorrência é salva mesmo assim; aluno sem responsável é pulado (log). Provedor: SMTP via env (Resend em produção) — ver `DEPLOY.md`.
+- **Notificação por email** (`services.py`): ao criar uma ocorrência (`perform_create`), envia email ao `email_responsavel` do aluno. O disparo roda em **thread daemon** (fire-and-forget) — o POST volta na hora; o email é melhor-esforço protegido por `try/except`. Em `TESTING` o envio é síncrono pra deixar `mail.outbox` determinístico. Provedor em produção: **Brevo via HTTP API** (`django-anymail`, porta 443) — escolhido porque o free tier do Render bloqueia outbound SMTP desde set/2025. Ver [`DEPLOY.md`](./DEPLOY.md).
 
 **`apps/presenca`**
 - `RegistroPresenca` — chamada de uma turma num dia; única por `(escola, turma, data)`; `professor` opcional.
@@ -270,11 +279,15 @@ Botões de criação/edição/exclusão em cadastros (Alunos, Turmas, Disciplina
 - **`features/<dominio>/hooks.ts`** — `useXxx`, `useCreate`, `useUpdate`, `useDelete` com invalidação automática de cache + toasts via sonner.
 - **`components/ui/`** — código copiado pelo shadcn CLI (Button, Input, Card, Dialog, Table, Select, DropdownMenu, Sonner, AlertDialog, etc.). Editável livremente.
 
-### Tema e responsividade
+### Identidade visual
 
-Dark mode permanente (`<html class="dark">`), com paleta um pouco mais clara que o default do shadcn-nova. Toggle de light/dark não exposto (decisão de UI).
+Light mode permanente com paleta de marca **Diário Diniz**: olive como cor primária (CTAs, sidebar), linho como fundo principal (papel), paper (off-white) em cards e inputs, ferrugem como accent quente (filetes, foco, indicadores), tinta + sepia como texto. Os tokens vivem em `src/index.css` como CSS variables e estão mapeados pros tokens do shadcn (`--background`, `--primary`, `--card`, etc.) — qualquer componente shadcn off-the-shelf herda automaticamente.
 
-Layout responsivo: a sidebar fixa (≥768px) vira um drawer (`Sheet`) com botão hamburguer abaixo de 768px. Padding e tipografia ajustam por breakpoint (`p-4 md:p-8`, `text-2xl md:text-3xl`). Tabelas escondem colunas secundárias em telas estreitas (`hidden sm:table-cell` / `md:` / `lg:`) em vez de scroll horizontal — os dados completos ficam acessíveis clicando na linha (vai pro detalhe). Funciona em celular (chamada de presença em sala) e tablet.
+Tipografia mista: **Fraunces** (serif variável) em títulos via `font-heading`, **Geist** (sans) no corpo. A combinação dá tom editorial sem perder legibilidade — assinatura visual consistente entre Login, sidebar e cards do Dashboard.
+
+Layout responsivo: a sidebar fixa (≥768px) vira um drawer (`Sheet`) com botão hamburguer abaixo de 768px. Padding e tipografia ajustam por breakpoint (`p-4 md:p-8`, `text-2xl md:text-3xl`). Headers de detalhe com muitas ações empilham até `lg` (1024px) pra evitar competição visual em tablet portrait. Tabelas escondem colunas secundárias em telas estreitas (`hidden sm:table-cell` / `md:` / `lg:`) em vez de scroll horizontal — os dados completos ficam acessíveis clicando na linha (vai pro detalhe). Funciona em celular (chamada de presença em sala) e tablet.
+
+Soft delete UX: listagens com soft delete (Aluno) escondem inativos por padrão. Toggle `Switch` "Mostrar inativos" na `AlunosPage` inverte e mostra só os inativos com badge `[ inativo ]`. Selects de criação (ex.: nova ocorrência) ficam restritos a ativos. Telas que apenas resolvem nome de aluno em registros antigos (ocorrências, presenças, tarefas) carregam todos os alunos pra não quebrar histórico.
 
 ---
 
@@ -360,7 +373,7 @@ feature/* → develop → main
 
 **JWT com claims customizados** — `access` carrega `escola_id`, `perfil`, `username`, `first_name`, `last_name` para que o frontend não precise de request adicional após o login. Como o `TokenRefreshView` propaga claims do refresh, mudanças nesses dados só refletem após o `REFRESH_TOKEN_LIFETIME` (7 dias) expirar — trade-off aceito no MVP.
 
-**Dark mode permanente no frontend** — sem toggle. O `<html class="dark">` é fixado no `index.html` para evitar flash de tema light no carregamento. Decisão de UI; pode ser revertida adicionando um theme provider quando houver demanda.
+**Light mode permanente no frontend** — paleta de marca olive/linho aplicada via CSS variables nos tokens do shadcn. `<meta name="color-scheme" content="light">` desabilita o force-dark-mode automático de browsers (Opera GX, Chrome auto-dark). Sem toggle de tema; adicionar dark vira um theme provider quando houver demanda comercial.
 
 **Optimistic update na chamada de presença** — clicar P/A/J/R num aluno muda a UI imediatamente; em caso de erro, o cache é revertido via snapshot. Sensação de fluidez sem esperar round-trip do backend.
 
@@ -370,21 +383,25 @@ feature/* → develop → main
 
 ---
 
-## Já entregue (infra, segurança e comunicação)
+## Já entregue (infra, segurança, comunicação, observabilidade, produto)
 
 - **Infra:** Docker (dev + prod), deploy no ar (Render + Vercel), backup do PostgreSQL (`scripts/`), CI no GitHub Actions.
-- **Segurança:** rate limit no login, JWT blacklist + rotação de refresh, hardening de produção (CSRF trusted origins, proxy SSL, cookies secure/HSTS).
-- **Comunicação:** notificação por email ao responsável quando uma ocorrência é criada (síncrono, via Resend).
+- **Segurança:** rate limit no login (5/min), JWT blacklist + rotação de refresh, hardening de produção (CSRF trusted origins, proxy SSL, cookies secure/HSTS), guard de IDOR consistente em todos os serializers com FK `escola`.
+- **Audit log:** `django-simple-history` nos 9 modelos do núcleo (Aluno, Professor, Lecionamento, Ocorrencia, RegistroPresenca, ItemPresenca, Tarefa, EntregaTarefa, PlanoEnsino, Usuario) com aba History no `/admin/` mostrando diff lado a lado. `populate_history --auto` no boot pra marco-zero dos registros pré-PR.
+- **Comunicação:** notificação por email ao responsável funcional em produção via **Brevo HTTP API** (`django-anymail`) — off-thread, protegido, sem domínio próprio, 300 emails/dia free. Resend e Gmail SMTP foram tentados e falharam pelo bloqueio de SMTP outbound do Render free desde set/2025.
+- **Observabilidade:** Sentry SDK no backend e frontend — captura exceções não tratadas + `logger.error/exception` + erros de render React via `<Sentry.ErrorBoundary>`. Plano free (Developer) 5k events/mês.
+- **Produto:** Dashboard com métricas (4 cards) + filtro por turma; soft delete + UX completa (toggle "Mostrar inativos" + Reativar); auto-escopo de escola em criação (multi-tenant invisível pro usuário).
+- **Identidade visual:** paleta de marca olive/linho/ferrugem com tokens semânticos, tipografia Fraunces + Geist em hierarquia editorial, Login + Sidebar + Dashboard repaginados em light mode permanente.
 
 ## Backlog (não implementado)
 
 A lista priorizada por fases vive em [`CLAUDE.md`](./CLAUDE.md) (seção Roadmap). Resumo do que ainda falta:
 
-- **Robustez:** paginação no backend (DRF `PageNumberPagination`), audit log (`django-simple-history`), observabilidade (Sentry + logging estruturado).
-- **Produto:** exportação de relatórios (PDF/CSV/Excel), métricas avançadas no dashboard (reincidência, presença média).
-- **Comunicação:** múltiplos responsáveis por aluno, fila assíncrona de email (Celery/Redis) quando o volume crescer, timeline do aluno.
-- **Senhas:** trocar a própria senha, reset por e-mail, admin resetar senha de terceiro pela UI.
-- **Dev experience:** drf-spectacular (gera client TypeScript), `repositories.py` por app, linting unificado (`ruff` + ESLint no fluxo).
+- **Robustez:** paginação no backend (DRF `PageNumberPagination`) antes do volume real, logging estruturado JSON.
+- **Produto:** exportação de relatórios (PDF/CSV/Excel), métricas avançadas no dashboard (reincidência, presença média), redesign das telas de listagem/detalhe/formulário (ondas seguintes).
+- **Comunicação:** múltiplos responsáveis por aluno + telefone + flag `recebe_notificacao`, fila assíncrona dedicada (Celery/Dramatiq/RQ) quando o volume crescer, timeline do aluno (consumindo HistoricalRecords + ocorrências + presença).
+- **Senhas:** trocar a própria senha, reset por e-mail (agora viável via Brevo), admin resetar senha de terceiro pela UI.
+- **Dev experience:** drf-spectacular (gera client TypeScript), `repositories.py` por app, linting unificado (`ruff` + ESLint no fluxo), `DESIGN.md` documentando tokens/anti-patterns.
 - **SaaS futuro:** multi-tenancy real (middleware + RLS + billing), httpOnly cookies, LGPD formal.
 
-> Pra enviar email pros responsáveis de verdade (não só modo teste), falta **verificar um domínio no Resend** e trocar o `DEFAULT_FROM_EMAIL`.
+> Higiene de segredos pendente (ações no painel): rotacionar `SECRET_KEY` (apareceu como 5 bytes em log do Render, JWT inseguro), rotacionar senha do banco, revogar API key antiga do Resend.
