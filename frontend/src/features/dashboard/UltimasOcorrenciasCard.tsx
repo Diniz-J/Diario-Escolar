@@ -1,12 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAlunos } from "@/features/alunos/hooks";
 import { useOcorrencias } from "@/features/ocorrencias/hooks";
@@ -16,17 +10,19 @@ interface UltimasOcorrenciasCardProps {
   turmaFiltrada?: number | null;
 }
 
-// Mapeia status → classes Tailwind do badge. Mantém a mesma paleta usada
-// nas listagens (verde/azul/cinza) pra consistência visual.
-const STATUS_BADGE: Record<OcorrenciaStatus, string> = {
-  aberta:
-    "text-red-700 bg-red-50 dark:bg-red-950 dark:text-red-300",
-  em_andamento:
-    "text-amber-700 bg-amber-50 dark:bg-amber-950 dark:text-amber-300",
-  resolvida:
-    "text-green-700 bg-green-50 dark:bg-green-950 dark:text-green-300",
-  arquivada:
-    "text-muted-foreground bg-muted",
+// Mapeia status → cores na paleta da marca (em vez do red/amber/green
+// genérico). Mantém a leitura "ferrugem = atenção, olive = resolvido"
+// coerente com o resto do app. Cada entrada gera classes Tailwind via
+// arbitrary values pra puxar diretamente das CSS variables.
+const STATUS_STYLE: Record<OcorrenciaStatus, string> = {
+  // ferrugem clarinho de fundo + ferrugem escuro de texto.
+  aberta: "bg-[#F4DAD3] text-[#7C2D1A]",
+  // mostarda quente — diferencia de "aberta" sem perder a sensação de pendente.
+  em_andamento: "bg-[#FCE7BC] text-[#854D0E]",
+  // olive — sensação de "consolidado, ok".
+  resolvida: "bg-[#D7DCC1] text-[#3A4524]",
+  // muted — paleta neutra da própria marca.
+  arquivada: "bg-muted text-sepia",
 };
 
 function formatarDataBR(iso: string): string {
@@ -42,6 +38,8 @@ export function UltimasOcorrenciasCard({
   const ocorrenciasQuery = useOcorrencias(
     turmaFiltrada ? { turma: turmaFiltrada } : {},
   );
+  // Sem filtro de `ativo` — precisamos resolver nome mesmo de alunos
+  // que foram desativados depois da ocorrência.
   const alunosQuery = useAlunos();
 
   const carregando = ocorrenciasQuery.isLoading || alunosQuery.isLoading;
@@ -58,52 +56,46 @@ export function UltimasOcorrenciasCard({
   );
 
   return (
-    <Card className="h-full">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          Últimas ocorrências
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {carregando ? (
-          <div className="space-y-2">
-            <Skeleton className="h-5 w-full" />
-            <Skeleton className="h-5 w-full" />
-            <Skeleton className="h-5 w-3/4" />
-          </div>
-        ) : recentes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nenhuma ocorrência registrada.
-          </p>
-        ) : (
-          <ul className="space-y-1.5 text-sm">
-            {recentes.map((o) => (
-              <li
-                key={o.id}
-                className="flex items-center justify-between gap-3"
+    <div className="h-full bg-paper rounded-lg p-6 border border-border">
+      <p className="text-[11px] uppercase tracking-[0.18em] text-sepia mb-4">
+        Últimas ocorrências
+      </p>
+      {carregando ? (
+        <div className="space-y-2">
+          <Skeleton className="h-5 w-full" />
+          <Skeleton className="h-5 w-full" />
+          <Skeleton className="h-5 w-3/4" />
+        </div>
+      ) : recentes.length === 0 ? (
+        <p className="text-sm text-sepia">Nenhuma ocorrência registrada.</p>
+      ) : (
+        <ul className="space-y-2 text-sm">
+          {recentes.map((o) => (
+            <li
+              key={o.id}
+              className="flex items-center justify-between gap-3"
+            >
+              <Link
+                to={`/ocorrencias/${o.id}`}
+                className="truncate flex-1 min-w-0 text-tinta hover:text-ferrugem transition-colors"
+                title={alunosPorId.get(o.aluno) ?? `Aluno #${o.aluno}`}
               >
-                <Link
-                  to={`/ocorrencias/${o.id}`}
-                  className="truncate hover:underline flex-1 min-w-0"
-                  title={alunosPorId.get(o.aluno) ?? `Aluno #${o.aluno}`}
-                >
-                  <span className="text-muted-foreground tabular-nums mr-2">
-                    {formatarDataBR(o.data_ocorrencia)}
-                  </span>
-                  <span>
-                    {alunosPorId.get(o.aluno) ?? `Aluno #${o.aluno}`}
-                  </span>
-                </Link>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded shrink-0 ${STATUS_BADGE[o.status]}`}
-                >
-                  {o.status_display}
+                <span className="text-sepia tabular-nums mr-2 font-mono text-xs">
+                  {formatarDataBR(o.data_ocorrencia)}
                 </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
+                <span>
+                  {alunosPorId.get(o.aluno) ?? `Aluno #${o.aluno}`}
+                </span>
+              </Link>
+              <span
+                className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded shrink-0 ${STATUS_STYLE[o.status]}`}
+              >
+                {o.status_display}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
