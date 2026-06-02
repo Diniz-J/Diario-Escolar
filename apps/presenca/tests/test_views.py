@@ -132,31 +132,34 @@ class RegistroPermissionTests(_PresencaSetup):
         resp = self._request_registro("list", "professor")
         self.assertEqual(resp.status_code, 200)
 
-    def test_list_secretaria_negado(self):
+    def test_list_secretaria_aceito(self):
+        """Alias de diretor — lê chamada."""
         resp = self._request_registro("list", "secretaria")
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 200)
 
     def test_create_professor_aceito(self):
         resp = self._request_registro("create", "professor", self._registro_payload())
         self.assertEqual(resp.status_code, 201)
 
-    def test_create_inspetor_negado(self):
-        """Inspetor lê, mas não escreve."""
+    def test_create_inspetor_aceito(self):
+        """Alias de professor — abre chamada."""
         resp = self._request_registro("create", "inspetor", self._registro_payload())
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 201)
 
-    def test_create_secretaria_negado(self):
+    def test_create_secretaria_aceito(self):
+        """Alias de diretor — abre chamada."""
         resp = self._request_registro(
             "create", "secretaria", self._registro_payload()
         )
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 201)
 
-    def test_destroy_inspetor_negado(self):
+    def test_destroy_inspetor_aceito(self):
+        """Alias de professor — pode apagar chamada (mesmo nível do prof)."""
         registro = RegistroPresenca.objects.create(
             escola=self.escola, turma=self.turma
         )
         resp = self._request_registro("destroy", "inspetor", pk=registro.id)
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 204)
 
 
 class RegistroValidationTests(_PresencaSetup):
@@ -333,17 +336,18 @@ class ItemPresencaViewTests(_PresencaSetup):
         self.assertEqual(self.item.status, ItemPresenca.Status.RETARDATARIO)
         self.assertEqual(self.item.observacao, "5 min de atraso")
 
-    def test_inspetor_le_mas_nao_edita(self):
+    def test_inspetor_le_e_edita(self):
+        """Alias de professor — pode lançar status em item."""
         # GET passa.
         req = self.factory.get("/")
         force_authenticate(req, user=self.usuarios["inspetor"])
         resp = ItemPresencaViewSet.as_view({"get": "list"})(req)
         self.assertEqual(resp.status_code, 200)
-        # PATCH falha.
+        # PATCH também passa.
         resp = self._patch(
             "inspetor", {"status": ItemPresenca.Status.AUSENTE}, self.item.id
         )
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 200)
 
     def test_create_e_destroy_acoes_nao_existem(self):
         """ItemPresencaViewSet não inclui Create/Destroy mixins de propósito.

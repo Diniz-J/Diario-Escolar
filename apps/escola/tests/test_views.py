@@ -107,8 +107,9 @@ class TurmaPermissionTests(_PermissionSetup):
     def test_list_professor_aceito(self):
         self.assertEqual(self._request(TurmaViewSet, "list", "professor").status_code, 200)
 
-    def test_list_secretaria_negado(self):
-        self.assertEqual(self._request(TurmaViewSet, "list", "secretaria").status_code, 403)
+    def test_list_secretaria_aceito(self):
+        """Alias de diretor — lê turmas."""
+        self.assertEqual(self._request(TurmaViewSet, "list", "secretaria").status_code, 200)
 
     def test_create_diretor_aceito(self):
         payload = {

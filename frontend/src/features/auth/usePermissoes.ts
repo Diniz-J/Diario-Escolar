@@ -4,16 +4,22 @@ import { useAuth } from "./useAuth";
 // fonte de verdade real (cada ViewSet tem suas permissions); aqui só
 // alinhamos a UI pra evitar mostrar botões que vão falhar com 403.
 //
-// Hoje só temos a regra "pode mexer em cadastros de domínio" (Alunos,
-// Turmas, Disciplinas, Professores, Lecionamentos) — restrita a admin
-// e diretor. Quando novos casos aparecerem (ex.: secretaria/inspetor
-// poder X), adicione propriedades novas a esse hook em vez de espalhar
-// `user?.perfil === "..."` pelas pages.
+// Decisão de design (espelhada em apps/common/permissions.py):
+// - `secretaria` opera como `diretor` (faz cadastros, gerencia usuários).
+// - `inspetor` opera como `professor` (lança ocorrência e chamada).
+// A distinção entre eles é só rótulo de UX (sidebar/Dashboard mostram
+// "Secretaria"/"Inspetor" via PERFIL_LABEL). Quando crescer pra rede
+// grande e fizer sentido separar, refina as listas abaixo.
+
+const PERFIS_NIVEL_DIRETOR = ["admin", "diretor", "secretaria"] as const;
+
 export function usePermissoes() {
   const { user } = useAuth();
   const perfil = user?.perfil;
 
-  const podeModificarCadastros = perfil === "admin" || perfil === "diretor";
+  const podeModificarCadastros =
+    perfil != null &&
+    (PERFIS_NIVEL_DIRETOR as readonly string[]).includes(perfil);
 
   return {
     podeModificarCadastros,
