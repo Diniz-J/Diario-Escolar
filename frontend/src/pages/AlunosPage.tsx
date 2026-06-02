@@ -87,8 +87,13 @@ export function AlunosPage() {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl md:text-3xl font-semibold">Alunos</h1>
+      <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div className="space-y-3">
+          <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
+            Alunos
+          </h1>
+          <div className="h-px w-10 bg-ferrugem" />
+        </div>
         {podeModificarCadastros && (
           <Button onClick={() => setFormOpen(true)}>Novo aluno</Button>
         )}
@@ -119,24 +124,33 @@ export function AlunosPage() {
           />
           <Label
             htmlFor="mostrar-inativos"
-            className="text-sm cursor-pointer select-none"
+            className="text-[11px] uppercase tracking-[0.18em] text-sepia cursor-pointer select-none"
           >
             Mostrar inativos
           </Label>
         </div>
       </div>
 
-      <div className="rounded-md border">
+      <div className="rounded-lg border border-border bg-paper overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
               {/* Em mobile mostramos só Nome + Turma + ⋯; o resto fica
                   no boletim (linha clicável). Matrícula volta em sm,
-                  Status em md. */}
-              <TableHead className="hidden sm:table-cell">Matrícula</TableHead>
-              <TableHead>Nome completo</TableHead>
-              <TableHead>Turma</TableHead>
-              <TableHead className="hidden md:table-cell">Status</TableHead>
+                  Status em md.
+                  Headers em eyebrow mono — padrão do DESIGN.md §7.1. */}
+              <TableHead className="hidden sm:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Matrícula
+              </TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Nome completo
+              </TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Turma
+              </TableHead>
+              <TableHead className="hidden md:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Status
+              </TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
           </TableHeader>
@@ -205,11 +219,11 @@ export function AlunosPage() {
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
                     {aluno.ativo ? (
-                      <span className="text-xs text-green-700 bg-green-50 dark:bg-green-950 dark:text-green-300 px-2 py-0.5 rounded">
+                      <span className="text-[10px] uppercase tracking-wide text-olive bg-olive/10 px-1.5 py-0.5 rounded">
                         Ativo
                       </span>
                     ) : (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-[10px] uppercase tracking-wide text-sepia">
                         Inativo
                       </span>
                     )}
