@@ -90,8 +90,13 @@ export function OcorrenciasPage() {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl md:text-3xl font-semibold">Ocorrências</h1>
+      <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div className="space-y-3">
+          <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
+            Ocorrências
+          </h1>
+          <div className="h-px w-10 bg-ferrugem" />
+        </div>
         <Button onClick={() => setFormOpen(true)}>Nova ocorrência</Button>
       </header>
 
@@ -118,7 +123,10 @@ export function OcorrenciasPage() {
           </SelectContent>
         </Select>
         <div className="flex flex-col gap-1">
-          <label htmlFor="data-inicio" className="text-xs text-muted-foreground">
+          <label
+            htmlFor="data-inicio"
+            className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+          >
             De
           </label>
           <Input
@@ -131,7 +139,10 @@ export function OcorrenciasPage() {
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label htmlFor="data-fim" className="text-xs text-muted-foreground">
+          <label
+            htmlFor="data-fim"
+            className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+          >
             Até
           </label>
           <Input
@@ -157,17 +168,26 @@ export function OcorrenciasPage() {
         )}
       </div>
 
-      <div className="rounded-md border">
+      <div className="rounded-lg border border-border bg-paper overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Data</TableHead>
-              {/* Turma e Status só a partir de md (≥768px) — em mobile
+              {/* Headers em eyebrow mono — padrão do DESIGN.md §7.1.
+                  Turma e Status só a partir de md (≥768px) — em mobile
                   cabem só Data + Aluno; o resto fica no detalhe da
                   ocorrência (linha clicável). */}
-              <TableHead className="hidden md:table-cell">Turma</TableHead>
-              <TableHead>Aluno</TableHead>
-              <TableHead className="hidden md:table-cell">Status</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Data
+              </TableHead>
+              <TableHead className="hidden md:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Turma
+              </TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Aluno
+              </TableHead>
+              <TableHead className="hidden md:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Status
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

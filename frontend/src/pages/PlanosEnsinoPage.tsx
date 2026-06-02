@@ -62,8 +62,13 @@ export function PlanosEnsinoPage() {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl md:text-3xl font-semibold">Planos de ensino</h1>
+      <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div className="space-y-3">
+          <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
+            Planos de ensino
+          </h1>
+          <div className="h-px w-10 bg-ferrugem" />
+        </div>
         <Button onClick={() => setCreateOpen(true)}>Novo plano</Button>
       </header>
 
@@ -80,17 +85,26 @@ export function PlanosEnsinoPage() {
         className="max-w-sm"
       />
 
-      <div className="rounded-md border">
+      <div className="rounded-lg border border-border bg-paper overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Turma</TableHead>
-              <TableHead>Disciplina</TableHead>
-              {/* Ano só em sm+ — em mobile o ano já costuma estar no
+              {/* Headers em eyebrow mono — padrão do DESIGN.md §7.1.
+                  Ano só em sm+ — em mobile o ano já costuma estar no
                   nome da turma. Status sempre visível porque sinaliza
                   o que o usuário ainda precisa preencher. */}
-              <TableHead className="hidden sm:table-cell">Ano</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Turma
+              </TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Disciplina
+              </TableHead>
+              <TableHead className="hidden sm:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Ano
+              </TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Status
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -142,15 +156,15 @@ export function PlanosEnsinoPage() {
                   </TableCell>
                   <TableCell>
                     {!p.ativo ? (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-[10px] uppercase tracking-wide text-sepia">
                         Inativo
                       </span>
                     ) : isPreenchido(p) ? (
-                      <span className="text-xs text-green-700 bg-green-50 dark:bg-green-950 dark:text-green-300 px-2 py-0.5 rounded">
+                      <span className="text-[10px] uppercase tracking-wide text-olive bg-olive/10 px-1.5 py-0.5 rounded">
                         Preenchido
                       </span>
                     ) : (
-                      <span className="text-xs text-amber-700 bg-amber-50 dark:bg-amber-950 dark:text-amber-300 px-2 py-0.5 rounded">
+                      <span className="text-[10px] uppercase tracking-wide bg-[#FCE7BC] text-[#854D0E] px-1.5 py-0.5 rounded">
                         Em branco
                       </span>
                     )}

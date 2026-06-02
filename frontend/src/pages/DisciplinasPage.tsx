@@ -50,8 +50,13 @@ export function DisciplinasPage() {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl md:text-3xl font-semibold">Disciplinas</h1>
+      <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div className="space-y-3">
+          <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
+            Disciplinas
+          </h1>
+          <div className="h-px w-10 bg-ferrugem" />
+        </div>
         {podeModificarCadastros && (
           <Button onClick={() => setFormOpen(true)}>Nova disciplina</Button>
         )}
@@ -74,11 +79,13 @@ export function DisciplinasPage() {
         className="max-w-sm"
       />
 
-      <div className="rounded-md border">
+      <div className="rounded-lg border border-border bg-paper overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Nome</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Nome
+              </TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
           </TableHeader>

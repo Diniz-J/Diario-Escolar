@@ -22,15 +22,18 @@ export const STATUS_LABEL: Record<OcorrenciaStatus, string> = Object.fromEntries
   STATUS_OPTIONS.map((s) => [s.value, s.label]),
 ) as Record<OcorrenciaStatus, string>;
 
-// Cores Tailwind por status — usadas na lista. Tons sólidos pra ficar
-// legível tanto em light quanto dark mode.
+// Badges por status na paleta da marca (DESIGN.md §6.1).
+// - aberta       → terracota clarinho + texto destructive (chama atenção)
+// - em_andamento → mostarda pastel (em curso, sem urgência)
+// - resolvida    → olive pastel (positivo, alinhado à primária)
+// - arquivada    → muted neutro (fundo de histórico)
 export const STATUS_BADGE: Record<OcorrenciaStatus, string> = {
   aberta:
-    "text-amber-700 bg-amber-50 dark:bg-amber-950 dark:text-amber-300",
+    "text-destructive bg-destructive/15",
   em_andamento:
-    "text-blue-700 bg-blue-50 dark:bg-blue-950 dark:text-blue-300",
+    "bg-[#FCE7BC] text-[#854D0E]",
   resolvida:
-    "text-green-700 bg-green-50 dark:bg-green-950 dark:text-green-300",
+    "text-olive bg-olive/10",
   arquivada:
     "text-muted-foreground bg-muted",
 };
