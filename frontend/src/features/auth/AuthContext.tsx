@@ -13,6 +13,7 @@ import { decodeToken, isTokenExpired } from "./jwt";
 import {
   clearTokens,
   getAccessToken,
+  getRefreshToken,
   setTokens,
 } from "./tokenStorage";
 import type { JwtPayload, LoginInput, TokenPair } from "./types";
@@ -28,7 +29,7 @@ export interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (input: LoginInput) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 // Context = "carrinho" compartilhado. Componentes leem via useAuth.
@@ -73,7 +74,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUser(payload);
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    // Tenta invalidar o refresh no backend (blacklist) antes de limpar local.
+    // Falha de rede ou token expirado não bloqueia o logout — sessão local
+    // sai do mesmo jeito; o pior caso é o refresh seguir válido até expirar.
+    const refresh = getRefreshToken();
+    if (refresh) {
+      try {
+        await api.post("/auth/logout/", { refresh });
+      } catch {
+        // Backend pode estar fora ou token já inválido — segue o jogo.
+      }
+    }
     clearTokens();
     setUser(null);
   }, []);
