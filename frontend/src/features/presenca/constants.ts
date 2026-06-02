@@ -26,28 +26,28 @@ export const STATUS_PRESENCA: {
     label: "P",
     full: "Presente",
     className:
-      "bg-[#D7DCC1] text-[#3A4524] hover:bg-[#C5CCB0]",
+      "bg-[#CFD4B8] text-[#3A4524] hover:bg-[#BFC6A6]",
   },
   {
     value: "A",
     label: "A",
     full: "Ausente",
     className:
-      "bg-[#F4DAD3] text-[#7C2D1A] hover:bg-[#EDC4B8]",
+      "bg-[#EFD2C8] text-[#7C2D1A] hover:bg-[#E5BFB1]",
   },
   {
     value: "J",
     label: "J",
     full: "Justificado",
     className:
-      "bg-[#FCE7BC] text-[#854D0E] hover:bg-[#F8D89A]",
+      "bg-[#F8DBAE] text-[#854D0E] hover:bg-[#F2CB8E]",
   },
   {
     value: "R",
     label: "R",
     full: "Retardatário",
     className:
-      "bg-[#C4D4D2] text-[#1F3A37] hover:bg-[#B0C4C1]",
+      "bg-[#BCCDCB] text-[#1F3A37] hover:bg-[#A8BEBB]",
   },
 ];
 
