@@ -1,6 +1,11 @@
 """Serializers da app escola."""
 from rest_framework import serializers
 
+from apps.common.serializers import (
+    AutoEscopoEscolaSerializerMixin,
+    validate_escola_do_usuario,
+)
+
 from .models import Aluno, Disciplina, Escola, Lecionamento, Professor, Turma
 
 
@@ -18,7 +23,19 @@ class EscolaSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "criado_em", "atualizado_em"]
 
 
-class TurmaSerializer(serializers.ModelSerializer):
+# Padrão aplicado nos serializers abaixo (Turma, Disciplina, Aluno,
+# Professor, Lecionamento):
+# - `escola` no `extra_kwargs` vira `required=False` — o viewset
+#   correspondente usa `AutoEscopoEscolaMixin` pra auto-preencher quando
+#   o usuário tem escola vinculada (e o frontend omite o campo).
+# - `validate_escola` aplica o guard IDOR — admin pode escolher qualquer
+#   escola; não-admin só pode escrever na própria mesmo que passe a
+#   escola explicitamente no payload (defesa contra um diretor da Escola
+#   A mandar `escola=B_id`).
+_ESCOLA_OPCIONAL = {"escola": {"required": False}}
+
+
+class TurmaSerializer(AutoEscopoEscolaSerializerMixin, serializers.ModelSerializer):
     turno_display = serializers.CharField(
         source="get_turno_display", read_only=True
     )
@@ -37,9 +54,17 @@ class TurmaSerializer(serializers.ModelSerializer):
             "atualizado_em",
         ]
         read_only_fields = ["id", "criado_em", "atualizado_em"]
+        extra_kwargs = _ESCOLA_OPCIONAL
+
+    def validate_escola(self, value):
+        return validate_escola_do_usuario(
+            value,
+            self.context.get("request"),
+            "Você só pode criar turmas na sua própria escola.",
+        )
 
 
-class DisciplinaSerializer(serializers.ModelSerializer):
+class DisciplinaSerializer(AutoEscopoEscolaSerializerMixin, serializers.ModelSerializer):
     class Meta:
         model = Disciplina
         fields = [
@@ -51,9 +76,17 @@ class DisciplinaSerializer(serializers.ModelSerializer):
             "atualizado_em",
         ]
         read_only_fields = ["id", "criado_em", "atualizado_em"]
+        extra_kwargs = _ESCOLA_OPCIONAL
+
+    def validate_escola(self, value):
+        return validate_escola_do_usuario(
+            value,
+            self.context.get("request"),
+            "Você só pode criar disciplinas na sua própria escola.",
+        )
 
 
-class AlunoSerializer(serializers.ModelSerializer):
+class AlunoSerializer(AutoEscopoEscolaSerializerMixin, serializers.ModelSerializer):
     # Obrigatórios no cadastro pela API, mesmo sendo blank=True no modelo.
     # O blank existe só para os alunos antigos sem responsável; novos e
     # edições precisam preencher para a notificação de ocorrência funcionar.
@@ -76,6 +109,14 @@ class AlunoSerializer(serializers.ModelSerializer):
             "atualizado_em",
         ]
         read_only_fields = ["id", "criado_em", "atualizado_em"]
+        extra_kwargs = _ESCOLA_OPCIONAL
+
+    def validate_escola(self, value):
+        return validate_escola_do_usuario(
+            value,
+            self.context.get("request"),
+            "Você só pode cadastrar alunos na sua própria escola.",
+        )
 
     def validate(self, attrs: dict) -> dict:
         """Garante que turma e aluno pertencem à mesma escola.
@@ -93,7 +134,7 @@ class AlunoSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class ProfessorSerializer(serializers.ModelSerializer):
+class ProfessorSerializer(AutoEscopoEscolaSerializerMixin, serializers.ModelSerializer):
     nome_completo = serializers.CharField(
         source="usuario.get_full_name", read_only=True
     )
@@ -110,6 +151,14 @@ class ProfessorSerializer(serializers.ModelSerializer):
             "atualizado_em",
         ]
         read_only_fields = ["id", "criado_em", "atualizado_em"]
+        extra_kwargs = _ESCOLA_OPCIONAL
+
+    def validate_escola(self, value):
+        return validate_escola_do_usuario(
+            value,
+            self.context.get("request"),
+            "Você só pode cadastrar professores na sua própria escola.",
+        )
 
     def validate(self, attrs: dict) -> dict:
         """Replica a invariante de `Professor.clean()` (mesma escola que o usuário).
@@ -126,7 +175,7 @@ class ProfessorSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class LecionamentoSerializer(serializers.ModelSerializer):
+class LecionamentoSerializer(AutoEscopoEscolaSerializerMixin, serializers.ModelSerializer):
     """Serializa o vínculo Professor × Turma × Disciplina.
 
     `ano_letivo` é exposto read-only via fonte da turma — evita duplicar
@@ -152,6 +201,14 @@ class LecionamentoSerializer(serializers.ModelSerializer):
             "atualizado_em",
         ]
         read_only_fields = ["id", "ano_letivo", "criado_em", "atualizado_em"]
+        extra_kwargs = _ESCOLA_OPCIONAL
+
+    def validate_escola(self, value):
+        return validate_escola_do_usuario(
+            value,
+            self.context.get("request"),
+            "Você só pode criar lecionamentos na sua própria escola.",
+        )
 
     def validate(self, attrs: dict) -> dict:
         """Garante alinhamento de escola entre professor, turma e disciplina."""

@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAuth } from "@/features/auth/useAuth";
 import { useTurmas } from "@/features/turmas/hooks";
 import type { Aluno, AlunoInput } from "@/types/api";
 
@@ -40,6 +41,10 @@ export function AlunoFormDialog({
   onOpenChange,
   aluno,
 }: AlunoFormDialogProps) {
+  const { user } = useAuth();
+  // Quando o usuário tem escola no perfil, o backend deduz — omitimos
+  // `escola` do payload. Admin global envia derivada da turma.
+  const escolaAuto = user?.escola_id ?? null;
   const turmasQuery = useTurmas();
   const createMutation = useCreateAluno();
   const updateMutation = useUpdateAluno();
@@ -92,7 +97,10 @@ export function AlunoFormDialog({
     }
 
     const payload: AlunoInput = {
-      escola: turma.escola, // derivado da turma — invariante do backend
+      // `escola` omitida quando o usuário tem escola no perfil — backend
+      // deduz via `AutoEscopoEscolaMixin`. Admin global envia derivado
+      // da turma (invariante: aluno.escola == turma.escola).
+      ...(escolaAuto == null ? { escola: turma.escola } : {}),
       turma: turma.id,
       matricula,
       nome_completo: nomeCompleto,

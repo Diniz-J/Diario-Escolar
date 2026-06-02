@@ -3,10 +3,15 @@ from datetime import date
 
 from rest_framework import serializers
 
+from apps.common.serializers import (
+    AutoEscopoEscolaSerializerMixin,
+    validate_escola_do_usuario,
+)
+
 from .models import Ocorrencia
 
 
-class OcorrenciaSerializer(serializers.ModelSerializer):
+class OcorrenciaSerializer(AutoEscopoEscolaSerializerMixin, serializers.ModelSerializer):
     status_display = serializers.CharField(
         source="get_status_display", read_only=True
     )
@@ -27,6 +32,9 @@ class OcorrenciaSerializer(serializers.ModelSerializer):
             "atualizado_em",
         ]
         read_only_fields = ["id", "criado_em", "atualizado_em"]
+        # `escola` opcional — `OcorrenciaViewSet` usa `AutoEscopoEscolaMixin`
+        # pra auto-preencher quando o usuário tem escola vinculada.
+        extra_kwargs = {"escola": {"required": False}}
 
     def validate_data_ocorrencia(self, value: date) -> date:
         """Bloqueia data futura — replica a invariante do model.clean()."""
@@ -37,26 +45,11 @@ class OcorrenciaSerializer(serializers.ModelSerializer):
         return value
 
     def validate_escola(self, value):
-        """Recusa payload com `escola` diferente da escola do usuário autenticado.
-
-        Defesa contra IDOR: o `EscopoEscolaMixin` esconde leitura cross-escola,
-        mas não bloqueia escrita — sem esta validação, um diretor da Escola A
-        poderia abrir ocorrência na Escola B mandando `escola=B_id` no payload.
-        Admin e superuser pulam a verificação porque legitimamente operam em
-        todas as escolas.
-        """
-        request = self.context.get("request")
-        if request is None or not request.user.is_authenticated:
-            return value
-        user = request.user
-        if user.is_superuser or getattr(user, "perfil", None) == "admin":
-            return value
-        user_escola_id = getattr(user, "escola_id", None)
-        if user_escola_id and value.id != user_escola_id:
-            raise serializers.ValidationError(
-                "Você só pode registrar ocorrências na sua própria escola."
-            )
-        return value
+        return validate_escola_do_usuario(
+            value,
+            self.context.get("request"),
+            "Você só pode registrar ocorrências na sua própria escola.",
+        )
 
     def validate(self, attrs: dict) -> dict:
         """Espelha as invariantes cruzadas de `Ocorrencia.clean()`.

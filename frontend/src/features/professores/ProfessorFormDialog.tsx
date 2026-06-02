@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/features/auth/useAuth";
 import { useDisciplinas } from "@/features/disciplinas/hooks";
 import { useEscolas } from "@/features/escolas/hooks";
 import {
@@ -57,6 +58,10 @@ export function ProfessorFormDialog({
   onOpenChange,
   professor,
 }: ProfessorFormDialogProps) {
+  const { user } = useAuth();
+  // Auto-scope: usuário não-admin não precisa selecionar escola — backend
+  // deduz. Admin global (escola_id=null) escolhe manualmente.
+  const escolaAuto = user?.escola_id ?? null;
   const escolasQuery = useEscolas();
   const disciplinasQuery = useDisciplinas();
   const turmasQuery = useTurmas();
@@ -138,7 +143,8 @@ export function ProfessorFormDialog({
     createLec.isPending ||
     deleteLec.isPending;
 
-  const mostrarEscolaSelect = (escolasQuery.data?.length ?? 0) > 1;
+  const mostrarEscolaSelect =
+    escolaAuto == null && (escolasQuery.data?.length ?? 0) > 1;
 
   // Filtra turmas da escola selecionada — admin com múltiplas escolas
   // não vê turmas de outra ao montar lecionamento.
@@ -192,11 +198,13 @@ export function ProfessorFormDialog({
     event.preventDefault();
     setErro(null);
 
-    if (!escolaId) {
+    // Quando o usuário tem escola no perfil, usa ela diretamente — o
+    // select nem foi renderizado. Caso contrário, exige seleção.
+    const escolaIdNum = escolaAuto ?? (escolaId ? parseInt(escolaId, 10) : NaN);
+    if (Number.isNaN(escolaIdNum)) {
       setErro("Selecione uma escola.");
       return;
     }
-    const escolaIdNum = parseInt(escolaId, 10);
 
     // Valida linhas: turma + disciplina obrigatórios em toda linha.
     const linhasValidas = linhas.filter(
@@ -227,11 +235,12 @@ export function ProfessorFormDialog({
             await deleteLec.mutateAsync(l.id);
           }
         }
-        // Novos: linhas sem id.
+        // Novos: linhas sem id. `escola` deduzida pelo backend quando
+        // o user tem escola no perfil.
         for (const linha of linhasValidas) {
           if (linha.id == null) {
             await createLec.mutateAsync({
-              escola: escolaIdNum,
+              ...(escolaAuto == null ? { escola: escolaIdNum } : {}),
               professor: professorIdAlvo,
               turma: parseInt(linha.turmaId, 10),
               disciplina: parseInt(linha.disciplinaId, 10),
@@ -253,7 +262,8 @@ export function ProfessorFormDialog({
           password,
         });
         const novoProfessor = await createProfessor.mutateAsync({
-          escola: escolaIdNum,
+          // `escola` omitida quando o user tem escola no perfil — backend deduz.
+          ...(escolaAuto == null ? { escola: escolaIdNum } : {}),
           usuario: usuario.id,
         });
         professorIdAlvo = novoProfessor.id;
@@ -261,7 +271,7 @@ export function ProfessorFormDialog({
         // Cria lecionamentos depois do Professor existir.
         for (const linha of linhasValidas) {
           await createLec.mutateAsync({
-            escola: escolaIdNum,
+            ...(escolaAuto == null ? { escola: escolaIdNum } : {}),
             professor: professorIdAlvo,
             turma: parseInt(linha.turmaId, 10),
             disciplina: parseInt(linha.disciplinaId, 10),
