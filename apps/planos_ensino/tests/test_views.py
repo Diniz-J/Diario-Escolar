@@ -65,15 +65,17 @@ class PermissionsTests(_Setup):
     def test_inspetor_le(self):
         self.assertEqual(self._list("inspetor").status_code, 200)
 
-    def test_inspetor_nao_escreve(self):
-        self.assertEqual(self._create("inspetor").status_code, 403)
+    def test_inspetor_escreve(self):
+        """Alias de professor — lança plano."""
+        self.assertEqual(self._create("inspetor").status_code, 201)
 
     def test_professor_escreve(self):
         self.assertEqual(self._create("professor").status_code, 201)
 
-    def test_secretaria_negado_em_tudo(self):
-        self.assertEqual(self._list("secretaria").status_code, 403)
-        self.assertEqual(self._create("secretaria").status_code, 403)
+    def test_secretaria_aceito_em_tudo(self):
+        """Alias de diretor — lê e escreve."""
+        self.assertEqual(self._list("secretaria").status_code, 200)
+        self.assertEqual(self._create("secretaria").status_code, 201)
 
 
 class ValidationTests(_Setup):

@@ -55,10 +55,12 @@ class BoletimEndpointTests(TestCase):
         resp = self.client.get(self._url(self.aluno.id))
         self.assertEqual(resp.status_code, 401)
 
-    def test_secretaria_negada(self):
+    def test_secretaria_acessa_como_diretor(self):
+        """Alias de diretor — acessa aluno da própria escola."""
         self._auth(self.secretaria)
         resp = self.client.get(self._url(self.aluno.id))
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["aluno"]["id"], self.aluno.id)
 
     def test_diretor_acessa_aluno_da_propria_escola(self):
         self._auth(self.diretor)

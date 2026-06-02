@@ -115,11 +115,13 @@ class OcorrenciaPermissionTests(_OcorrenciaSetup):
     def test_list_professor_aceito(self):
         self.assertEqual(self._request("list", "professor").status_code, 200)
 
-    def test_list_secretaria_negado(self):
-        self.assertEqual(self._request("list", "secretaria").status_code, 403)
+    def test_list_secretaria_aceito(self):
+        """Alias de diretor — lê ocorrências."""
+        self.assertEqual(self._request("list", "secretaria").status_code, 200)
 
-    def test_list_inspetor_negado(self):
-        self.assertEqual(self._request("list", "inspetor").status_code, 403)
+    def test_list_inspetor_aceito(self):
+        """Alias de professor — lê ocorrências."""
+        self.assertEqual(self._request("list", "inspetor").status_code, 200)
 
     def test_create_professor_aceito(self):
         """Professor é o caso de uso principal — precisa conseguir abrir ocorrência."""
@@ -134,9 +136,10 @@ class OcorrenciaPermissionTests(_OcorrenciaSetup):
         resp = self._request("create", "admin", self._payload_valido())
         self.assertEqual(resp.status_code, 201)
 
-    def test_create_secretaria_negado(self):
+    def test_create_secretaria_aceito(self):
+        """Alias de diretor — abre ocorrência."""
         resp = self._request("create", "secretaria", self._payload_valido())
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 201)
 
 
 class OcorrenciaValidationTests(_OcorrenciaSetup):
@@ -349,29 +352,32 @@ class OcorrenciaWritePermissionTests(_OcorrenciaSetup):
         )
         self.assertEqual(resp.status_code, 200)
 
-    def test_secretaria_update_negado(self):
+    def test_secretaria_update_aceito(self):
+        """Alias de diretor."""
         resp = self._request(
             "partial_update", "secretaria",
             payload={"status": Ocorrencia.Status.RESOLVIDA},
             pk=self.ocorrencia.id,
         )
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 200)
 
-    def test_inspetor_update_negado(self):
+    def test_inspetor_update_aceito(self):
+        """Alias de professor."""
         resp = self._request(
             "partial_update", "inspetor",
             payload={"status": Ocorrencia.Status.RESOLVIDA},
             pk=self.ocorrencia.id,
         )
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 200)
 
     def test_professor_destroy_aceito(self):
         resp = self._request("destroy", "professor", pk=self.ocorrencia.id)
         self.assertEqual(resp.status_code, 204)
 
-    def test_secretaria_destroy_negado(self):
+    def test_secretaria_destroy_aceito(self):
+        """Alias de diretor."""
         resp = self._request("destroy", "secretaria", pk=self.ocorrencia.id)
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 204)
 
 
 class OcorrenciaPatchPartialTests(_OcorrenciaSetup):

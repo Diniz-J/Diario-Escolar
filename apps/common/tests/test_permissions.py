@@ -88,10 +88,12 @@ class IsAdminOrDiretorTests(_PermissionMatrixTests):
     def test_professor_negado(self):
         self.assertFalse(self._check(IsAdminOrDiretor, self.professor))
 
-    def test_secretaria_negado(self):
-        self.assertFalse(self._check(IsAdminOrDiretor, self.secretaria))
+    def test_secretaria_aceito(self):
+        """Alias de diretor — passa em IsAdminOrDiretor."""
+        self.assertTrue(self._check(IsAdminOrDiretor, self.secretaria))
 
     def test_inspetor_negado(self):
+        """Inspetor não tem cadastro — fica fora de IsAdminOrDiretor."""
         self.assertFalse(self._check(IsAdminOrDiretor, self.inspetor))
 
 
@@ -111,11 +113,13 @@ class IsAdminOrDiretorOrProfessorTests(_PermissionMatrixTests):
     def test_professor_aceito(self):
         self.assertTrue(self._check(IsAdminOrDiretorOrProfessor, self.professor))
 
-    def test_secretaria_negado(self):
-        self.assertFalse(self._check(IsAdminOrDiretorOrProfessor, self.secretaria))
+    def test_secretaria_aceito(self):
+        """Alias de diretor."""
+        self.assertTrue(self._check(IsAdminOrDiretorOrProfessor, self.secretaria))
 
-    def test_inspetor_negado(self):
-        self.assertFalse(self._check(IsAdminOrDiretorOrProfessor, self.inspetor))
+    def test_inspetor_aceito(self):
+        """Alias de professor."""
+        self.assertTrue(self._check(IsAdminOrDiretorOrProfessor, self.inspetor))
 
 
 class PerfilConstantsConsistencyTests(TestCase):
@@ -127,7 +131,9 @@ class PerfilConstantsConsistencyTests(TestCase):
         valores_enum = set(Usuario.Perfil.values)
         self.assertIn(permissions._PERFIL_ADMIN, valores_enum)
         self.assertIn(permissions._PERFIL_DIRETOR, valores_enum)
+        self.assertIn(permissions._PERFIL_SECRETARIA, valores_enum)
         self.assertIn(permissions._PERFIL_PROFESSOR, valores_enum)
+        self.assertIn(permissions._PERFIL_INSPETOR, valores_enum)
 
     def test_admin_bypass_corresponde_ao_enum(self):
         """A constante de bypass deve ser exatamente Usuario.Perfil.ADMIN."""
