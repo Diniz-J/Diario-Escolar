@@ -51,8 +51,13 @@ export function TarefasPage() {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl md:text-3xl font-semibold">Tarefas</h1>
+      <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div className="space-y-3">
+          <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
+            Tarefas
+          </h1>
+          <div className="h-px w-10 bg-ferrugem" />
+        </div>
         <Button onClick={() => setFormOpen(true)}>Nova tarefa</Button>
       </header>
 
@@ -65,19 +70,32 @@ export function TarefasPage() {
         className="max-w-sm"
       />
 
-      <div className="rounded-md border">
+      <div className="rounded-lg border border-border bg-paper overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Título</TableHead>
-              <TableHead>Turma</TableHead>
-              {/* Em mobile escondemos colunas pra evitar o scroll horizontal
+              {/* Headers em eyebrow mono — padrão do DESIGN.md §7.1.
+                  Em mobile escondemos colunas pra evitar o scroll horizontal
                   grosso do Windows. As infos completas continuam acessíveis
                   ao clicar na linha (rota de detalhe). */}
-              <TableHead className="hidden md:table-cell">Disciplina</TableHead>
-              <TableHead className="hidden md:table-cell">Lançamento</TableHead>
-              <TableHead className="hidden lg:table-cell">Prazo</TableHead>
-              <TableHead className="hidden lg:table-cell">Vale nota</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Título
+              </TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Turma
+              </TableHead>
+              <TableHead className="hidden md:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Disciplina
+              </TableHead>
+              <TableHead className="hidden md:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Lançamento
+              </TableHead>
+              <TableHead className="hidden lg:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Prazo
+              </TableHead>
+              <TableHead className="hidden lg:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Vale nota
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -132,11 +150,11 @@ export function TarefasPage() {
                   </TableCell>
                   <TableCell className="hidden lg:table-cell">
                     {t.vale_nota ? (
-                      <span className="text-xs text-blue-700 bg-blue-50 dark:bg-blue-950 dark:text-blue-300 px-2 py-0.5 rounded">
+                      <span className="text-xs text-ferrugem bg-ferrugem/10 px-2 py-0.5 rounded">
                         {t.nota_maxima ? `Vale ${t.nota_maxima}` : "Sim"}
                       </span>
                     ) : (
-                      <span className="text-xs text-muted-foreground">Não</span>
+                      <span className="text-xs text-sepia">Não</span>
                     )}
                   </TableCell>
                 </TableRow>

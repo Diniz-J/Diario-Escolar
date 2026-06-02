@@ -8,15 +8,20 @@ export const STATUS_LABEL: Record<EntregaStatus, string> = {
   entregue_com_atraso: "Entregue com atraso",
 };
 
+// Badges por status na paleta da marca (DESIGN.md §6.1).
+// - pendente            → mostarda pastel (aguardando ação)
+// - atrasada            → terracota + texto destructive (urgência)
+// - entregue_no_prazo   → olive pastel (positivo, alinhado à primária)
+// - entregue_com_atraso → petrol pastel (entregue, mas com ressalva)
 export const STATUS_BADGE: Record<EntregaStatus, string> = {
   pendente:
-    "text-amber-700 bg-amber-50 dark:bg-amber-950 dark:text-amber-300",
+    "bg-[#FCE7BC] text-[#854D0E]",
   atrasada:
-    "text-red-700 bg-red-50 dark:bg-red-950 dark:text-red-300",
+    "text-destructive bg-destructive/15",
   entregue_no_prazo:
-    "text-green-700 bg-green-50 dark:bg-green-950 dark:text-green-300",
+    "text-olive bg-olive/10",
   entregue_com_atraso:
-    "text-blue-700 bg-blue-50 dark:bg-blue-950 dark:text-blue-300",
+    "bg-[#C4D4D2] text-[#1F3A37]",
 };
 
 // Ordem de prioridade na listagem (atrasadas / pendentes em cima).
