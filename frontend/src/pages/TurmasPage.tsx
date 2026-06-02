@@ -69,8 +69,13 @@ export function TurmasPage() {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl md:text-3xl font-semibold">Turmas</h1>
+      <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div className="space-y-3">
+          <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
+            Turmas
+          </h1>
+          <div className="h-px w-10 bg-ferrugem" />
+        </div>
         {podeModificarCadastros && (
           <Button onClick={() => setFormOpen(true)}>Nova turma</Button>
         )}
@@ -93,17 +98,26 @@ export function TurmasPage() {
         className="max-w-sm"
       />
 
-      <div className="rounded-md border">
+      <div className="rounded-lg border border-border bg-paper overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Nome</TableHead>
-              {/* Turno e Ano letivo só em telas maiores. O nome da turma
+              {/* Headers em eyebrow mono — padrão do DESIGN.md §7.1.
+                  Turno e Ano letivo só em telas maiores. O nome da turma
                   geralmente já carrega o ano ("1º Ano A"); detalhe da
                   turma mostra tudo. */}
-              <TableHead className="hidden md:table-cell">Turno</TableHead>
-              <TableHead className="hidden sm:table-cell">Ano letivo</TableHead>
-              <TableHead>Alunos</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Nome
+              </TableHead>
+              <TableHead className="hidden md:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Turno
+              </TableHead>
+              <TableHead className="hidden sm:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Ano letivo
+              </TableHead>
+              <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Alunos
+              </TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
           </TableHeader>
