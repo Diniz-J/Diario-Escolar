@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAuth } from "@/features/auth/useAuth";
 import { useEscolas } from "@/features/escolas/hooks";
 import type { Turma, TurmaInput, Turno } from "@/types/api";
 
@@ -43,6 +44,12 @@ export function TurmaFormDialog({
   onOpenChange,
   turma,
 }: TurmaFormDialogProps) {
+  const { user } = useAuth();
+  // Auto-scope: quando o usuário tem escola no JWT (diretor/professor/
+  // secretaria/inspetor), o backend deduz a escola — não enviamos no
+  // payload e escondemos o select. Admin global (escola_id=null)
+  // continua escolhendo manualmente.
+  const escolaAuto = user?.escola_id ?? null;
   const escolasQuery = useEscolas();
   const createMutation = useCreateTurma();
   const updateMutation = useUpdateTurma();
@@ -90,7 +97,7 @@ export function TurmaFormDialog({
       setErro("Selecione um turno.");
       return;
     }
-    if (!escolaId) {
+    if (!escolaAuto && !escolaId) {
       setErro("Selecione uma escola.");
       return;
     }
@@ -101,7 +108,11 @@ export function TurmaFormDialog({
     }
 
     const payload: TurmaInput = {
-      escola: parseInt(escolaId, 10),
+      // Quando o usuário tem escola no perfil, o backend deduz —
+      // omitimos `escola` do payload. Admin global envia explicitamente.
+      ...(escolaAuto == null && escolaId
+        ? { escola: parseInt(escolaId, 10) }
+        : {}),
       nome,
       turno,
       ano_letivo: anoNum,
@@ -129,9 +140,11 @@ export function TurmaFormDialog({
     }
   }
 
-  // Mostrar select de escola apenas quando há mais de uma opção.
-  // Caso contrário, ela já foi pré-selecionada e o campo é redundante.
-  const mostrarEscolaSelect = (escolasQuery.data?.length ?? 0) > 1;
+  // Mostra select de escola SÓ se o usuário não tem escola no perfil
+  // (admin global) E há mais de uma escola disponível. Pra qualquer
+  // outro perfil, o backend resolve automaticamente.
+  const mostrarEscolaSelect =
+    escolaAuto == null && (escolasQuery.data?.length ?? 0) > 1;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

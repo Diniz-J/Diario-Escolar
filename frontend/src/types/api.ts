@@ -47,10 +47,14 @@ export interface Disciplina {
 
 // `ativa` é opcional porque o backend tem default=True no modelo e o
 // form da UI deixou de expor o campo — disciplina nasce ativa.
+//
+// `escola` é opcional: o backend (`AutoEscopoEscolaMixin`) auto-preenche
+// com a escola do usuário autenticado quando o campo é omitido. Admin
+// global (sem `escola` no perfil) precisa enviar explicitamente.
 export type DisciplinaInput = Omit<
   Disciplina,
-  "id" | "ativa" | "criado_em" | "atualizado_em"
-> & { ativa?: boolean };
+  "id" | "escola" | "ativa" | "criado_em" | "atualizado_em"
+> & { escola?: number; ativa?: boolean };
 
 export type Turno = "matutino" | "vespertino" | "noturno" | "integral";
 
@@ -66,10 +70,12 @@ export interface Turma {
   atualizado_em: string;
 }
 
+// `escola` opcional — backend auto-preenche pelo usuário autenticado
+// quando ausente (`AutoEscopoEscolaMixin`).
 export type TurmaInput = Omit<
   Turma,
-  "id" | "turno_display" | "criado_em" | "atualizado_em"
->;
+  "id" | "escola" | "turno_display" | "criado_em" | "atualizado_em"
+> & { escola?: number };
 
 export interface Aluno {
   id: number;
@@ -85,10 +91,13 @@ export interface Aluno {
   atualizado_em: string;
 }
 
+// `escola` opcional — backend auto-preenche pelo usuário autenticado
+// (`AutoEscopoEscolaMixin`); o form deriva da turma escolhida quando
+// admin precisa especificar.
 export type AlunoInput = Omit<
   Aluno,
-  "id" | "criado_em" | "atualizado_em"
->;
+  "id" | "escola" | "criado_em" | "atualizado_em"
+> & { escola?: number };
 
 export interface Professor {
   id: number;
@@ -102,8 +111,10 @@ export interface Professor {
 
 // `usuario` é obrigatório pra criar (FK existente); na edição em geral
 // não muda (você edita o Usuario por baixo, não a vinculação).
+//
+// `escola` opcional — backend auto-preenche (`AutoEscopoEscolaMixin`).
 export type ProfessorInput = {
-  escola: number;
+  escola?: number;
   usuario: number;
   ativo?: boolean;
 };
@@ -122,8 +133,9 @@ export interface Lecionamento {
   atualizado_em: string;
 }
 
+// `escola` opcional — backend auto-preenche (`AutoEscopoEscolaMixin`).
 export type LecionamentoInput = {
-  escola: number;
+  escola?: number;
   professor: number;
   turma: number;
   disciplina: number;
@@ -150,10 +162,11 @@ export interface Ocorrencia {
   atualizado_em: string;
 }
 
+// `escola` opcional — backend auto-preenche (`AutoEscopoEscolaMixin`).
 export type OcorrenciaInput = Omit<
   Ocorrencia,
-  "id" | "status_display" | "criado_em" | "atualizado_em"
->;
+  "id" | "escola" | "status_display" | "criado_em" | "atualizado_em"
+> & { escola?: number };
 
 // P=Presente, A=Ausente, J=Justificado, R=Retardatário
 export type PresencaStatus = "P" | "A" | "J" | "R";
@@ -169,10 +182,11 @@ export interface RegistroPresenca {
   atualizado_em: string;
 }
 
+// `escola` opcional — backend auto-preenche (`AutoEscopoEscolaMixin`).
 export type RegistroPresencaInput = Omit<
   RegistroPresenca,
-  "id" | "criado_em" | "atualizado_em"
->;
+  "id" | "escola" | "criado_em" | "atualizado_em"
+> & { escola?: number };
 
 export interface ItemPresenca {
   id: number;
@@ -209,10 +223,11 @@ export interface Tarefa {
   atualizado_em: string;
 }
 
+// `escola` opcional — backend auto-preenche (`AutoEscopoEscolaMixin`).
 export type TarefaInput = Omit<
   Tarefa,
-  "id" | "criado_em" | "atualizado_em"
->;
+  "id" | "escola" | "criado_em" | "atualizado_em"
+> & { escola?: number };
 
 export interface EntregaTarefa {
   id: number;
@@ -250,10 +265,11 @@ export interface PlanoEnsino {
   atualizado_em: string;
 }
 
+// `escola` opcional — backend auto-preenche (`AutoEscopoEscolaMixin`).
 export type PlanoEnsinoInput = Omit<
   PlanoEnsino,
-  "id" | "criado_em" | "atualizado_em"
->;
+  "id" | "escola" | "criado_em" | "atualizado_em"
+> & { escola?: number };
 
 // Boletim do aluno — agregação calculada pelo backend (sem persistência).
 // Decimal serializado como string.

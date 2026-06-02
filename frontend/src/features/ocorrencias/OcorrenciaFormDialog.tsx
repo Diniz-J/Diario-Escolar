@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAlunos } from "@/features/alunos/hooks";
+import { useAuth } from "@/features/auth/useAuth";
 import { useProfessores } from "@/features/professores/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
 import type { Ocorrencia, OcorrenciaInput, OcorrenciaStatus } from "@/types/api";
@@ -41,6 +42,8 @@ export function OcorrenciaFormDialog({
   onOpenChange,
   ocorrencia,
 }: OcorrenciaFormDialogProps) {
+  const { user } = useAuth();
+  const escolaAuto = user?.escola_id ?? null;
   const turmasQuery = useTurmas();
   // Só alunos ativos podem ser alvo de uma NOVA ocorrência. Alunos
   // inativos (soft delete) preservam histórico mas saem dos seletores
@@ -122,7 +125,9 @@ export function OcorrenciaFormDialog({
     }
 
     const payload: OcorrenciaInput = {
-      escola: aluno.escola,
+      // `escola` deduzida pelo backend quando o user tem escola. Admin
+      // global envia derivado do aluno (invariante: ambos na mesma escola).
+      ...(escolaAuto == null ? { escola: aluno.escola } : {}),
       turma: aluno.turma, // backend exige; derivamos do aluno
       aluno: aluno.id,
       professor:

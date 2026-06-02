@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAuth } from "@/features/auth/useAuth";
 import { useDisciplinas } from "@/features/disciplinas/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
 import type { Tarefa, TarefaInput } from "@/types/api";
@@ -37,6 +38,8 @@ export function TarefaFormDialog({
   onOpenChange,
   tarefa,
 }: TarefaFormDialogProps) {
+  const { user } = useAuth();
+  const escolaAuto = user?.escola_id ?? null;
   const turmasQuery = useTurmas();
   const disciplinasQuery = useDisciplinas();
   const createMutation = useCreateTarefa();
@@ -103,7 +106,8 @@ export function TarefaFormDialog({
     }
 
     const payload: TarefaInput = {
-      escola: turma.escola,
+      // `escola` deduzida pelo backend quando o user tem escola.
+      ...(escolaAuto == null ? { escola: turma.escola } : {}),
       turma: turma.id,
       disciplina: disciplina.id,
       professor: null,

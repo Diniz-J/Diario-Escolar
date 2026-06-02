@@ -3,10 +3,15 @@ from datetime import date
 
 from rest_framework import serializers
 
+from apps.common.serializers import (
+    AutoEscopoEscolaSerializerMixin,
+    validate_escola_do_usuario,
+)
+
 from .models import EntregaTarefa, Tarefa
 
 
-class TarefaSerializer(serializers.ModelSerializer):
+class TarefaSerializer(AutoEscopoEscolaSerializerMixin, serializers.ModelSerializer):
     class Meta:
         model = Tarefa
         fields = [
@@ -26,25 +31,15 @@ class TarefaSerializer(serializers.ModelSerializer):
             "atualizado_em",
         ]
         read_only_fields = ["id", "criado_em", "atualizado_em"]
+        # `escola` opcional — `TarefaViewSet` usa `AutoEscopoEscolaMixin`.
+        extra_kwargs = {"escola": {"required": False}}
 
     def validate_escola(self, value):
-        """Recusa payload com `escola` diferente da do usuário autenticado.
-
-        Mesmo guard de IDOR aplicado em `ocorrencias` e `presenca`:
-        admin/superuser pulam.
-        """
-        request = self.context.get("request")
-        if request is None or not request.user.is_authenticated:
-            return value
-        user = request.user
-        if user.is_superuser or getattr(user, "perfil", None) == "admin":
-            return value
-        user_escola_id = getattr(user, "escola_id", None)
-        if user_escola_id and value.id != user_escola_id:
-            raise serializers.ValidationError(
-                "Você só pode lançar tarefas na sua própria escola."
-            )
-        return value
+        return validate_escola_do_usuario(
+            value,
+            self.context.get("request"),
+            "Você só pode lançar tarefas na sua própria escola.",
+        )
 
     def validate(self, attrs: dict) -> dict:
         """Espelha invariantes cruzadas de `Tarefa.clean()`.

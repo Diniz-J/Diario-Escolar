@@ -4,10 +4,17 @@ from datetime import date
 from rest_framework import serializers
 from rest_framework.validators import UniqueTogetherValidator
 
+from apps.common.serializers import (
+    AutoEscopoEscolaSerializerMixin,
+    validate_escola_do_usuario,
+)
+
 from .models import ItemPresenca, RegistroPresenca
 
 
-class RegistroPresencaSerializer(serializers.ModelSerializer):
+class RegistroPresencaSerializer(
+    AutoEscopoEscolaSerializerMixin, serializers.ModelSerializer
+):
     # Replicar o default do model: o `UniqueTogetherValidator` declarado
     # explicitamente abaixo torna todos os campos required, descartando o
     # default herdado do field. Sem isso, POST sem `data` falha com
@@ -27,6 +34,10 @@ class RegistroPresencaSerializer(serializers.ModelSerializer):
             "atualizado_em",
         ]
         read_only_fields = ["id", "criado_em", "atualizado_em"]
+        # `escola` opcional — `RegistroPresencaViewSet` usa
+        # `AutoEscopoEscolaMixin` pra auto-preencher quando o usuário
+        # tem escola vinculada.
+        extra_kwargs = {"escola": {"required": False}}
         # Mensagem customizada pra UX em pt-BR (sobrescreve o default
         # do DRF baseado na UniqueConstraint do model).
         validators = [
@@ -46,23 +57,11 @@ class RegistroPresencaSerializer(serializers.ModelSerializer):
         return value
 
     def validate_escola(self, value):
-        """Recusa payload com `escola` diferente da do usuário autenticado.
-
-        Mesmo guard de IDOR aplicado em `OcorrenciaSerializer`: não-admin
-        só registra na própria escola; admin/superuser bypassam.
-        """
-        request = self.context.get("request")
-        if request is None or not request.user.is_authenticated:
-            return value
-        user = request.user
-        if user.is_superuser or getattr(user, "perfil", None) == "admin":
-            return value
-        user_escola_id = getattr(user, "escola_id", None)
-        if user_escola_id and value.id != user_escola_id:
-            raise serializers.ValidationError(
-                "Você só pode registrar presença na sua própria escola."
-            )
-        return value
+        return validate_escola_do_usuario(
+            value,
+            self.context.get("request"),
+            "Você só pode registrar presença na sua própria escola.",
+        )
 
     def validate(self, attrs: dict) -> dict:
         """Espelha invariantes cruzadas de `RegistroPresenca.clean()`.

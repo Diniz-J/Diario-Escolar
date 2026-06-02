@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAuth } from "@/features/auth/useAuth";
 import { useTurmas } from "@/features/turmas/hooks";
 import type { RegistroPresencaInput } from "@/types/api";
 
@@ -41,6 +42,8 @@ export function RegistroFormDialog({
   onOpenChange,
   onCreated,
 }: RegistroFormDialogProps) {
+  const { user } = useAuth();
+  const escolaAuto = user?.escola_id ?? null;
   const turmasQuery = useTurmas();
   const createMutation = useCreateRegistro();
 
@@ -71,7 +74,8 @@ export function RegistroFormDialog({
     }
 
     const payload: RegistroPresencaInput = {
-      escola: turma.escola,
+      // `escola` deduzida pelo backend quando o user tem escola no perfil.
+      ...(escolaAuto == null ? { escola: turma.escola } : {}),
       turma: turma.id,
       data,
       professor: null,

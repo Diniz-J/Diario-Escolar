@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAuth } from "@/features/auth/useAuth";
 import { useEscolas } from "@/features/escolas/hooks";
 import type { Disciplina, DisciplinaInput } from "@/types/api";
 
@@ -36,6 +37,10 @@ export function DisciplinaFormDialog({
   onOpenChange,
   disciplina,
 }: DisciplinaFormDialogProps) {
+  const { user } = useAuth();
+  // Auto-scope: usuário com escola no JWT não precisa selecionar;
+  // backend deduz. Admin global continua escolhendo.
+  const escolaAuto = user?.escola_id ?? null;
   const escolasQuery = useEscolas();
   const createMutation = useCreateDisciplina();
   const updateMutation = useUpdateDisciplina();
@@ -66,15 +71,19 @@ export function DisciplinaFormDialog({
     event.preventDefault();
     setErro(null);
 
-    if (!escolaId) {
+    if (!escolaAuto && !escolaId) {
       setErro("Selecione uma escola.");
       return;
     }
 
     // `ativa` é omitido: no create o backend usa default=True; no edit
     // mantém o valor atual porque o endpoint é PATCH parcial.
+    // `escola` é omitido quando o usuário tem escola no perfil — backend
+    // deduz via `AutoEscopoEscolaMixin`.
     const payload: DisciplinaInput = {
-      escola: parseInt(escolaId, 10),
+      ...(escolaAuto == null && escolaId
+        ? { escola: parseInt(escolaId, 10) }
+        : {}),
       nome,
     };
 
@@ -99,9 +108,9 @@ export function DisciplinaFormDialog({
     }
   }
 
-  // Mostra select de escola só quando há mais de uma (admin), seguindo
-  // o padrão do form de Turma.
-  const mostrarEscolaSelect = (escolasQuery.data?.length ?? 0) > 1;
+  // Select de escola só pra admin global com múltiplas escolas.
+  const mostrarEscolaSelect =
+    escolaAuto == null && (escolasQuery.data?.length ?? 0) > 1;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
