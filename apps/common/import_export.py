@@ -333,6 +333,16 @@ def executar_import(
         collect_failed_rows=False,
     )
     erros = _coletar_erros(result)
+    import sys
+    print(
+        f"\n[IMPORT DEBUG] resource={resource_class.__name__} "
+        f"dry_run={not confirmar} totals={dict(result.totals)} "
+        f"has_errors={result.has_errors()} hve={result.has_validation_errors()} "
+        f"row_errors={[(n, [str(e.error) for e in errs]) for n, errs in result.row_errors()]} "
+        f"base_errors={[str(e.error) for e in result.base_errors]}\n",
+        file=sys.stderr,
+        flush=True,
+    )
     return Response(
         {
             "criados": result.totals.get("new", 0),
