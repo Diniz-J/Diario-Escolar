@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import tablib
+from django.db import transaction
 from django.http import FileResponse, HttpResponse
 from import_export import resources
 from rest_framework import status
@@ -331,34 +332,43 @@ def executar_import(
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # Single-pass: rodar 2x (dry-run + persist) duplica side-effects.
-    # No `AlunoResource.before_import_row` criamos a turma faltante
-    # FORA da `transaction.atomic` do import_data (porque `Turma.objects.create`
-    # foge da transação do save da linha). No primeiro pass (dry_run) ela
-    # ficava criada, no segundo pass (persist) tentava criar de novo e
-    # batia em UniqueViolation. Com 1 pass:
-    # - `confirmar=False` → `dry_run=True`: a lib faz rollback do
-    #   savepoint atômico no fim. Relatório de erros sem persistir.
-    # - `confirmar=True` → `dry_run=False`: persiste. Em erro de linha,
-    #   `raise_errors=False` registra no `result` em vez de levantar.
+    # Envolvemos TUDO num savepoint próprio. Subclasses dos resources
+    # criam entidades fora do save do row (ex.: `Turma.objects.create`
+    # no `before_import_row` do `AlunoResource`, `Usuario.objects.create`
+    # no `init_instance` do `ProfessorResource`). A `transaction.atomic`
+    # interna do `import_data` não cobre esses side-effects. Sem este
+    # outer savepoint, dry-run virava write real pra essas entidades.
+    #
+    # Estratégia: rodar import dentro do savepoint. Decidir commit vs
+    # rollback no fim baseado em `confirmar and not erros`.
     resource = resource_class(contexto=contexto)
-    result = resource.import_data(
-        dataset,
-        dry_run=not confirmar,
-        raise_errors=False,
-        # `collect_failed_rows` é incompatível com nossos resources que
-        # mutam chaves no `before_import_row` — tablib rejeita rows com
-        # número de colunas diferente do header inicial. Sem o flag,
-        # `row_errors()` ainda dá tudo que precisamos pro relatório.
-        collect_failed_rows=False,
-    )
-    erros = _coletar_erros(result)
+    with transaction.atomic():
+        sid = transaction.savepoint()
+        result = resource.import_data(
+            dataset,
+            dry_run=not confirmar,
+            raise_errors=False,
+            # `collect_failed_rows` é incompatível com nossos resources
+            # que mutam chaves no `before_import_row` — tablib rejeita
+            # rows com número de colunas diferente do header inicial.
+            collect_failed_rows=False,
+        )
+        erros = _coletar_erros(result)
+        persistir = bool(confirmar and not erros)
+        if persistir:
+            transaction.savepoint_commit(sid)
+        else:
+            # Dry-run, ou confirmação com erros: descarta TUDO que rolou
+            # dentro do savepoint — inclui criação de Turma faltante no
+            # AlunoResource e Usuario no ProfessorResource.
+            transaction.savepoint_rollback(sid)
+
     return Response(
         {
             "criados": result.totals.get("new", 0),
             "pulados": list(resource.duplicados),
             "erros": erros,
-            "persistido": confirmar and not erros,
+            "persistido": persistir,
         },
         status=status.HTTP_200_OK,
     )
@@ -393,4 +403,15 @@ def _coletar_erros(result) -> list[dict[str, Any]]:
                         "mensagem": str(msg),
                     }
                 )
+    # `base_errors` cobre problemas no dataset INTEIRO — ex.: coluna
+    # obrigatória ausente no header, `import_id_fields` faltando.
+    # Antes ignorávamos isso e a UI mostrava "criados=0, erros=[]" sem
+    # explicação. Sem linha porque o erro é do arquivo todo.
+    for erro in getattr(result, "base_errors", []) or []:
+        erros.append(
+            {
+                "linha": None,
+                "mensagem": str(erro.error),
+            }
+        )
     return erros

@@ -437,76 +437,33 @@ class ProfessorResource(BaseEscolaResource):
             instance.ativo = row.get("ativo", True)
         return instance
 
-    def _import_instance_legacy(self, instance, row, **kwargs):  # noqa: ARG002
-        """Cria Usuario + Professor numa transação atômica.
-
-        Sobrescreve o caminho normal porque o ModelResource padrão não
-        sabe criar a OneToOne relacionada. Roda só quando a instância é
-        nova (linhas duplicadas são puladas em `skip_row`).
-        """
-        escola_id = self.contexto.escola_id if self.contexto else None
-        if escola_id is None:
-            raise ValueError("Escola não definida no contexto do import.")
-
-        username = (row.get("username") or "").strip()
-        first_name = (row.get("first_name") or "").strip()
-        last_name = (row.get("last_name") or "").strip()
-        email = (row.get("email") or "").strip()
-
-        if not username:
-            raise ValueError("Coluna 'username' é obrigatória.")
-        if not email:
-            raise ValueError(
-                f"Coluna 'email' é obrigatória (usuário {username}) — "
-                "usamos pra enviar o link de definição de senha."
-            )
-
-        # Username globalmente único. Se já existe (em qualquer escola),
-        # falha a linha com erro claro em vez de IntegrityError.
-        if Usuario.objects.filter(username=username).exists():
-            raise ValueError(
-                f"Já existe usuário com username '{username}' no sistema. "
-                "Use outro username ou deixe a linha de fora."
-            )
-
-        with transaction.atomic():
-            usuario = Usuario.objects.create(
-                username=username,
-                first_name=first_name,
-                last_name=last_name,
-                email=email,
-                perfil=Usuario.Perfil.PROFESSOR,
-                escola_id=escola_id,
-            )
-            # Senha aleatória, não usada — o professor define a dele via
-            # link de redefinição. `set_unusable_password` deixa o
-            # password hash como `!` (não-validável), o que efetivamente
-            # bloqueia login até o reset.
-            usuario.set_password(secrets.token_urlsafe(32))
-            usuario.save(update_fields=["password"])
-
-            instance.usuario = usuario
-            instance.escola_id = escola_id
-            instance.ativo = row.get("ativo", True)
-            return instance
-
     def after_save_instance(self, instance, row, **kwargs):  # noqa: ARG002
-        """Dispara email de reset de senha pro professor recém-criado.
+        """Agenda envio do email de reset pra DEPOIS do commit final.
 
-        Só roda no save real (não no dry-run) — o
-        `django-import-export` gerencia o `using_transactions` via kwarg
-        `dry_run` que checamos.
+        `transaction.on_commit` só dispara o callback se a transação
+        externa (savepoint do `executar_import`) for commitada. Em
+        dry-run ou rollback por erro, o email nunca sai — evita o caso
+        "professor não foi salvo mas recebeu email" que rolaria se
+        chamássemos `enviar_link_redefinicao` direto aqui.
         """
         if kwargs.get("dry_run"):
             return
-        try:
-            _token_obj, token_cru = PasswordResetToken.gerar(instance.usuario)
-            enviar_link_redefinicao(instance.usuario, token_cru)
-        except Exception:  # noqa: BLE001 — log e segue (não falha o import)
-            logger.exception(
-                "Falha ao enviar email de definição de senha pro professor importado",
-                extra={"usuario_id": instance.usuario_id},
-            )
+
+        # Capturamos o usuario num closure pra `on_commit` não depender
+        # do estado da instance no momento da execução.
+        usuario = instance.usuario
+
+        def _enviar():
+            try:
+                _token_obj, token_cru = PasswordResetToken.gerar(usuario)
+                enviar_link_redefinicao(usuario, token_cru)
+            except Exception:  # noqa: BLE001 — log e segue
+                logger.exception(
+                    "Falha ao enviar email de definição de senha",
+                    extra={"usuario_id": usuario.id},
+                )
+
+        transaction.on_commit(_enviar)
 
     def _descricao_linha(self, row) -> str:
         username = row.get("username", "?")
