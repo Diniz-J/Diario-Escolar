@@ -339,6 +339,21 @@ def executar_import(
             "pulados": list(resource.duplicados),
             "erros": erros,
             "persistido": confirmar and not erros,
+            # DEBUG temporário pra entender por que persistido fica False
+            # em testes que deveriam passar. Remover quando os testes
+            # virarem verde.
+            "_debug": {
+                "totals": dict(result.totals),
+                "has_errors": result.has_errors(),
+                "has_validation_errors": result.has_validation_errors(),
+                "row_errors_count": sum(
+                    len(errs) for _, errs in result.row_errors()
+                ),
+                "invalid_rows_count": len(
+                    getattr(result, "invalid_rows", []) or []
+                ),
+                "base_errors": [str(e.error) for e in result.base_errors],
+            },
         },
         status=status.HTTP_200_OK,
     )
