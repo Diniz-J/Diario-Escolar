@@ -116,6 +116,26 @@ class BaseEscolaResource(resources.ModelResource):
     # Import — escopo de escola + dedup                                  #
     # ------------------------------------------------------------------ #
 
+    def before_import(self, dataset, **kwargs):  # noqa: ARG002
+        """Injeta coluna `escola` no dataset antes da validação de headers.
+
+        A lib checa em `_check_import_id_fields` se todas as colunas de
+        `import_id_fields` estão no `dataset.headers`. Como `escola` nunca
+        vem no CSV do usuário, adicionamos aqui (preenchendo todas as
+        linhas com o `escola_id` do contexto). Sem isso, a lib registra
+        um `base_error` que faz `has_errors()=True`.
+        """
+        super().before_import(dataset, **kwargs)
+        if (
+            self.contexto
+            and self.contexto.escola_id is not None
+            and "escola" not in dataset.headers
+        ):
+            dataset.append_col(
+                [self.contexto.escola_id] * dataset.height,
+                header="escola",
+            )
+
     def before_import_row(self, row, **kwargs):  # noqa: ARG002
         """Injeta a escola do contexto na linha (se ausente).
 
@@ -333,37 +353,12 @@ def executar_import(
         collect_failed_rows=False,
     )
     erros = _coletar_erros(result)
-    import sys
-    print(
-        f"\n[IMPORT DEBUG] resource={resource_class.__name__} "
-        f"dry_run={not confirmar} totals={dict(result.totals)} "
-        f"has_errors={result.has_errors()} hve={result.has_validation_errors()} "
-        f"row_errors={[(n, [str(e.error) for e in errs]) for n, errs in result.row_errors()]} "
-        f"base_errors={[str(e.error) for e in result.base_errors]}\n",
-        file=sys.stderr,
-        flush=True,
-    )
     return Response(
         {
             "criados": result.totals.get("new", 0),
             "pulados": list(resource.duplicados),
             "erros": erros,
             "persistido": confirmar and not erros,
-            # DEBUG temporário pra entender por que persistido fica False
-            # em testes que deveriam passar. Remover quando os testes
-            # virarem verde.
-            "_debug": {
-                "totals": dict(result.totals),
-                "has_errors": result.has_errors(),
-                "has_validation_errors": result.has_validation_errors(),
-                "row_errors_count": sum(
-                    len(errs) for _, errs in result.row_errors()
-                ),
-                "invalid_rows_count": len(
-                    getattr(result, "invalid_rows", []) or []
-                ),
-                "base_errors": [str(e.error) for e in result.base_errors],
-            },
         },
         status=status.HTTP_200_OK,
     )
