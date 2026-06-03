@@ -105,18 +105,20 @@ export function TarefaDetalhePage() {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <header className="space-y-2">
+      <header className="space-y-3">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/tarefas">← Voltar</Link>
         </Button>
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-semibold">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div className="space-y-3">
+            <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
               {tarefa?.titulo ?? "Tarefa"}
             </h1>
+            <div className="h-px w-10 bg-ferrugem" />
             {tarefa && (
-              <p className="text-sm text-muted-foreground mt-1">
-                {turma?.nome ?? `Turma #${tarefa.turma}`} ·{" "}
+              <p className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+                {turma?.nome ?? `Turma #${tarefa.turma}`}
+                <span className="mx-1.5 text-border">·</span>
                 {disciplina?.nome ?? `Disciplina #${tarefa.disciplina}`}
               </p>
             )}
@@ -160,18 +162,24 @@ export function TarefaDetalhePage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Informações</CardTitle>
+              <CardTitle className="font-heading text-lg tracking-tight">
+                Informações
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
-                <dt className="text-muted-foreground">Lançamento</dt>
+                <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+                  Lançamento
+                </dt>
                 <dd>
                   {new Date(
                     tarefa.data_lancamento + "T00:00:00",
                   ).toLocaleDateString("pt-BR")}
                 </dd>
 
-                <dt className="text-muted-foreground">Prazo</dt>
+                <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+                  Prazo
+                </dt>
                 <dd>
                   {tarefa.prazo
                     ? new Date(tarefa.prazo + "T00:00:00").toLocaleDateString(
@@ -180,7 +188,9 @@ export function TarefaDetalhePage() {
                     : "Sem prazo"}
                 </dd>
 
-                <dt className="text-muted-foreground">Vale nota</dt>
+                <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+                  Vale nota
+                </dt>
                 <dd>
                   {tarefa.vale_nota
                     ? `Sim — máxima ${tarefa.nota_maxima ?? "—"}, peso ${tarefa.peso}`
@@ -189,7 +199,9 @@ export function TarefaDetalhePage() {
 
                 {tarefa.descricao && (
                   <>
-                    <dt className="text-muted-foreground">Descrição</dt>
+                    <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+                      Descrição
+                    </dt>
                     <dd className="whitespace-pre-wrap">{tarefa.descricao}</dd>
                   </>
                 )}
@@ -199,31 +211,33 @@ export function TarefaDetalhePage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Resumo</CardTitle>
+              <CardTitle className="font-heading text-lg tracking-tight">
+                Resumo
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex gap-6 text-sm">
+              <div className="flex gap-6 text-sm flex-wrap">
                 <div className="space-y-1">
-                  <p className="text-muted-foreground text-xs uppercase">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-sepia">
                     Pendentes
                   </p>
-                  <p className="text-2xl font-semibold tabular-nums">
+                  <p className="font-heading text-3xl tabular-nums text-tinta">
                     {resumo.pendente}
                   </p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-muted-foreground text-xs uppercase">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-sepia">
                     Atrasadas
                   </p>
-                  <p className="text-2xl font-semibold tabular-nums">
+                  <p className="font-heading text-3xl tabular-nums text-tinta">
                     {resumo.atrasada}
                   </p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-muted-foreground text-xs uppercase">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-sepia">
                     Entregues
                   </p>
-                  <p className="text-2xl font-semibold tabular-nums">
+                  <p className="font-heading text-3xl tabular-nums text-tinta">
                     {resumo.entregue_no_prazo + resumo.entregue_com_atraso}
                   </p>
                 </div>
@@ -233,7 +247,9 @@ export function TarefaDetalhePage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Entregas</CardTitle>
+              <CardTitle className="font-heading text-lg tracking-tight">
+                Entregas
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {entregasQuery.isLoading ? (

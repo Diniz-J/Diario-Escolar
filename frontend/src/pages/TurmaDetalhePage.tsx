@@ -35,11 +35,11 @@ export function TurmaDetalhePage() {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <header className="space-y-2">
+      <header className="space-y-3">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/turmas">← Voltar</Link>
         </Button>
-        <h1 className="text-2xl md:text-3xl font-semibold">
+        <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
           {turmaQuery.isLoading ? (
             <Skeleton className="h-8 w-64" />
           ) : turmaQuery.data ? (
@@ -48,20 +48,29 @@ export function TurmaDetalhePage() {
             "Turma não encontrada"
           )}
         </h1>
+        <div className="h-px w-10 bg-ferrugem" />
       </header>
 
       {turmaQuery.data && (
         <Card>
           <CardHeader>
-            <CardTitle>Informações</CardTitle>
+            <CardTitle className="font-heading text-lg tracking-tight">
+              Informações
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
-              <dt className="text-muted-foreground">Turno</dt>
+              <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+                Turno
+              </dt>
               <dd>{turmaQuery.data.turno_display}</dd>
-              <dt className="text-muted-foreground">Ano letivo</dt>
+              <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+                Ano letivo
+              </dt>
               <dd>{turmaQuery.data.ano_letivo}</dd>
-              <dt className="text-muted-foreground">Status</dt>
+              <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+                Status
+              </dt>
               <dd>{turmaQuery.data.ativa ? "Ativa" : "Inativa"}</dd>
             </dl>
           </CardContent>
@@ -69,15 +78,21 @@ export function TurmaDetalhePage() {
       )}
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Alunos</h2>
+        <h2 className="font-heading text-xl tracking-tight">Alunos</h2>
 
-        <div className="rounded-md border">
+        <div className="rounded-lg border border-border bg-paper overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Matrícula</TableHead>
-                <TableHead>Nome completo</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                  Matrícula
+                </TableHead>
+                <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                  Nome completo
+                </TableHead>
+                <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                  Status
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -122,11 +137,11 @@ export function TurmaDetalhePage() {
                     <TableCell>{aluno.nome_completo}</TableCell>
                     <TableCell>
                       {aluno.ativo ? (
-                        <span className="text-xs text-green-700 bg-green-50 dark:bg-green-950 dark:text-green-300 px-2 py-0.5 rounded">
+                        <span className="text-[10px] uppercase tracking-wide text-olive bg-olive/10 px-1.5 py-0.5 rounded">
                           Ativo
                         </span>
                       ) : (
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-[10px] uppercase tracking-wide text-sepia">
                           Inativo
                         </span>
                       )}
