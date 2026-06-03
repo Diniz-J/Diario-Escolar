@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
+import { normalizarPaginado } from "@/lib/pagination";
 import type {
   ItemPresenca,
   Paginated,
@@ -42,11 +43,10 @@ export function useRegistrosPaginated(
   return useQuery({
     queryKey: [...REGISTROS_KEY, "paginated", filter, pagination],
     queryFn: async (): Promise<Paginated<RegistroPresenca>> => {
-      const { data } = await api.get<Paginated<RegistroPresenca>>(
-        "/registros-presenca/",
-        { params: { ...filter, ...pagination } },
-      );
-      return data;
+      const { data } = await api.get<
+        Paginated<RegistroPresenca> | RegistroPresenca[]
+      >("/registros-presenca/", { params: { ...filter, ...pagination } });
+      return normalizarPaginado(data);
     },
     placeholderData: (previous) => previous,
   });

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
+import { normalizarPaginado } from "@/lib/pagination";
 import type { Aluno, AlunoInput, Paginated } from "@/types/api";
 
 // `params` opcionais entram tanto na queryKey quanto na URL — assim
@@ -35,14 +36,19 @@ export function useAlunosPaginated(
   return useQuery({
     queryKey: [...ALUNOS_BASE_KEY, "paginated", filter, pagination],
     queryFn: async (): Promise<Paginated<Aluno>> => {
-      const { data } = await api.get<Paginated<Aluno>>("/alunos/", {
-        params: { ...filter, ...pagination },
-      });
-      return data;
+      const { data } = await api.get<Paginated<Aluno> | Aluno[]>(
+        "/alunos/",
+        { params: { ...filter, ...pagination } },
+      );
+      // Defesa contra backend ainda na versão sem paginação (preview do
+      // frontend rodando contra Render antigo) — normaliza array cru pro
+      // envelope DRF esperado pela UI.
+      return normalizarPaginado(data);
     },
     placeholderData: (previous) => previous,
   });
 }
+
 
 // Invalida o prefixo inteiro de alunos — refetch de todas as variantes
 // filtradas que estiverem montadas.

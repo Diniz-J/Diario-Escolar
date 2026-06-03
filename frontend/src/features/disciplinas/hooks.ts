@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
+import { normalizarPaginado } from "@/lib/pagination";
 import type { Disciplina, DisciplinaInput, Paginated } from "@/types/api";
 
 const DISCIPLINAS_KEY = ["disciplinas"] as const;
@@ -24,10 +25,11 @@ export function useDisciplinasPaginated(pagination: {
   return useQuery({
     queryKey: [...DISCIPLINAS_KEY, "paginated", pagination],
     queryFn: async (): Promise<Paginated<Disciplina>> => {
-      const { data } = await api.get<Paginated<Disciplina>>("/disciplinas/", {
-        params: pagination,
-      });
-      return data;
+      const { data } = await api.get<Paginated<Disciplina> | Disciplina[]>(
+        "/disciplinas/",
+        { params: pagination },
+      );
+      return normalizarPaginado(data);
     },
     placeholderData: (previous) => previous,
   });

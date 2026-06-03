@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
+import { normalizarPaginado } from "@/lib/pagination";
 import type { Paginated, Turma, TurmaInput } from "@/types/api";
 
 const TURMAS_KEY = ["turmas"] as const;
@@ -24,10 +25,10 @@ export function useTurmasPaginated(pagination: {
   return useQuery({
     queryKey: [...TURMAS_KEY, "paginated", pagination],
     queryFn: async (): Promise<Paginated<Turma>> => {
-      const { data } = await api.get<Paginated<Turma>>("/turmas/", {
+      const { data } = await api.get<Paginated<Turma> | Turma[]>("/turmas/", {
         params: pagination,
       });
-      return data;
+      return normalizarPaginado(data);
     },
     placeholderData: (previous) => previous,
   });

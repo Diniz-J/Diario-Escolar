@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
+import { normalizarPaginado } from "@/lib/pagination";
 import type {
   EntregaTarefa,
   Paginated,
@@ -38,10 +39,11 @@ export function useTarefasPaginated(
   return useQuery({
     queryKey: [...TAREFAS_BASE_KEY, "paginated", filter, pagination],
     queryFn: async (): Promise<Paginated<Tarefa>> => {
-      const { data } = await api.get<Paginated<Tarefa>>("/tarefas/", {
-        params: { ...filter, ...pagination },
-      });
-      return data;
+      const { data } = await api.get<Paginated<Tarefa> | Tarefa[]>(
+        "/tarefas/",
+        { params: { ...filter, ...pagination } },
+      );
+      return normalizarPaginado(data);
     },
     placeholderData: (previous) => previous,
   });

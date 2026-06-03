@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
+import { normalizarPaginado } from "@/lib/pagination";
 import type { Paginated, PlanoEnsino, PlanoEnsinoInput } from "@/types/api";
 
 interface PlanosFilter {
@@ -33,11 +34,11 @@ export function usePlanosEnsinoPaginated(
   return useQuery({
     queryKey: [...PLANOS_KEY, "paginated", filter, pagination],
     queryFn: async (): Promise<Paginated<PlanoEnsino>> => {
-      const { data } = await api.get<Paginated<PlanoEnsino>>(
+      const { data } = await api.get<Paginated<PlanoEnsino> | PlanoEnsino[]>(
         "/planos-ensino/",
         { params: { ...filter, ...pagination } },
       );
-      return data;
+      return normalizarPaginado(data);
     },
     placeholderData: (previous) => previous,
   });
