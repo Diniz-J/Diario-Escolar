@@ -23,7 +23,7 @@ import { useAlunos } from "@/features/alunos/hooks";
 import { usePermissoes } from "@/features/auth/usePermissoes";
 import { TurmaDeleteDialog } from "@/features/turmas/TurmaDeleteDialog";
 import { TurmaFormDialog } from "@/features/turmas/TurmaFormDialog";
-import { useTurmas, useTurmasPaginated } from "@/features/turmas/hooks";
+import { useTurmasPaginated } from "@/features/turmas/hooks";
 import type { Turma } from "@/types/api";
 
 const PAGE_SIZE = 20;
