@@ -387,7 +387,57 @@ class ProfessorResource(BaseEscolaResource):
                 linha[headers.index(nome)] = valor
         return linha
 
-    def import_instance(self, instance, row, **kwargs):  # noqa: ARG002
+    def init_instance(self, row=None):
+        """Cria Professor + Usuario juntos antes da pipeline normal.
+
+        A lib chama `init_instance()` pra criar a instance a ser preenchida
+        pelos widgets do row. Aproveitamos isso pra criar o Usuario aqui —
+        os widgets do row (username, first_name etc.) viram NoOp porque
+        `attribute=None`, e o `before_save_instance` já tem `instance.usuario`
+        e `instance.escola_id` setados.
+        """
+        instance = super().init_instance(row=row)
+        if row is None:
+            return instance
+
+        escola_id = self.contexto.escola_id if self.contexto else None
+        if escola_id is None:
+            raise ValueError("Escola não definida no contexto do import.")
+
+        username = (row.get("username") or "").strip()
+        if not username:
+            raise ValueError("Coluna 'username' é obrigatória.")
+        email = (row.get("email") or "").strip()
+        if not email:
+            raise ValueError(
+                f"Coluna 'email' é obrigatória (usuário {username})."
+            )
+
+        # Se o usuário existe globalmente, deixamos a violation explodir
+        # com mensagem clara — `skip_row` já cobre o caso de Professor
+        # com esse username na MESMA escola.
+        if Usuario.objects.filter(username=username).exists():
+            raise ValueError(
+                f"Já existe usuário com username '{username}'."
+            )
+
+        with transaction.atomic():
+            usuario = Usuario.objects.create(
+                username=username,
+                first_name=(row.get("first_name") or "").strip(),
+                last_name=(row.get("last_name") or "").strip(),
+                email=email,
+                perfil=Usuario.Perfil.PROFESSOR,
+                escola_id=escola_id,
+            )
+            usuario.set_password(secrets.token_urlsafe(32))
+            usuario.save(update_fields=["password"])
+            instance.usuario = usuario
+            instance.escola_id = escola_id
+            instance.ativo = row.get("ativo", True)
+        return instance
+
+    def _import_instance_legacy(self, instance, row, **kwargs):  # noqa: ARG002
         """Cria Usuario + Professor numa transação atômica.
 
         Sobrescreve o caminho normal porque o ModelResource padrão não
