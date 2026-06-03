@@ -185,16 +185,6 @@ class AlunoResource(BaseEscolaResource):
         )
         export_order = fields
 
-    def get_export_fields(self, fields=None):
-        """No export trocamos a coluna `turma` (id) por dois campos legíveis.
-
-        A planilha exportada precisa rodar de volta pelo import — então
-        traduzimos `turma_id → turma_nome + ano_letivo` na hora de
-        exportar. O import já aceita esses dois nomes (resolvidos em
-        `before_import_row`).
-        """
-        return super().get_export_fields(fields=fields)
-
     def export(self, queryset=None, **kwargs):
         """Override do export pra anexar colunas legíveis de turma.
 
