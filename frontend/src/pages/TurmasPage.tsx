@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -22,12 +23,15 @@ import { useAlunos } from "@/features/alunos/hooks";
 import { usePermissoes } from "@/features/auth/usePermissoes";
 import { TurmaDeleteDialog } from "@/features/turmas/TurmaDeleteDialog";
 import { TurmaFormDialog } from "@/features/turmas/TurmaFormDialog";
-import { useTurmas } from "@/features/turmas/hooks";
+import { useTurmasPaginated } from "@/features/turmas/hooks";
 import type { Turma } from "@/types/api";
+
+const PAGE_SIZE = 20;
 
 export function TurmasPage() {
   const navigate = useNavigate();
-  const turmasQuery = useTurmas();
+  const [page, setPage] = useState(1);
+  const turmasQuery = useTurmasPaginated({ page, page_size: PAGE_SIZE });
   // Carregamos os alunos ativos uma vez e contamos localmente — evita
   // N+1 requests (um por turma). Inativos (soft delete) não entram na
   // contagem porque o número reflete a operação atual, não o histórico
@@ -49,15 +53,18 @@ export function TurmasPage() {
   }, [alunosQuery.data]);
 
   const turmasFiltradas = useMemo(() => {
-    if (!turmasQuery.data) return [];
+    const resultados = turmasQuery.data?.results ?? [];
     const q = busca.trim().toLowerCase();
-    if (!q) return turmasQuery.data;
-    return turmasQuery.data.filter(
+    if (!q) return resultados;
+    return resultados.filter(
       (t) =>
         t.nome.toLowerCase().includes(q) ||
         String(t.ano_letivo).includes(q),
     );
   }, [turmasQuery.data, busca]);
+
+  const totalCount = turmasQuery.data?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const dialogAberto = formOpen || editando !== null;
   function fecharDialog(open: boolean) {
@@ -213,6 +220,13 @@ export function TurmasPage() {
           </TableBody>
         </Table>
       </div>
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        totalLabel={totalCount > 0 ? `${totalCount} turmas no total` : undefined}
+      />
     </div>
   );
 }

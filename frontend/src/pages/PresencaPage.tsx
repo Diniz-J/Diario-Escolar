@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,18 +14,29 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { RegistroFormDialog } from "@/features/presenca/RegistroFormDialog";
-import { useRegistros } from "@/features/presenca/hooks";
+import { useRegistrosPaginated } from "@/features/presenca/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
+
+const PAGE_SIZE = 20;
 
 export function PresencaPage() {
   const navigate = useNavigate();
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
+  const [page, setPage] = useState(1);
+  // Reseta a paginação quando o range de datas server-side muda.
+  useEffect(() => {
+    setPage(1);
+  }, [dataInicio, dataFim]);
+
   // Range de datas filtrado server-side; busca por turma continua client-side.
-  const registrosQuery = useRegistros({
-    ...(dataInicio ? { data_inicio: dataInicio } : {}),
-    ...(dataFim ? { data_fim: dataFim } : {}),
-  });
+  const registrosQuery = useRegistrosPaginated(
+    {
+      ...(dataInicio ? { data_inicio: dataInicio } : {}),
+      ...(dataFim ? { data_fim: dataFim } : {}),
+    },
+    { page, page_size: PAGE_SIZE },
+  );
   const turmasQuery = useTurmas();
   const [busca, setBusca] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -38,11 +50,12 @@ export function PresencaPage() {
   // Ordena por data desc (mais recente primeiro) — chamadas do dia
   // sempre no topo.
   const registrosOrdenados = useMemo(() => {
-    if (!registrosQuery.data) return [];
-    return [...registrosQuery.data].sort((a, b) =>
-      b.data.localeCompare(a.data),
-    );
+    const resultados = registrosQuery.data?.results ?? [];
+    return [...resultados].sort((a, b) => b.data.localeCompare(a.data));
   }, [registrosQuery.data]);
+
+  const totalCount = registrosQuery.data?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const registrosFiltrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
@@ -199,6 +212,15 @@ export function PresencaPage() {
           </TableBody>
         </Table>
       </div>
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        totalLabel={
+          totalCount > 0 ? `${totalCount} chamadas no total` : undefined
+        }
+      />
     </div>
   );
 }

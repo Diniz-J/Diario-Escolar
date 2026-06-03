@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -27,11 +28,12 @@ import {
   STATUS_OPTIONS,
   STATUS_ORDEM,
 } from "@/features/ocorrencias/constants";
-import { useOcorrencias } from "@/features/ocorrencias/hooks";
+import { useOcorrenciasPaginated } from "@/features/ocorrencias/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
 import type { OcorrenciaStatus } from "@/types/api";
 
 const FILTRO_TODOS = "__all__";
+const PAGE_SIZE = 20;
 
 export function OcorrenciasPage() {
   const navigate = useNavigate();
@@ -40,16 +42,25 @@ export function OcorrenciasPage() {
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  // Reseta pra página 1 sempre que o filtro server-side muda — senão
+  // pode cair numa página que não existe mais no novo subset.
+  useEffect(() => {
+    setPage(1);
+  }, [filtroStatus, dataInicio, dataFim]);
 
   // Filtros server-side: status + range de datas vão pro backend.
   // A busca por nome (aluno/turma) continua client-side.
-  const ocorrenciasQuery = useOcorrencias({
-    ...(filtroStatus !== FILTRO_TODOS
-      ? { status: filtroStatus as OcorrenciaStatus }
-      : {}),
-    ...(dataInicio ? { data_inicio: dataInicio } : {}),
-    ...(dataFim ? { data_fim: dataFim } : {}),
-  });
+  const ocorrenciasQuery = useOcorrenciasPaginated(
+    {
+      ...(filtroStatus !== FILTRO_TODOS
+        ? { status: filtroStatus as OcorrenciaStatus }
+        : {}),
+      ...(dataInicio ? { data_inicio: dataInicio } : {}),
+      ...(dataFim ? { data_fim: dataFim } : {}),
+    },
+    { page, page_size: PAGE_SIZE },
+  );
   const alunosQuery = useAlunos();
   const turmasQuery = useTurmas();
 
@@ -70,8 +81,8 @@ export function OcorrenciasPage() {
   // 2. Data desc dentro do mesmo status (mais recente primeiro).
   // Reflete a UX desejada: o que precisa de ação aparece em cima.
   const ocorrenciasOrdenadas = useMemo(() => {
-    if (!ocorrenciasQuery.data) return [];
-    return [...ocorrenciasQuery.data].sort((a, b) => {
+    const resultados = ocorrenciasQuery.data?.results ?? [];
+    return [...resultados].sort((a, b) => {
       const diffStatus = STATUS_ORDEM[a.status] - STATUS_ORDEM[b.status];
       if (diffStatus !== 0) return diffStatus;
       return b.data_ocorrencia.localeCompare(a.data_ocorrencia);
@@ -87,6 +98,9 @@ export function OcorrenciasPage() {
       return nomeAluno.includes(q) || nomeTurma.includes(q);
     });
   }, [ocorrenciasOrdenadas, busca, alunosPorId, turmasPorId]);
+
+  const totalCount = ocorrenciasQuery.data?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   return (
     <div className="p-4 md:p-8 space-y-6">
@@ -259,6 +273,15 @@ export function OcorrenciasPage() {
           </TableBody>
         </Table>
       </div>
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        totalLabel={
+          totalCount > 0 ? `${totalCount} ocorrências no total` : undefined
+        }
+      />
     </div>
   );
 }

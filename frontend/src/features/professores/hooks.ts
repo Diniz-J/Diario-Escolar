@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
-import type { Professor, ProfessorInput } from "@/types/api";
+import { normalizarPaginado } from "@/lib/pagination";
+import type { Paginated, Professor, ProfessorInput } from "@/types/api";
 
 const PROFESSORES_KEY = ["professores"] as const;
 
@@ -13,6 +14,24 @@ export function useProfessores() {
       const { data } = await api.get<Professor[]>("/professores/");
       return data;
     },
+  });
+}
+
+// Ver `useAlunosPaginated` em features/alunos/hooks.ts pra justificativa.
+export function useProfessoresPaginated(pagination: {
+  page: number;
+  page_size?: number;
+}) {
+  return useQuery({
+    queryKey: [...PROFESSORES_KEY, "paginated", pagination],
+    queryFn: async (): Promise<Paginated<Professor>> => {
+      const { data } = await api.get<Paginated<Professor> | Professor[]>(
+        "/professores/",
+        { params: pagination },
+      );
+      return normalizarPaginado(data);
+    },
+    placeholderData: (previous) => previous,
   });
 }
 

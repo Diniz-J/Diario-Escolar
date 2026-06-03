@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 
+import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -20,11 +21,17 @@ import {
 import { usePermissoes } from "@/features/auth/usePermissoes";
 import { DisciplinaDeleteDialog } from "@/features/disciplinas/DisciplinaDeleteDialog";
 import { DisciplinaFormDialog } from "@/features/disciplinas/DisciplinaFormDialog";
-import { useDisciplinas } from "@/features/disciplinas/hooks";
+import { useDisciplinasPaginated } from "@/features/disciplinas/hooks";
 import type { Disciplina } from "@/types/api";
 
+const PAGE_SIZE = 20;
+
 export function DisciplinasPage() {
-  const disciplinasQuery = useDisciplinas();
+  const [page, setPage] = useState(1);
+  const disciplinasQuery = useDisciplinasPaginated({
+    page,
+    page_size: PAGE_SIZE,
+  });
   const { podeModificarCadastros } = usePermissoes();
   const [busca, setBusca] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -32,13 +39,14 @@ export function DisciplinasPage() {
   const [excluindo, setExcluindo] = useState<Disciplina | null>(null);
 
   const disciplinasFiltradas = useMemo(() => {
-    if (!disciplinasQuery.data) return [];
+    const resultados = disciplinasQuery.data?.results ?? [];
     const q = busca.trim().toLowerCase();
-    if (!q) return disciplinasQuery.data;
-    return disciplinasQuery.data.filter((d) =>
-      d.nome.toLowerCase().includes(q),
-    );
+    if (!q) return resultados;
+    return resultados.filter((d) => d.nome.toLowerCase().includes(q));
   }, [disciplinasQuery.data, busca]);
+
+  const totalCount = disciplinasQuery.data?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const dialogAberto = formOpen || editando !== null;
   function fecharDialog(open: boolean) {
@@ -151,6 +159,15 @@ export function DisciplinasPage() {
           </TableBody>
         </Table>
       </div>
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        totalLabel={
+          totalCount > 0 ? `${totalCount} disciplinas no total` : undefined
+        }
+      />
     </div>
   );
 }

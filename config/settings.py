@@ -205,6 +205,10 @@ REST_FRAMEWORK = {
         # Desligado sob testes (rate None) — ver TESTING acima.
         "login": None if TESTING else "5/min",
     },
+    # Paginação **opt-in**: só ativa quando o cliente envia `?page=N` ou
+    # `?page_size=N`. Sem isso, retorna array cru. Ver `apps/common/pagination.py`.
+    "DEFAULT_PAGINATION_CLASS": "apps.common.pagination.PaginacaoPadrao",
+    "PAGE_SIZE": 20,
 }
 
 # SimpleJWT
