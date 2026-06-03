@@ -244,6 +244,12 @@ EMAIL_BACKEND = config(
     "EMAIL_BACKEND",
     default="django.core.mail.backends.console.EmailBackend",
 )
+
+# Base do frontend — usada pra montar o link de redefinição de senha
+# no email enviado pelo backend. Default aponta pra prod (Vercel) porque
+# os emails vêm do Render e geralmente apontam pra prod; em dev você
+# sobrescreve no `.env` (`FRONTEND_URL=http://localhost:5173`).
+FRONTEND_URL = config("FRONTEND_URL", default="https://diario-diniz.vercel.app")
 EMAIL_HOST = config("EMAIL_HOST", default="")
 EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
