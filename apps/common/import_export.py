@@ -298,53 +298,34 @@ def executar_import(
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    # Single-pass: rodar 2x (dry-run + persist) duplica side-effects.
+    # No `AlunoResource.before_import_row` criamos a turma faltante
+    # FORA da `transaction.atomic` do import_data (porque `Turma.objects.create`
+    # foge da transação do save da linha). No primeiro pass (dry_run) ela
+    # ficava criada, no segundo pass (persist) tentava criar de novo e
+    # batia em UniqueViolation. Com 1 pass:
+    # - `confirmar=False` → `dry_run=True`: a lib faz rollback do
+    #   savepoint atômico no fim. Relatório de erros sem persistir.
+    # - `confirmar=True` → `dry_run=False`: persiste. Em erro de linha,
+    #   `raise_errors=False` registra no `result` em vez de levantar.
     resource = resource_class(contexto=contexto)
     result = resource.import_data(
         dataset,
-        dry_run=True,
+        dry_run=not confirmar,
         raise_errors=False,
-        # `collect_failed_rows=True` faz a lib popular um `failed_dataset`
-        # com as linhas que falharam — mas exige colunas estáveis, e
-        # nossos resources (Aluno, Lecionamento) reescrevem chaves do row
-        # em `before_import_row` (ex.: `turma_nome` → `turma`). Sem o
-        # flag, ainda temos `row_errors()` com tudo que precisamos pro
-        # relatório.
+        # `collect_failed_rows` é incompatível com nossos resources que
+        # mutam chaves no `before_import_row` — tablib rejeita rows com
+        # número de colunas diferente do header inicial. Sem o flag,
+        # `row_errors()` ainda dá tudo que precisamos pro relatório.
         collect_failed_rows=False,
     )
-
     erros = _coletar_erros(result)
-    if erros or not confirmar:
-        return Response(
-            {
-                "criados": result.totals.get("new", 0),
-                "pulados": list(resource.duplicados),
-                "erros": erros,
-                "persistido": False,
-            },
-            status=status.HTTP_200_OK,
-        )
-
-    # Sem erros + confirmação: persiste de verdade.
-    resource_persist = resource_class(contexto=contexto)
-    result_persist = resource_persist.import_data(
-        dataset,
-        dry_run=False,
-        raise_errors=False,
-        # `collect_failed_rows=True` faz a lib popular um `failed_dataset`
-        # com as linhas que falharam — mas exige colunas estáveis, e
-        # nossos resources (Aluno, Lecionamento) reescrevem chaves do row
-        # em `before_import_row` (ex.: `turma_nome` → `turma`). Sem o
-        # flag, ainda temos `row_errors()` com tudo que precisamos pro
-        # relatório.
-        collect_failed_rows=False,
-    )
-    erros_persist = _coletar_erros(result_persist)
     return Response(
         {
-            "criados": result_persist.totals.get("new", 0),
-            "pulados": list(resource_persist.duplicados),
-            "erros": erros_persist,
-            "persistido": True,
+            "criados": result.totals.get("new", 0),
+            "pulados": list(resource.duplicados),
+            "erros": erros,
+            "persistido": confirmar and not erros,
         },
         status=status.HTTP_200_OK,
     )
