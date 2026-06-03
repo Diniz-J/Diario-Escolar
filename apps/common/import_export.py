@@ -128,6 +128,19 @@ class BaseEscolaResource(resources.ModelResource):
             # numérico — o widget converte int → instância no instance loader.
             row.setdefault("escola", self.contexto.escola_id)
 
+    def before_save_instance(self, instance, row, **kwargs):  # noqa: ARG002
+        """Garante `instance.escola_id` antes do save.
+
+        Necessário porque o CSV de import não precisa ter coluna `escola`
+        — tablib só lê colunas presentes no header, então `row["escola"]`
+        injetado em `before_import_row` é ignorado pela pipeline normal
+        do resource. Setamos direto na instance aqui, que vem logo antes
+        do `.save()`.
+        """
+        if self.contexto and self.contexto.escola_id is not None:
+            if not getattr(instance, "escola_id", None):
+                instance.escola_id = self.contexto.escola_id
+
     def skip_row(self, instance, original, row, import_validation_errors=None):
         """Pula linha cuja chave natural já existe no banco.
 
