@@ -115,7 +115,9 @@ export function PlanoEnsinoCreateDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Novo plano de ensino</DialogTitle>
+          <DialogTitle className="font-heading tracking-tight">
+            Novo plano de ensino
+          </DialogTitle>
           <DialogDescription>
             Escolha turma e disciplina. Os campos do plano (ementa,
             conteúdo, objetivos, etc.) são preenchidos na tela seguinte.
@@ -124,7 +126,9 @@ export function PlanoEnsinoCreateDialog({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label>Turma</Label>
+            <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+              Turma
+            </Label>
             <Select value={turmaId} onValueChange={setTurmaId}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecione" />
@@ -140,7 +144,9 @@ export function PlanoEnsinoCreateDialog({
           </div>
 
           <div className="space-y-2">
-            <Label>Disciplina</Label>
+            <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+              Disciplina
+            </Label>
             <Select value={disciplinaId} onValueChange={setDisciplinaId}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecione" />
@@ -164,7 +170,7 @@ export function PlanoEnsinoCreateDialog({
           <DialogFooter>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               onClick={() => onOpenChange(false)}
               disabled={createMutation.isPending}
             >

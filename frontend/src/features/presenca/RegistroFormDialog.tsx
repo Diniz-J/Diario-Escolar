@@ -104,7 +104,9 @@ export function RegistroFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Nova chamada</DialogTitle>
+          <DialogTitle className="font-heading tracking-tight">
+            Nova chamada
+          </DialogTitle>
           <DialogDescription>
             Os alunos ativos da turma serão adicionados automaticamente
             como presentes; você ajusta os ausentes na tela seguinte.
@@ -113,7 +115,9 @@ export function RegistroFormDialog({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label>Turma</Label>
+            <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+              Turma
+            </Label>
             <Select value={turmaId} onValueChange={setTurmaId}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecione uma turma" />
@@ -129,7 +133,12 @@ export function RegistroFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="data">Data</Label>
+            <Label
+              htmlFor="data"
+              className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+            >
+              Data
+            </Label>
             <Input
               id="data"
               type="date"
@@ -149,7 +158,7 @@ export function RegistroFormDialog({
           <DialogFooter>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               onClick={() => onOpenChange(false)}
               disabled={createMutation.isPending}
             >

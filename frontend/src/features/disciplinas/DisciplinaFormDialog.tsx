@@ -116,7 +116,7 @@ export function DisciplinaFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="font-heading tracking-tight">
             {editando ? "Editar disciplina" : "Nova disciplina"}
           </DialogTitle>
           <DialogDescription>
@@ -128,7 +128,12 @@ export function DisciplinaFormDialog({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="nome">Nome</Label>
+            <Label
+              htmlFor="nome"
+              className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+            >
+              Nome
+            </Label>
             <Input
               id="nome"
               required
@@ -140,7 +145,9 @@ export function DisciplinaFormDialog({
 
           {mostrarEscolaSelect && (
             <div className="space-y-2">
-              <Label>Escola</Label>
+              <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+                Escola
+              </Label>
               <Select value={escolaId} onValueChange={setEscolaId}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecione uma escola" />
@@ -165,7 +172,7 @@ export function DisciplinaFormDialog({
           <DialogFooter>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               onClick={() => onOpenChange(false)}
               disabled={enviando}
             >
