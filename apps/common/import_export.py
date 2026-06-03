@@ -357,6 +357,14 @@ def executar_import(
         persistir = bool(confirmar and not erros)
         if persistir:
             transaction.savepoint_commit(sid)
+            # Hook pra side-effects externos (ex.: envio de email no
+            # ProfessorResource). Roda só após commit do savepoint pra
+            # garantir que o que estamos notificando realmente persistiu.
+            # Não usamos `transaction.on_commit` porque TestCase rola back
+            # a outer transaction — callbacks nunca rodariam na suíte.
+            pos_commit = getattr(resource, "executar_pos_commit", None)
+            if callable(pos_commit):
+                pos_commit()
         else:
             # Dry-run, ou confirmação com erros: descarta TUDO que rolou
             # dentro do savepoint — inclui criação de Turma faltante no

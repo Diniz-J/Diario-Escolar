@@ -437,23 +437,28 @@ class ProfessorResource(BaseEscolaResource):
             instance.ativo = row.get("ativo", True)
         return instance
 
-    def after_save_instance(self, instance, row, **kwargs):  # noqa: ARG002
-        """Agenda envio do email de reset pra DEPOIS do commit final.
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Acumula usuários criados pra notificar SÓ depois do commit final
+        # do savepoint externo (em `executar_import`). Não usamos
+        # `transaction.on_commit` porque TestCase rola back a transação
+        # outer e callbacks nunca rodariam — quebraria a suíte. A view
+        # chama `executar_pos_commit` após `savepoint_commit`.
+        self._notificar_apos_commit: list = []
 
-        `transaction.on_commit` só dispara o callback se a transação
-        externa (savepoint do `executar_import`) for commitada. Em
-        dry-run ou rollback por erro, o email nunca sai — evita o caso
-        "professor não foi salvo mas recebeu email" que rolaria se
-        chamássemos `enviar_link_redefinicao` direto aqui.
+    def after_save_instance(self, instance, row, **kwargs):  # noqa: ARG002
+        """Marca o professor pra receber email APÓS o commit final.
+
+        Em dry-run, o `executar_import` faz rollback do savepoint e
+        nunca chama `executar_pos_commit`, então nenhum email sai.
         """
         if kwargs.get("dry_run"):
             return
+        self._notificar_apos_commit.append(instance.usuario)
 
-        # Capturamos o usuario num closure pra `on_commit` não depender
-        # do estado da instance no momento da execução.
-        usuario = instance.usuario
-
-        def _enviar():
+    def executar_pos_commit(self) -> None:
+        """Disparado pela view `executar_import` após o savepoint commit."""
+        for usuario in self._notificar_apos_commit:
             try:
                 _token_obj, token_cru = PasswordResetToken.gerar(usuario)
                 enviar_link_redefinicao(usuario, token_cru)
@@ -462,8 +467,7 @@ class ProfessorResource(BaseEscolaResource):
                     "Falha ao enviar email de definição de senha",
                     extra={"usuario_id": usuario.id},
                 )
-
-        transaction.on_commit(_enviar)
+        self._notificar_apos_commit.clear()
 
     def _descricao_linha(self, row) -> str:
         username = row.get("username", "?")
