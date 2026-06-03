@@ -303,7 +303,13 @@ def executar_import(
         dataset,
         dry_run=True,
         raise_errors=False,
-        collect_failed_rows=True,
+        # `collect_failed_rows=True` faz a lib popular um `failed_dataset`
+        # com as linhas que falharam — mas exige colunas estáveis, e
+        # nossos resources (Aluno, Lecionamento) reescrevem chaves do row
+        # em `before_import_row` (ex.: `turma_nome` → `turma`). Sem o
+        # flag, ainda temos `row_errors()` com tudo que precisamos pro
+        # relatório.
+        collect_failed_rows=False,
     )
 
     erros = _coletar_erros(result)
@@ -324,7 +330,13 @@ def executar_import(
         dataset,
         dry_run=False,
         raise_errors=False,
-        collect_failed_rows=True,
+        # `collect_failed_rows=True` faz a lib popular um `failed_dataset`
+        # com as linhas que falharam — mas exige colunas estáveis, e
+        # nossos resources (Aluno, Lecionamento) reescrevem chaves do row
+        # em `before_import_row` (ex.: `turma_nome` → `turma`). Sem o
+        # flag, ainda temos `row_errors()` com tudo que precisamos pro
+        # relatório.
+        collect_failed_rows=False,
     )
     erros_persist = _coletar_erros(result_persist)
     return Response(
