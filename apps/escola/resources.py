@@ -516,6 +516,22 @@ class LecionamentoResource(BaseEscolaResource):
         fields = ("escola", "professor", "turma", "disciplina", "ativo")
         export_order = ("professor", "turma", "disciplina", "ativo")
 
+    def before_import(self, dataset, **kwargs):
+        """Injeta colunas placeholders pros FK pra passar a validação de headers.
+
+        A lib checa em `_check_import_id_fields` se as colunas estão no
+        `dataset.headers`. Como o CSV traz `professor_username`,
+        `turma_nome`, `disciplina_nome`, adicionamos placeholders nulos
+        — o `before_import_row` resolve nomes → IDs e sobrescreve.
+        """
+        super().before_import(dataset, **kwargs)
+        for nome in ("professor", "turma", "disciplina"):
+            if nome not in dataset.headers:
+                dataset.append_col(
+                    [0] * dataset.height,
+                    header=nome,
+                )
+
     def export(self, queryset=None, **kwargs):
         """Substitui colunas numéricas (FK ids) pelos nomes legíveis."""
         dataset = super().export(queryset=queryset, **kwargs)
