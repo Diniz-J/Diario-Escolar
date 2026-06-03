@@ -31,19 +31,25 @@ export function BoletimPage() {
 
   return (
     <div className="p-4 md:p-8 space-y-6 max-w-4xl mx-auto print:p-0 print:max-w-none">
-      <header className="space-y-2 print:hidden">
+      <header className="space-y-3 print:hidden">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/alunos">← Voltar</Link>
         </Button>
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl md:text-3xl font-semibold">Boletim</h1>
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div className="space-y-3">
+            <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
+              Boletim
+            </h1>
+            <div className="h-px w-10 bg-ferrugem" />
+          </div>
           <Button variant="outline" onClick={() => window.print()}>
             Imprimir
           </Button>
         </div>
       </header>
 
-      {/* Cabeçalho que aparece SÓ na impressão. */}
+      {/* Cabeçalho que aparece SÓ na impressão — tipografia plana, sem
+          paleta da marca, pra economizar tinta e ficar serio em papel. */}
       <header className="hidden print:block space-y-1 mb-6">
         <h1 className="text-2xl font-semibold">Boletim escolar</h1>
         <p className="text-sm">
@@ -67,17 +73,27 @@ export function BoletimPage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Aluno</CardTitle>
+              <CardTitle className="font-heading text-lg tracking-tight">
+                Aluno
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
-                <dt className="text-muted-foreground">Nome</dt>
+                <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+                  Nome
+                </dt>
                 <dd>{boletim.aluno.nome_completo}</dd>
-                <dt className="text-muted-foreground">Matrícula</dt>
+                <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+                  Matrícula
+                </dt>
                 <dd className="font-mono">{boletim.aluno.matricula}</dd>
-                <dt className="text-muted-foreground">Turma</dt>
+                <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+                  Turma
+                </dt>
                 <dd>{boletim.turma.nome ?? "—"}</dd>
-                <dt className="text-muted-foreground">Situação</dt>
+                <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+                  Situação
+                </dt>
                 <dd>{boletim.aluno.ativo ? "Ativo" : "Inativo"}</dd>
               </dl>
             </CardContent>
@@ -85,7 +101,9 @@ export function BoletimPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Frequência</CardTitle>
+              <CardTitle className="font-heading text-lg tracking-tight">
+                Frequência
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
@@ -100,20 +118,20 @@ export function BoletimPage() {
                 />
                 <Indicador label="Faltas" valor={boletim.frequencia.ausentes} />
               </div>
-              <div className="border-t pt-4 grid grid-cols-2 gap-4 text-sm">
+              <div className="border-t border-border pt-4 grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <p className="text-muted-foreground text-xs uppercase">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-sepia">
                     Total de chamadas
                   </p>
-                  <p className="text-2xl font-semibold tabular-nums">
+                  <p className="font-heading text-3xl tabular-nums text-tinta">
                     {boletim.frequencia.total}
                   </p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground text-xs uppercase">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-sepia">
                     Frequência
                   </p>
-                  <p className="text-2xl font-semibold tabular-nums">
+                  <p className="font-heading text-3xl tabular-nums text-tinta">
                     {boletim.frequencia.percentual_presenca}%
                   </p>
                 </div>
@@ -123,7 +141,9 @@ export function BoletimPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Notas por disciplina</CardTitle>
+              <CardTitle className="font-heading text-lg tracking-tight">
+                Notas por disciplina
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {boletim.notas_por_disciplina.length === 0 ? (
@@ -135,26 +155,32 @@ export function BoletimPage() {
                   {boletim.notas_por_disciplina.map((d) => (
                     <div key={d.disciplina.id} className="space-y-2">
                       <div className="flex items-baseline justify-between">
-                        <h3 className="font-medium">{d.disciplina.nome}</h3>
+                        <h3 className="font-heading text-base tracking-tight">
+                          {d.disciplina.nome}
+                        </h3>
                         <span className="text-sm">
-                          <span className="text-muted-foreground">
-                            Média ponderada:
-                          </span>{" "}
+                          <span className="text-sepia">Média ponderada:</span>{" "}
                           <strong className="tabular-nums">
                             {d.media_ponderada}
                           </strong>
                         </span>
                       </div>
-                      <div className="rounded-md border">
+                      <div className="rounded-lg border border-border bg-paper overflow-hidden print:bg-white">
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>Tarefa</TableHead>
-                              <TableHead className="text-right">Nota</TableHead>
-                              <TableHead className="text-right">
+                              <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                                Tarefa
+                              </TableHead>
+                              <TableHead className="text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                                Nota
+                              </TableHead>
+                              <TableHead className="text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
                                 Máxima
                               </TableHead>
-                              <TableHead className="text-right">Peso</TableHead>
+                              <TableHead className="text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                                Peso
+                              </TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -184,7 +210,9 @@ export function BoletimPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Ocorrências</CardTitle>
+              <CardTitle className="font-heading text-lg tracking-tight">
+                Ocorrências
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {boletim.ocorrencias.total === 0 ? (
@@ -222,8 +250,10 @@ export function BoletimPage() {
 function Indicador({ label, valor }: { label: string; valor: number }) {
   return (
     <div>
-      <p className="text-muted-foreground text-xs uppercase">{label}</p>
-      <p className="text-2xl font-semibold tabular-nums">{valor}</p>
+      <p className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+        {label}
+      </p>
+      <p className="font-heading text-3xl tabular-nums text-tinta">{valor}</p>
     </div>
   );
 }

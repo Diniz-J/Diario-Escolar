@@ -98,16 +98,20 @@ export function PresencaDetalhePage() {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <header className="space-y-2">
+      <header className="space-y-3">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/presenca">← Voltar</Link>
         </Button>
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-semibold">Chamada</h1>
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div className="space-y-3">
+            <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
+              Chamada
+            </h1>
+            <div className="h-px w-10 bg-ferrugem" />
             {registro && (
-              <p className="text-sm text-muted-foreground mt-1">
-                {turma?.nome ?? `Turma #${registro.turma}`} —{" "}
+              <p className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+                {turma?.nome ?? `Turma #${registro.turma}`}
+                <span className="mx-1.5 text-border">·</span>
                 {new Date(registro.data + "T00:00:00").toLocaleDateString(
                   "pt-BR",
                 )}
@@ -142,16 +146,18 @@ export function PresencaDetalhePage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Resumo</CardTitle>
+              <CardTitle className="font-heading text-lg tracking-tight">
+                Resumo
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex gap-6 text-sm">
+              <div className="flex gap-6 text-sm flex-wrap">
                 {STATUS_PRESENCA.map((s) => (
                   <div key={s.value} className="space-y-1">
-                    <p className="text-muted-foreground text-xs uppercase">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-sepia">
                       {s.full}
                     </p>
-                    <p className="text-2xl font-semibold tabular-nums">
+                    <p className="font-heading text-3xl tabular-nums text-tinta">
                       {resumo[s.value]}
                     </p>
                   </div>
@@ -162,7 +168,9 @@ export function PresencaDetalhePage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Alunos</CardTitle>
+              <CardTitle className="font-heading text-lg tracking-tight">
+                Alunos
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {itensQuery.isLoading ? (

@@ -87,7 +87,7 @@ export function OcorrenciaDetalhePage() {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <header className="space-y-2">
+      <header className="space-y-3">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/ocorrencias">← Voltar</Link>
         </Button>
@@ -95,16 +95,21 @@ export function OcorrenciaDetalhePage() {
             (768-1024px) os 3 botões de status + dropdown não cabem na
             mesma linha do título sem ficar colados; só a partir de `lg`
             há respiro pra mostrar tudo lado a lado. */}
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl md:text-3xl font-semibold">Ocorrência</h1>
-            {ocorrencia && (
-              <span
-                className={`text-xs px-2 py-0.5 rounded ${STATUS_BADGE[ocorrencia.status]}`}
-              >
-                {STATUS_LABEL[ocorrencia.status]}
-              </span>
-            )}
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between lg:gap-4">
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
+                Ocorrência
+              </h1>
+              {ocorrencia && (
+                <span
+                  className={`text-xs px-2 py-0.5 rounded ${STATUS_BADGE[ocorrencia.status]}`}
+                >
+                  {STATUS_LABEL[ocorrencia.status]}
+                </span>
+              )}
+            </div>
+            <div className="h-px w-10 bg-ferrugem" />
           </div>
 
           {ocorrencia && (
@@ -163,28 +168,38 @@ export function OcorrenciaDetalhePage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Informações</CardTitle>
+              <CardTitle className="font-heading text-lg tracking-tight">
+                Informações
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
-                <dt className="text-muted-foreground">Data</dt>
+                <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+                  Data
+                </dt>
                 <dd>
                   {new Date(
                     ocorrencia.data_ocorrencia + "T00:00:00",
                   ).toLocaleDateString("pt-BR")}
                 </dd>
 
-                <dt className="text-muted-foreground">Turma</dt>
+                <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+                  Turma
+                </dt>
                 <dd>{turma?.nome ?? "—"}</dd>
 
-                <dt className="text-muted-foreground">Aluno</dt>
+                <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+                  Aluno
+                </dt>
                 <dd>
                   {aluno
                     ? `${aluno.nome_completo} (${aluno.matricula})`
                     : "—"}
                 </dd>
 
-                <dt className="text-muted-foreground">Professor</dt>
+                <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+                  Professor
+                </dt>
                 <dd>
                   {professor?.nome_completo ??
                     (ocorrencia.professor
@@ -192,7 +207,9 @@ export function OcorrenciaDetalhePage() {
                       : "—")}
                 </dd>
 
-                <dt className="text-muted-foreground">Registrada em</dt>
+                <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+                  Registrada em
+                </dt>
                 <dd>
                   {new Date(ocorrencia.criado_em).toLocaleString("pt-BR")}
                 </dd>
@@ -202,7 +219,9 @@ export function OcorrenciaDetalhePage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Descrição</CardTitle>
+              <CardTitle className="font-heading text-lg tracking-tight">
+                Descrição
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm whitespace-pre-wrap">

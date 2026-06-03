@@ -129,17 +129,22 @@ export function PlanoEnsinoDetalhePage() {
 
   return (
     <div className="p-4 md:p-8 space-y-6 max-w-4xl mx-auto">
-      <header className="space-y-2">
+      <header className="space-y-3">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/planos-ensino">← Voltar</Link>
         </Button>
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-semibold">Plano de ensino</h1>
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div className="space-y-3">
+            <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
+              Plano de ensino
+            </h1>
+            <div className="h-px w-10 bg-ferrugem" />
             {plano && (
-              <p className="text-sm text-muted-foreground mt-1">
-                {turma?.nome ?? `Turma #${plano.turma}`} ·{" "}
-                {disciplina?.nome ?? `Disciplina #${plano.disciplina}`} ·{" "}
+              <p className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+                {turma?.nome ?? `Turma #${plano.turma}`}
+                <span className="mx-1.5 text-border">·</span>
+                {disciplina?.nome ?? `Disciplina #${plano.disciplina}`}
+                <span className="mx-1.5 text-border">·</span>
                 {plano.ano_letivo}
               </p>
             )}
@@ -265,7 +270,9 @@ export function PlanoEnsinoDetalhePage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Situação</CardTitle>
+                <CardTitle className="font-heading text-lg tracking-tight">
+                  Situação
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-2">
@@ -319,7 +326,9 @@ function Secao({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{titulo}</CardTitle>
+        <CardTitle className="font-heading text-lg tracking-tight">
+          {titulo}
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">{children}</CardContent>
     </Card>
@@ -343,14 +352,19 @@ function Campo({
 }) {
   return (
     <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
+      <Label
+        htmlFor={id}
+        className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+      >
+        {label}
+      </Label>
       <textarea
         id={id}
         rows={rows}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-y"
+        className="w-full rounded-md border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition resize-y"
       />
     </div>
   );
