@@ -290,7 +290,7 @@ export function ProfessorFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="font-heading tracking-tight">
             {editando ? "Editar professor" : "Novo professor"}
           </DialogTitle>
           <DialogDescription>
@@ -303,7 +303,12 @@ export function ProfessorFormDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="first-name">Nome</Label>
+              <Label
+                htmlFor="first-name"
+                className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+              >
+                Nome
+              </Label>
               <Input
                 id="first-name"
                 required
@@ -312,7 +317,12 @@ export function ProfessorFormDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="last-name">Sobrenome</Label>
+              <Label
+                htmlFor="last-name"
+                className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+              >
+                Sobrenome
+              </Label>
               <Input
                 id="last-name"
                 value={lastName}
@@ -324,7 +334,12 @@ export function ProfessorFormDialog({
           {!editando && (
             <>
               <div className="space-y-2">
-                <Label htmlFor="username">Usuário (login)</Label>
+                <Label
+                  htmlFor="username"
+                  className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+                >
+                  Usuário (login)
+                </Label>
                 <Input
                   id="username"
                   required
@@ -336,7 +351,12 @@ export function ProfessorFormDialog({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email">E-mail</Label>
+                <Label
+                  htmlFor="email"
+                  className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+                >
+                  E-mail
+                </Label>
                 <Input
                   id="email"
                   type="email"
@@ -347,7 +367,12 @@ export function ProfessorFormDialog({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">Senha</Label>
+                <Label
+                  htmlFor="password"
+                  className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+                >
+                  Senha
+                </Label>
                 <Input
                   id="password"
                   type="password"
@@ -363,12 +388,17 @@ export function ProfessorFormDialog({
 
           {mostrarEscolaSelect && (
             <div className="space-y-2">
-              <Label htmlFor="escola">Escola</Label>
+              <Label
+                htmlFor="escola"
+                className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+              >
+                Escola
+              </Label>
               <select
                 id="escola"
                 value={escolaId}
                 onChange={(e) => setEscolaId(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full rounded-md border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
               >
                 <option value="">Selecione uma escola</option>
                 {escolasQuery.data?.map((e) => (
@@ -382,7 +412,9 @@ export function ProfessorFormDialog({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Lecionamentos (turma + disciplina)</Label>
+              <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+                Lecionamentos (turma + disciplina)
+              </Label>
               <Button
                 type="button"
                 variant="outline"
@@ -407,7 +439,7 @@ export function ProfessorFormDialog({
                       onChange={(e) =>
                         atualizarLinha(idx, "turmaId", e.target.value)
                       }
-                      className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      className="flex-1 rounded-md border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
                     >
                       <option value="">Turma</option>
                       {turmasDaEscola.map((t) => (
@@ -421,7 +453,7 @@ export function ProfessorFormDialog({
                       onChange={(e) =>
                         atualizarLinha(idx, "disciplinaId", e.target.value)
                       }
-                      className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      className="flex-1 rounded-md border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
                     >
                       <option value="">Disciplina</option>
                       {disciplinasDaEscola.map((d) => (
@@ -454,7 +486,7 @@ export function ProfessorFormDialog({
           <DialogFooter>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               onClick={() => onOpenChange(false)}
               disabled={enviando}
             >

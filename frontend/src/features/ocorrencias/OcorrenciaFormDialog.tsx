@@ -165,7 +165,7 @@ export function OcorrenciaFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="font-heading tracking-tight">
             {editando ? "Editar ocorrência" : "Nova ocorrência"}
           </DialogTitle>
           <DialogDescription>
@@ -178,7 +178,9 @@ export function OcorrenciaFormDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Turma</Label>
+              <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+                Turma
+              </Label>
               <Select value={turmaId} onValueChange={handleTurmaChange}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecione uma turma" />
@@ -194,7 +196,9 @@ export function OcorrenciaFormDialog({
             </div>
 
             <div className="space-y-2">
-              <Label>Aluno</Label>
+              <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+                Aluno
+              </Label>
               <Select
                 value={alunoId}
                 onValueChange={setAlunoId}
@@ -223,7 +227,9 @@ export function OcorrenciaFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label>Professor que registrou (opcional)</Label>
+            <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+              Professor que registrou (opcional)
+            </Label>
             <Select value={professorId} onValueChange={setProfessorId}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecione" />
@@ -241,7 +247,9 @@ export function OcorrenciaFormDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Status</Label>
+              <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+                Status
+              </Label>
               <Select
                 value={status}
                 onValueChange={(v) => setStatus(v as OcorrenciaStatus)}
@@ -260,7 +268,12 @@ export function OcorrenciaFormDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="data_ocorrencia">Data</Label>
+              <Label
+                htmlFor="data_ocorrencia"
+                className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+              >
+                Data
+              </Label>
               <Input
                 id="data_ocorrencia"
                 type="date"
@@ -273,14 +286,19 @@ export function OcorrenciaFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="descricao">Descrição</Label>
+            <Label
+              htmlFor="descricao"
+              className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+            >
+              Descrição
+            </Label>
             <textarea
               id="descricao"
               required
               rows={5}
               value={descricao}
               onChange={(e) => setDescricao(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-y"
+              className="w-full rounded-md border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition resize-y"
               placeholder="O que aconteceu?"
             />
           </div>
@@ -294,7 +312,7 @@ export function OcorrenciaFormDialog({
           <DialogFooter>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               onClick={() => onOpenChange(false)}
               disabled={enviando}
             >

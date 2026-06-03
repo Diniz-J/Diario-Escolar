@@ -137,7 +137,7 @@ export function AlunoFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="font-heading tracking-tight">
             {editando ? "Editar aluno" : "Novo aluno"}
           </DialogTitle>
           <DialogDescription>
@@ -149,7 +149,12 @@ export function AlunoFormDialog({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="matricula">Matrícula</Label>
+            <Label
+              htmlFor="matricula"
+              className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+            >
+              Matrícula
+            </Label>
             <Input
               id="matricula"
               required
@@ -159,7 +164,12 @@ export function AlunoFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="nome">Nome completo</Label>
+            <Label
+              htmlFor="nome"
+              className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+            >
+              Nome completo
+            </Label>
             <Input
               id="nome"
               required
@@ -169,7 +179,12 @@ export function AlunoFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="data_nascimento">Data de nascimento</Label>
+            <Label
+              htmlFor="data_nascimento"
+              className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+            >
+              Data de nascimento
+            </Label>
             <Input
               id="data_nascimento"
               type="date"
@@ -179,7 +194,9 @@ export function AlunoFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label>Turma</Label>
+            <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+              Turma
+            </Label>
             <Select value={turmaId} onValueChange={setTurmaId}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione uma turma" />
@@ -195,7 +212,12 @@ export function AlunoFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="nome_responsavel">Nome do responsável</Label>
+            <Label
+              htmlFor="nome_responsavel"
+              className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+            >
+              Nome do responsável
+            </Label>
             <Input
               id="nome_responsavel"
               required
@@ -205,7 +227,12 @@ export function AlunoFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email_responsavel">E-mail do responsável</Label>
+            <Label
+              htmlFor="email_responsavel"
+              className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+            >
+              E-mail do responsável
+            </Label>
             <Input
               id="email_responsavel"
               type="email"
@@ -238,7 +265,7 @@ export function AlunoFormDialog({
           <DialogFooter>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               onClick={() => onOpenChange(false)}
               disabled={enviando}
             >

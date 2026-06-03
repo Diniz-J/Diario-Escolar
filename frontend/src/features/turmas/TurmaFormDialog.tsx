@@ -150,7 +150,7 @@ export function TurmaFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="font-heading tracking-tight">
             {editando ? "Editar turma" : "Nova turma"}
           </DialogTitle>
           <DialogDescription>
@@ -162,7 +162,12 @@ export function TurmaFormDialog({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="nome">Nome</Label>
+            <Label
+              htmlFor="nome"
+              className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+            >
+              Nome
+            </Label>
             <Input
               id="nome"
               required
@@ -174,7 +179,9 @@ export function TurmaFormDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Turno</Label>
+              <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+                Turno
+              </Label>
               <Select
                 value={turno}
                 onValueChange={(v) => setTurno(v as Turno)}
@@ -193,7 +200,12 @@ export function TurmaFormDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="ano_letivo">Ano letivo</Label>
+              <Label
+                htmlFor="ano_letivo"
+                className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+              >
+                Ano letivo
+              </Label>
               <Input
                 id="ano_letivo"
                 type="number"
@@ -208,7 +220,9 @@ export function TurmaFormDialog({
 
           {mostrarEscolaSelect && (
             <div className="space-y-2">
-              <Label>Escola</Label>
+              <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+                Escola
+              </Label>
               <Select value={escolaId} onValueChange={setEscolaId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione uma escola" />
@@ -246,7 +260,7 @@ export function TurmaFormDialog({
           <DialogFooter>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               onClick={() => onOpenChange(false)}
               disabled={enviando}
             >

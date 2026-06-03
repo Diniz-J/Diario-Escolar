@@ -145,7 +145,7 @@ export function TarefaFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="font-heading tracking-tight">
             {editando ? "Editar tarefa" : "Nova tarefa"}
           </DialogTitle>
           <DialogDescription>
@@ -157,7 +157,12 @@ export function TarefaFormDialog({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="titulo">Título</Label>
+            <Label
+              htmlFor="titulo"
+              className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+            >
+              Título
+            </Label>
             <Input
               id="titulo"
               required
@@ -169,7 +174,9 @@ export function TarefaFormDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Turma</Label>
+              <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+                Turma
+              </Label>
               <Select value={turmaId} onValueChange={setTurmaId}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecione" />
@@ -185,7 +192,9 @@ export function TarefaFormDialog({
             </div>
 
             <div className="space-y-2">
-              <Label>Disciplina</Label>
+              <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+                Disciplina
+              </Label>
               <Select value={disciplinaId} onValueChange={setDisciplinaId}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecione" />
@@ -203,7 +212,12 @@ export function TarefaFormDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="data_lancamento">Data de lançamento</Label>
+              <Label
+                htmlFor="data_lancamento"
+                className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+              >
+                Data de lançamento
+              </Label>
               <Input
                 id="data_lancamento"
                 type="date"
@@ -214,7 +228,12 @@ export function TarefaFormDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="prazo">Prazo (opcional)</Label>
+              <Label
+                htmlFor="prazo"
+                className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+              >
+                Prazo (opcional)
+              </Label>
               <Input
                 id="prazo"
                 type="date"
@@ -226,13 +245,18 @@ export function TarefaFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="descricao">Descrição</Label>
+            <Label
+              htmlFor="descricao"
+              className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+            >
+              Descrição
+            </Label>
             <textarea
               id="descricao"
               rows={4}
               value={descricao}
               onChange={(e) => setDescricao(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-y"
+              className="w-full rounded-md border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition resize-y"
               placeholder="Detalhes da tarefa..."
             />
           </div>
@@ -253,7 +277,12 @@ export function TarefaFormDialog({
           {valeNota && (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="nota_maxima">Nota máxima</Label>
+                <Label
+                  htmlFor="nota_maxima"
+                  className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+                >
+                  Nota máxima
+                </Label>
                 <Input
                   id="nota_maxima"
                   type="number"
@@ -267,7 +296,12 @@ export function TarefaFormDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="peso">Peso (média ponderada)</Label>
+                <Label
+                  htmlFor="peso"
+                  className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+                >
+                  Peso (média ponderada)
+                </Label>
                 <Input
                   id="peso"
                   type="number"
@@ -290,7 +324,7 @@ export function TarefaFormDialog({
           <DialogFooter>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               onClick={() => onOpenChange(false)}
               disabled={enviando}
             >
