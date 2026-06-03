@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type {
   EntregaTarefa,
+  Paginated,
   Tarefa,
   TarefaInput,
 } from "@/types/api";
@@ -26,6 +27,23 @@ export function useTarefas(filter: TarefasFilter = {}) {
       });
       return data;
     },
+  });
+}
+
+// Ver `useAlunosPaginated` em features/alunos/hooks.ts pra justificativa.
+export function useTarefasPaginated(
+  filter: TarefasFilter = {},
+  pagination: { page: number; page_size?: number },
+) {
+  return useQuery({
+    queryKey: [...TAREFAS_BASE_KEY, "paginated", filter, pagination],
+    queryFn: async (): Promise<Paginated<Tarefa>> => {
+      const { data } = await api.get<Paginated<Tarefa>>("/tarefas/", {
+        params: { ...filter, ...pagination },
+      });
+      return data;
+    },
+    placeholderData: (previous) => previous,
   });
 }
 

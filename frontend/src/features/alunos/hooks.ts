@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
-import type { Aluno, AlunoInput } from "@/types/api";
+import type { Aluno, AlunoInput, Paginated } from "@/types/api";
 
 // `params` opcionais entram tanto na queryKey quanto na URL — assim
 // /alunos/?turma=3 e /alunos/ têm caches independentes.
@@ -20,6 +20,27 @@ export function useAlunos(filter: AlunosFilter = {}) {
       const { data } = await api.get<Aluno[]>("/alunos/", { params: filter });
       return data;
     },
+  });
+}
+
+// Variante paginada — só dispara quando `pagination.page` for definido.
+// O backend (apps.common.pagination.PaginacaoPadrao) só pagina quando
+// `page` ou `page_size` aparecem nos query params; sem eles, devolve
+// array cru — por isso o `useAlunos` acima segue funcionando intocado.
+// `placeholderData: keepPrevious` evita o flicker entre páginas.
+export function useAlunosPaginated(
+  filter: AlunosFilter = {},
+  pagination: { page: number; page_size?: number },
+) {
+  return useQuery({
+    queryKey: [...ALUNOS_BASE_KEY, "paginated", filter, pagination],
+    queryFn: async (): Promise<Paginated<Aluno>> => {
+      const { data } = await api.get<Paginated<Aluno>>("/alunos/", {
+        params: { ...filter, ...pagination },
+      });
+      return data;
+    },
+    placeholderData: (previous) => previous,
   });
 }
 

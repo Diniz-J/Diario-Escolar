@@ -2,7 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
-import type { Ocorrencia, OcorrenciaInput, OcorrenciaStatus } from "@/types/api";
+import type {
+  Ocorrencia,
+  OcorrenciaInput,
+  OcorrenciaStatus,
+  Paginated,
+} from "@/types/api";
 
 interface OcorrenciasFilter {
   status?: OcorrenciaStatus;
@@ -24,6 +29,23 @@ export function useOcorrencias(filter: OcorrenciasFilter = {}) {
       });
       return data;
     },
+  });
+}
+
+// Ver `useAlunosPaginated` em features/alunos/hooks.ts pra justificativa.
+export function useOcorrenciasPaginated(
+  filter: OcorrenciasFilter = {},
+  pagination: { page: number; page_size?: number },
+) {
+  return useQuery({
+    queryKey: [...OCORRENCIAS_BASE_KEY, "paginated", filter, pagination],
+    queryFn: async (): Promise<Paginated<Ocorrencia>> => {
+      const { data } = await api.get<Paginated<Ocorrencia>>("/ocorrencias/", {
+        params: { ...filter, ...pagination },
+      });
+      return data;
+    },
+    placeholderData: (previous) => previous,
   });
 }
 

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,7 +15,7 @@ import {
 } from "@/components/ui/table";
 import { useDisciplinas } from "@/features/disciplinas/hooks";
 import { PlanoEnsinoCreateDialog } from "@/features/planos-ensino/PlanoEnsinoCreateDialog";
-import { usePlanosEnsino } from "@/features/planos-ensino/hooks";
+import { usePlanosEnsinoPaginated } from "@/features/planos-ensino/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
 import type { PlanoEnsino } from "@/types/api";
 
@@ -25,9 +26,15 @@ function isPreenchido(p: PlanoEnsino): boolean {
   return p.ementa.trim().length > 0 || p.conteudo_programatico.trim().length > 0;
 }
 
+const PAGE_SIZE = 20;
+
 export function PlanosEnsinoPage() {
   const navigate = useNavigate();
-  const planosQuery = usePlanosEnsino();
+  const [page, setPage] = useState(1);
+  const planosQuery = usePlanosEnsinoPaginated(
+    {},
+    { page, page_size: PAGE_SIZE },
+  );
   const turmasQuery = useTurmas();
   const disciplinasQuery = useDisciplinas();
   const [busca, setBusca] = useState("");
@@ -46,10 +53,10 @@ export function PlanosEnsinoPage() {
   }, [disciplinasQuery.data]);
 
   const planosFiltrados = useMemo(() => {
-    if (!planosQuery.data) return [];
+    const resultados = planosQuery.data?.results ?? [];
     const q = busca.trim().toLowerCase();
-    if (!q) return planosQuery.data;
-    return planosQuery.data.filter((p) => {
+    if (!q) return resultados;
+    return resultados.filter((p) => {
       const turma = turmasPorId.get(p.turma)?.toLowerCase() ?? "";
       const disciplina = disciplinasPorId.get(p.disciplina)?.toLowerCase() ?? "";
       return (
@@ -59,6 +66,9 @@ export function PlanosEnsinoPage() {
       );
     });
   }, [planosQuery.data, busca, turmasPorId, disciplinasPorId]);
+
+  const totalCount = planosQuery.data?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   return (
     <div className="p-4 md:p-8 space-y-6">
@@ -175,6 +185,13 @@ export function PlanosEnsinoPage() {
           </TableBody>
         </Table>
       </div>
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        totalLabel={totalCount > 0 ? `${totalCount} planos no total` : undefined}
+      />
     </div>
   );
 }

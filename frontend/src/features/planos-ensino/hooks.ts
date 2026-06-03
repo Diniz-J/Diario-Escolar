@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
-import type { PlanoEnsino, PlanoEnsinoInput } from "@/types/api";
+import type { Paginated, PlanoEnsino, PlanoEnsinoInput } from "@/types/api";
 
 interface PlanosFilter {
   turma?: number;
@@ -22,6 +22,24 @@ export function usePlanosEnsino(filter: PlanosFilter = {}) {
       });
       return data;
     },
+  });
+}
+
+// Ver `useAlunosPaginated` em features/alunos/hooks.ts pra justificativa.
+export function usePlanosEnsinoPaginated(
+  filter: PlanosFilter = {},
+  pagination: { page: number; page_size?: number },
+) {
+  return useQuery({
+    queryKey: [...PLANOS_KEY, "paginated", filter, pagination],
+    queryFn: async (): Promise<Paginated<PlanoEnsino>> => {
+      const { data } = await api.get<Paginated<PlanoEnsino>>(
+        "/planos-ensino/",
+        { params: { ...filter, ...pagination } },
+      );
+      return data;
+    },
+    placeholderData: (previous) => previous,
   });
 }
 

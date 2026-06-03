@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -22,19 +23,34 @@ import {
 } from "@/components/ui/table";
 import { AlunoDeleteDialog } from "@/features/alunos/AlunoDeleteDialog";
 import { AlunoFormDialog } from "@/features/alunos/AlunoFormDialog";
-import { useAlunos, useUpdateAluno } from "@/features/alunos/hooks";
+import {
+  useAlunosPaginated,
+  useUpdateAluno,
+} from "@/features/alunos/hooks";
 import { usePermissoes } from "@/features/auth/usePermissoes";
 import { useTurmas } from "@/features/turmas/hooks";
 import type { Aluno } from "@/types/api";
 
+const PAGE_SIZE = 20;
+
 export function AlunosPage() {
   const navigate = useNavigate();
   const [mostrarInativos, setMostrarInativos] = useState(false);
+  const [page, setPage] = useState(1);
+  // Reseta pra página 1 quando o filtro de inativos muda — senão pode
+  // cair numa página que não existe mais no novo subset.
+  useEffect(() => {
+    setPage(1);
+  }, [mostrarInativos]);
+
   // Padrão: lista só ativos. Toggle "Mostrar inativos" inverte e o
   // backend devolve só os com `ativo=false` — soft delete deixa de
   // poluir a listagem do dia a dia, mas permanece acessível pra
   // pesquisar histórico ou reativar um aluno.
-  const alunosQuery = useAlunos({ ativo: !mostrarInativos });
+  const alunosQuery = useAlunosPaginated(
+    { ativo: !mostrarInativos },
+    { page, page_size: PAGE_SIZE },
+  );
   const turmasQuery = useTurmas();
   const updateMutation = useUpdateAluno();
   const { podeModificarCadastros } = usePermissoes();
@@ -50,16 +66,22 @@ export function AlunosPage() {
     return map;
   }, [turmasQuery.data]);
 
+  // Busca client-side filtra dentro da página atual. Pra busca cross-page
+  // (server-side) seria preciso passar `?search=` no hook — fica pra
+  // próxima onda.
   const alunosFiltrados = useMemo(() => {
-    if (!alunosQuery.data) return [];
+    const resultados = alunosQuery.data?.results ?? [];
     const q = busca.trim().toLowerCase();
-    if (!q) return alunosQuery.data;
-    return alunosQuery.data.filter(
+    if (!q) return resultados;
+    return resultados.filter(
       (a) =>
         a.nome_completo.toLowerCase().includes(q) ||
         a.matricula.toLowerCase().includes(q),
     );
   }, [alunosQuery.data, busca]);
+
+  const totalCount = alunosQuery.data?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   // Unifica criação e edição no mesmo dialog: `editando=null` + `formOpen`
   // = modo criar; `editando=aluno` = modo editar.
@@ -271,6 +293,17 @@ export function AlunosPage() {
           </TableBody>
         </Table>
       </div>
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        totalLabel={
+          totalCount > 0
+            ? `${totalCount} ${mostrarInativos ? "inativos" : "ativos"} no total`
+            : undefined
+        }
+      />
     </div>
   );
 }

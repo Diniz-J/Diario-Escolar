@@ -2,6 +2,16 @@
 
 import type { Perfil } from "@/features/auth/types";
 
+// Envelope de paginação do DRF (apps.common.pagination.PaginacaoPadrao).
+// `next` e `previous` são URLs absolutas; o frontend só precisa do `count`
+// pra calcular o total de páginas e dos `results` pra renderizar.
+export interface Paginated<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 export interface Usuario {
   id: number;
   username: string;

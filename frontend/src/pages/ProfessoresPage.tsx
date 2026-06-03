@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 
+import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -21,7 +22,7 @@ import { useDisciplinas } from "@/features/disciplinas/hooks";
 import { useLecionamentos } from "@/features/lecionamentos/hooks";
 import { ProfessorDeactivateDialog } from "@/features/professores/ProfessorDeactivateDialog";
 import { ProfessorFormDialog } from "@/features/professores/ProfessorFormDialog";
-import { useProfessores } from "@/features/professores/hooks";
+import { useProfessoresPaginated } from "@/features/professores/hooks";
 import { usePermissoes } from "@/features/auth/usePermissoes";
 import { useTurmas } from "@/features/turmas/hooks";
 import type { Professor } from "@/types/api";
@@ -30,8 +31,14 @@ import type { Professor } from "@/types/api";
 // agregadas a partir dos lecionamentos), status e dropdown ⋯.
 // Criação envolve POSTs em sequência (Usuario + Professor + Lecionamentos)
 // — ver ProfessorFormDialog.
+const PAGE_SIZE = 20;
+
 export function ProfessoresPage() {
-  const professoresQuery = useProfessores();
+  const [page, setPage] = useState(1);
+  const professoresQuery = useProfessoresPaginated({
+    page,
+    page_size: PAGE_SIZE,
+  });
   const disciplinasQuery = useDisciplinas();
   const turmasQuery = useTurmas();
   // Carregamos todos os lecionamentos de uma vez e agrupamos por
@@ -72,13 +79,16 @@ export function ProfessoresPage() {
   }, [lecionamentosQuery.data]);
 
   const professoresFiltrados = useMemo(() => {
-    if (!professoresQuery.data) return [];
+    const resultados = professoresQuery.data?.results ?? [];
     const q = busca.trim().toLowerCase();
-    if (!q) return professoresQuery.data;
-    return professoresQuery.data.filter((p) =>
+    if (!q) return resultados;
+    return resultados.filter((p) =>
       p.nome_completo.toLowerCase().includes(q),
     );
   }, [professoresQuery.data, busca]);
+
+  const totalCount = professoresQuery.data?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const dialogAberto = formOpen || editando !== null;
   function fecharDialog(open: boolean) {
@@ -266,6 +276,15 @@ export function ProfessoresPage() {
           </TableBody>
         </Table>
       </div>
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        totalLabel={
+          totalCount > 0 ? `${totalCount} professores no total` : undefined
+        }
+      />
     </div>
   );
 }

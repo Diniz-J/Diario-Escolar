@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,12 +15,15 @@ import {
 } from "@/components/ui/table";
 import { useDisciplinas } from "@/features/disciplinas/hooks";
 import { TarefaFormDialog } from "@/features/tarefas/TarefaFormDialog";
-import { useTarefas } from "@/features/tarefas/hooks";
+import { useTarefasPaginated } from "@/features/tarefas/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
+
+const PAGE_SIZE = 20;
 
 export function TarefasPage() {
   const navigate = useNavigate();
-  const tarefasQuery = useTarefas();
+  const [page, setPage] = useState(1);
+  const tarefasQuery = useTarefasPaginated({}, { page, page_size: PAGE_SIZE });
   const turmasQuery = useTurmas();
   const disciplinasQuery = useDisciplinas();
   const [busca, setBusca] = useState("");
@@ -38,16 +42,19 @@ export function TarefasPage() {
   }, [disciplinasQuery.data]);
 
   const tarefasFiltradas = useMemo(() => {
-    if (!tarefasQuery.data) return [];
+    const resultados = tarefasQuery.data?.results ?? [];
     const q = busca.trim().toLowerCase();
-    if (!q) return tarefasQuery.data;
-    return tarefasQuery.data.filter(
+    if (!q) return resultados;
+    return resultados.filter(
       (t) =>
         t.titulo.toLowerCase().includes(q) ||
         (turmasPorId.get(t.turma)?.toLowerCase() ?? "").includes(q) ||
         (disciplinasPorId.get(t.disciplina)?.toLowerCase() ?? "").includes(q),
     );
   }, [tarefasQuery.data, busca, turmasPorId, disciplinasPorId]);
+
+  const totalCount = tarefasQuery.data?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   return (
     <div className="p-4 md:p-8 space-y-6">
@@ -163,6 +170,15 @@ export function TarefasPage() {
           </TableBody>
         </Table>
       </div>
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        totalLabel={
+          totalCount > 0 ? `${totalCount} tarefas no total` : undefined
+        }
+      />
     </div>
   );
 }
