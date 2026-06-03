@@ -102,7 +102,7 @@ class TurmaResource(BaseEscolaResource):
         # `skip_row` do BaseEscolaResource, dá o comportamento "pular
         # duplicados" baseado na chave natural.
         import_id_fields = ("escola", "nome", "ano_letivo")
-        fields = ("nome", "turno", "ano_letivo", "ativa")
+        fields = ("escola", "nome", "turno", "ano_letivo", "ativa")
         export_order = ("nome", "turno", "ano_letivo", "ativa")
 
     def before_import_row(self, row, **kwargs):
@@ -136,7 +136,7 @@ class DisciplinaResource(BaseEscolaResource):
     class Meta:
         model = Disciplina
         import_id_fields = ("escola", "nome")
-        fields = ("nome", "ativa")
+        fields = ("escola", "nome", "ativa")
         export_order = ("nome", "ativa")
 
     def _descricao_linha(self, row) -> str:
@@ -175,6 +175,7 @@ class AlunoResource(BaseEscolaResource):
         model = Aluno
         import_id_fields = ("escola", "matricula")
         fields = (
+            "escola",
             "matricula",
             "nome_completo",
             "data_nascimento",
@@ -183,7 +184,15 @@ class AlunoResource(BaseEscolaResource):
             "email_responsavel",
             "ativo",
         )
-        export_order = fields
+        export_order = (
+            "matricula",
+            "nome_completo",
+            "data_nascimento",
+            "turma",
+            "nome_responsavel",
+            "email_responsavel",
+            "ativo",
+        )
 
     def export(self, queryset=None, **kwargs):
         """Override do export pra anexar colunas legíveis de turma.
@@ -504,8 +513,8 @@ class LecionamentoResource(BaseEscolaResource):
     class Meta:
         model = Lecionamento
         import_id_fields = ("professor", "turma", "disciplina")
-        fields = ("professor", "turma", "disciplina", "ativo")
-        export_order = fields
+        fields = ("escola", "professor", "turma", "disciplina", "ativo")
+        export_order = ("professor", "turma", "disciplina", "ativo")
 
     def export(self, queryset=None, **kwargs):
         """Substitui colunas numéricas (FK ids) pelos nomes legíveis."""
