@@ -30,3 +30,9 @@ django-anymail[brevo]>=11,<14
 # Inicialização fica em `config/settings.py`, gated pela env `SENTRY_DSN`
 # (sem a env, o SDK fica inerte — bom pra dev local e CI).
 sentry-sdk[django]>=2.20,<3
+# Import/export de tabelas (CSV/XLSX) via Resource classes. Usamos só o
+# core — não habilitamos os mixins de admin nem o `import_export` no
+# INSTALLED_APPS, porque o fluxo é via API REST (actions custom nos
+# ViewSets). `tablib[xlsx]` puxa `openpyxl` pra ler/escrever XLSX.
+django-import-export>=4.0,<5.0
+tablib[xlsx]>=3.5,<4.0

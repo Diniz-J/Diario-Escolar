@@ -6,6 +6,7 @@ Escrita: admin/diretor/professor (professores preenchem seu plano).
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, viewsets
 
+from apps.common.import_export_views import ImportExportViewSetMixin
 from apps.common.permissions import (
     IsAdminOrDiretorOrProfessor,
     IsAdminOrDiretorOrProfessorOrInspetor,
@@ -13,6 +14,7 @@ from apps.common.permissions import (
 from apps.common.views import EscopoEscolaMixin, ReadWritePermissionMixin
 
 from .models import PlanoEnsino
+from .resources import PlanoEnsinoResource
 from .serializers import PlanoEnsinoSerializer
 
 
@@ -22,7 +24,10 @@ class _PlanoEnsinoReadWriteMixin(ReadWritePermissionMixin):
 
 
 class PlanoEnsinoViewSet(
-    EscopoEscolaMixin, _PlanoEnsinoReadWriteMixin, viewsets.ModelViewSet
+    ImportExportViewSetMixin,
+    EscopoEscolaMixin,
+    _PlanoEnsinoReadWriteMixin,
+    viewsets.ModelViewSet,
 ):
     queryset = (
         PlanoEnsino.objects.select_related(
@@ -36,3 +41,5 @@ class PlanoEnsinoViewSet(
     # Pesquisa nos campos mais consultados; conteúdo programático pode
     # ser longo mas costuma ser onde se busca por palavra-chave.
     search_fields = ["ementa", "conteudo_programatico", "habilidades_bncc"]
+    import_export_resource = PlanoEnsinoResource
+    import_export_nome_arquivo = "planos_ensino"

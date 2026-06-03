@@ -7,10 +7,18 @@ bypassam o filtro.
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, viewsets
 
+from apps.common.import_export_views import ImportExportViewSetMixin
 from apps.common.permissions import IsAdmin, IsAdminOrDiretor
 from apps.common.views import EscopoEscolaMixin, ReadWritePermissionMixin
 
 from .models import Aluno, Disciplina, Escola, Lecionamento, Professor, Turma
+from .resources import (
+    AlunoResource,
+    DisciplinaResource,
+    LecionamentoResource,
+    ProfessorResource,
+    TurmaResource,
+)
 from .serializers import (
     AlunoSerializer,
     DisciplinaSerializer,
@@ -45,22 +53,41 @@ class EscolaViewSet(ReadWritePermissionMixin, viewsets.ModelViewSet):
         return qs.filter(id=user.escola_id)
 
 
-class TurmaViewSet(EscopoEscolaMixin, ReadWritePermissionMixin, viewsets.ModelViewSet):
+class TurmaViewSet(
+    ImportExportViewSetMixin,
+    EscopoEscolaMixin,
+    ReadWritePermissionMixin,
+    viewsets.ModelViewSet,
+):
     queryset = Turma.objects.select_related("escola").order_by("-ano_letivo", "nome")
     serializer_class = TurmaSerializer
     filter_backends = [DjangoFilterBackend]
     # `escola` removido: o queryset já é escopado por `EscopoEscolaMixin`.
     filterset_fields = ["ano_letivo", "turno", "ativa"]
+    import_export_resource = TurmaResource
+    import_export_nome_arquivo = "turmas"
 
 
-class DisciplinaViewSet(EscopoEscolaMixin, ReadWritePermissionMixin, viewsets.ModelViewSet):
+class DisciplinaViewSet(
+    ImportExportViewSetMixin,
+    EscopoEscolaMixin,
+    ReadWritePermissionMixin,
+    viewsets.ModelViewSet,
+):
     queryset = Disciplina.objects.select_related("escola").order_by("nome")
     serializer_class = DisciplinaSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["ativa"]
+    import_export_resource = DisciplinaResource
+    import_export_nome_arquivo = "disciplinas"
 
 
-class AlunoViewSet(EscopoEscolaMixin, ReadWritePermissionMixin, viewsets.ModelViewSet):
+class AlunoViewSet(
+    ImportExportViewSetMixin,
+    EscopoEscolaMixin,
+    ReadWritePermissionMixin,
+    viewsets.ModelViewSet,
+):
     """CRUD de alunos. Suporta busca por nome/matrícula e filtro por turma.
 
     DELETE faz soft delete (marca `ativo=False`). Decisão consciente para
@@ -77,14 +104,34 @@ class AlunoViewSet(EscopoEscolaMixin, ReadWritePermissionMixin, viewsets.ModelVi
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ["turma", "ativo"]
     search_fields = ["nome_completo", "matricula"]
+    import_export_resource = AlunoResource
+    import_export_nome_arquivo = "alunos"
 
     def perform_destroy(self, instance: Aluno) -> None:
         """Soft delete: só marca `ativo=False`, mantém a linha no banco."""
         instance.ativo = False
         instance.save(update_fields=["ativo", "atualizado_em"])
 
+    def get_import_extras(self, request) -> dict:
+        """Aceita `turno_padrao` e `ano_letivo_padrao` no upload.
 
-class ProfessorViewSet(EscopoEscolaMixin, ReadWritePermissionMixin, viewsets.ModelViewSet):
+        Usados pela `AlunoResource` quando uma linha referencia turma
+        que ainda não existe — a turma é criada na hora com esses
+        defaults. Sem eles, linhas com turma faltante falham com
+        mensagem explicando o que falta.
+        """
+        return {
+            "turno_padrao": request.data.get("turno_padrao"),
+            "ano_letivo_padrao": request.data.get("ano_letivo_padrao"),
+        }
+
+
+class ProfessorViewSet(
+    ImportExportViewSetMixin,
+    EscopoEscolaMixin,
+    ReadWritePermissionMixin,
+    viewsets.ModelViewSet,
+):
     """CRUD de professores. Busca pelo nome do usuário vinculado."""
 
     queryset = (
@@ -99,9 +146,16 @@ class ProfessorViewSet(EscopoEscolaMixin, ReadWritePermissionMixin, viewsets.Mod
         "usuario__last_name",
         "usuario__username",
     ]
+    import_export_resource = ProfessorResource
+    import_export_nome_arquivo = "professores"
 
 
-class LecionamentoViewSet(EscopoEscolaMixin, ReadWritePermissionMixin, viewsets.ModelViewSet):
+class LecionamentoViewSet(
+    ImportExportViewSetMixin,
+    EscopoEscolaMixin,
+    ReadWritePermissionMixin,
+    viewsets.ModelViewSet,
+):
     """CRUD de lecionamentos (vínculo professor × turma × disciplina)."""
 
     queryset = (
@@ -112,3 +166,5 @@ class LecionamentoViewSet(EscopoEscolaMixin, ReadWritePermissionMixin, viewsets.
     serializer_class = LecionamentoSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["professor", "turma", "disciplina", "ativo"]
+    import_export_resource = LecionamentoResource
+    import_export_nome_arquivo = "lecionamentos"
