@@ -1,6 +1,6 @@
 import axios from "axios";
 import { useState, type FormEvent } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/features/auth/useAuth";
 
@@ -98,15 +98,12 @@ export function LoginPage() {
               >
                 Senha
               </label>
-              <button
-                type="button"
+              <Link
+                to="/esqueci-senha"
                 className="text-xs text-ferrugem hover:underline"
-                onClick={() => {
-                  /* Reset por email entra depois (FASE 4); por ora vira no-op. */
-                }}
               >
                 Esqueci a senha
-              </button>
+              </Link>
             </div>
             <input
               id="password"

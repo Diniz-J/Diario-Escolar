@@ -17,7 +17,13 @@ from django.contrib import admin
 from django.urls import include, path
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from apps.accounts.views import LogoutView, UsuarioTokenObtainPairView
+from apps.accounts.views import (
+    LogoutView,
+    PasswordChangeRequestView,
+    PasswordResetConfirmView,
+    PasswordResetRequestView,
+    UsuarioTokenObtainPairView,
+)
 
 api_v1_patterns = [
     path(
@@ -34,6 +40,21 @@ api_v1_patterns = [
         "auth/logout/",
         LogoutView.as_view(),
         name="logout",
+    ),
+    path(
+        "auth/password/reset/request/",
+        PasswordResetRequestView.as_view(),
+        name="password_reset_request",
+    ),
+    path(
+        "auth/password/reset/confirm/",
+        PasswordResetConfirmView.as_view(),
+        name="password_reset_confirm",
+    ),
+    path(
+        "auth/password/change/",
+        PasswordChangeRequestView.as_view(),
+        name="password_change_request",
     ),
     path("", include("apps.accounts.urls")),
     path("", include("apps.escola.urls")),

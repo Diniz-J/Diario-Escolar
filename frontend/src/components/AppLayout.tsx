@@ -101,12 +101,19 @@ function SidebarBody({ perfilLabel, onNavigate, onLogout }: SidebarBodyProps) {
         ))}
       </nav>
 
-      {/* Filete ferrugem fininho + logout + versão. */}
+      {/* Filete ferrugem fininho + minha conta + logout + versão. */}
       <div className="px-5 pb-5 pt-3">
         <div
           className="h-px w-8 mb-4"
           style={{ background: "var(--ferrugem)" }}
         />
+        <NavLink
+          to="/conta/senha"
+          onClick={onNavigate}
+          className="block text-sm text-creme/75 hover:text-creme transition-colors mb-2"
+        >
+          Trocar minha senha
+        </NavLink>
         <button
           type="button"
           onClick={onLogout}

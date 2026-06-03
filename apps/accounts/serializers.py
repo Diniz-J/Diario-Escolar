@@ -6,6 +6,28 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import Usuario
 
 
+class PasswordResetRequestSerializer(serializers.Serializer):
+    """Body do POST /auth/password/reset/request/.
+
+    Recebe apenas o `username` — o backend resolve o email cadastrado.
+    Esta escolha é deliberada (vs. receber email diretamente): impede que
+    alguém com o username de um colega aponte o reset pro próprio email.
+    """
+
+    username = serializers.CharField(max_length=150)
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    """Body do POST /auth/password/reset/confirm/."""
+
+    token = serializers.CharField(max_length=128)
+    new_password = serializers.CharField(max_length=128, write_only=True)
+
+    def validate_new_password(self, value: str) -> str:
+        validate_password(value)
+        return value
+
+
 class UsuarioTokenObtainPairSerializer(TokenObtainPairSerializer):
     """Inclui claims customizados no payload do JWT.
 
@@ -38,6 +60,9 @@ class UsuarioSerializer(serializers.ModelSerializer):
     """Serializa Usuario para respostas da API."""
 
     password = serializers.CharField(write_only=True, required=False)
+    # Email é a chave do fluxo de redefinição de senha — obrigatório no
+    # cadastro (sobrescreve o `blank=True` herdado do AbstractUser).
+    email = serializers.EmailField(required=True, allow_blank=False)
 
     class Meta:
         model = Usuario

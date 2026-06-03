@@ -4,10 +4,13 @@ import { AppLayout } from "@/components/AppLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AlunosPage } from "@/pages/AlunosPage";
 import { BoletimPage } from "@/pages/BoletimPage";
+import { ContaSenhaPage } from "@/pages/ContaSenhaPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { DisciplinasPage } from "@/pages/DisciplinasPage";
+import { EsqueciSenhaPage } from "@/pages/EsqueciSenhaPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
+import { RedefinirSenhaPage } from "@/pages/RedefinirSenhaPage";
 import { OcorrenciaDetalhePage } from "@/pages/OcorrenciaDetalhePage";
 import { OcorrenciasPage } from "@/pages/OcorrenciasPage";
 import { PlanoEnsinoDetalhePage } from "@/pages/PlanoEnsinoDetalhePage";
@@ -26,11 +29,14 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/esqueci-senha" element={<EsqueciSenhaPage />} />
+      <Route path="/redefinir-senha" element={<RedefinirSenhaPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/conta/senha" element={<ContaSenhaPage />} />
           <Route path="/alunos" element={<AlunosPage />} />
           <Route path="/turmas" element={<TurmasPage />} />
           <Route path="/turmas/:id" element={<TurmaDetalhePage />} />
