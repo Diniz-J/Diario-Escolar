@@ -88,7 +88,8 @@ Diario-Escolar/
 ├── entrypoint.sh            — prod: migrate + superusuário no boot, depois gunicorn
 ├── docker-compose.yml       — ambiente de desenvolvimento (hot reload)
 ├── docker-compose.prod.yml  — ambiente de produção (gunicorn + nginx)
-├── DEPLOY.md                — guia de deploy (Render + Vercel) + Resend
+├── DEPLOY.md                — guia de deploy (Render + Vercel) + Brevo
+├── DESIGN.md                — norte visual da marca (tokens, voz, componentes, anti-patterns)
 ├── CLAUDE.md                — guia pra agentes de IA (guardrails + mapa + roadmap)
 ├── manage.py
 ├── requirements.txt
@@ -281,9 +282,11 @@ Botões de criação/edição/exclusão em cadastros (Alunos, Turmas, Disciplina
 
 ### Identidade visual
 
-Light mode permanente com paleta de marca **Diário Diniz**: olive como cor primária (CTAs, sidebar), linho como fundo principal (papel), paper (off-white) em cards e inputs, ferrugem como accent quente (filetes, foco, indicadores), tinta + sepia como texto. Os tokens vivem em `src/index.css` como CSS variables e estão mapeados pros tokens do shadcn (`--background`, `--primary`, `--card`, etc.) — qualquer componente shadcn off-the-shelf herda automaticamente.
+Light mode permanente com paleta de marca **Diário Diniz**: olive como cor primária (CTAs, sidebar), linho como fundo principal (papel), paper (off-white) em cards e inputs, ferrugem como accent quente (filetes, foco, indicadores), tinta + sepia como texto. Os tokens vivem em `src/index.css` como CSS variables e estão mapeados pros tokens do shadcn (`--background`, `--primary`, `--card`, etc.) — qualquer componente shadcn off-the-shelf herda automaticamente. A fonte da verdade visual da marca (tokens, voz, componentes cristalizados, anti-patterns) vive em [`DESIGN.md`](./DESIGN.md).
 
-Tipografia mista: **Fraunces** (serif variável) em títulos via `font-heading`, **Geist** (sans) no corpo. A combinação dá tom editorial sem perder legibilidade — assinatura visual consistente entre Login, sidebar e cards do Dashboard.
+Tipografia mista: **Fraunces** (serif variável) em títulos via `font-heading`, **Geist** (sans) no corpo. A combinação dá tom editorial sem perder legibilidade — assinatura visual consistente entre Login, sidebar, Dashboard e todas as 8 telas de lista (Alunos, Turmas, Disciplinas, Professores, PlanosEnsino, Ocorrencias, Presenca, Tarefas), cada uma com header em Fraunces + filete ferrugem e tabelas em `bg-paper`. Detalhes e formulários ainda herdam paleta via tokens shadcn mas serão repaginados nas próximas ondas.
+
+Status badges 100% na paleta da marca (ocorrências, tarefas, presença) — sem amber/blue/green/red genéricos do Tailwind.
 
 Layout responsivo: a sidebar fixa (≥768px) vira um drawer (`Sheet`) com botão hamburguer abaixo de 768px. Padding e tipografia ajustam por breakpoint (`p-4 md:p-8`, `text-2xl md:text-3xl`). Headers de detalhe com muitas ações empilham até `lg` (1024px) pra evitar competição visual em tablet portrait. Tabelas escondem colunas secundárias em telas estreitas (`hidden sm:table-cell` / `md:` / `lg:`) em vez de scroll horizontal — os dados completos ficam acessíveis clicando na linha (vai pro detalhe). Funciona em celular (chamada de presença em sala) e tablet.
 
@@ -342,6 +345,8 @@ npm run dev
 Para build de produção: `npm run build` (saída em `frontend/dist/`).
 
 > O backend precisa estar com `CORS_ALLOWED_ORIGINS=http://localhost:5173` no `.env` para o frontend conseguir autenticar.
+>
+> Em produção, o backend também aceita origens via `CORS_ALLOWED_ORIGIN_REGEXES` (CSV de regex) — usado pra liberar os domínios dinâmicos dos preview deployments do Vercel (ex.: `^https://diario-escolar-[a-z0-9-]+\.vercel\.app$`). `CSRF_TRUSTED_ORIGINS` complementa com wildcard `https://*.vercel.app` (Django 4+).
 
 ---
 
@@ -401,7 +406,7 @@ A lista priorizada por fases vive em [`CLAUDE.md`](./CLAUDE.md) (seção Roadmap
 - **Produto:** exportação de relatórios (PDF/CSV/Excel), métricas avançadas no dashboard (reincidência, presença média), redesign das telas de listagem/detalhe/formulário (ondas seguintes).
 - **Comunicação:** múltiplos responsáveis por aluno + telefone + flag `recebe_notificacao`, fila assíncrona dedicada (Celery/Dramatiq/RQ) quando o volume crescer, timeline do aluno (consumindo HistoricalRecords + ocorrências + presença).
 - **Senhas:** trocar a própria senha, reset por e-mail (agora viável via Brevo), admin resetar senha de terceiro pela UI.
-- **Dev experience:** drf-spectacular (gera client TypeScript), `repositories.py` por app, linting unificado (`ruff` + ESLint no fluxo), `DESIGN.md` documentando tokens/anti-patterns.
+- **Dev experience:** drf-spectacular (gera client TypeScript), `repositories.py` por app, linting unificado (`ruff` + ESLint no fluxo).
 - **SaaS futuro:** multi-tenancy real (middleware + RLS + billing), httpOnly cookies, LGPD formal.
 
 > Higiene de segredos pendente (ações no painel): rotacionar `SECRET_KEY` (apareceu como 5 bytes em log do Render, JWT inseguro), rotacionar senha do banco, revogar API key antiga do Resend.
