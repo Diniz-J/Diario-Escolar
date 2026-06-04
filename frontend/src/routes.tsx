@@ -8,6 +8,7 @@ import { ContaSenhaPage } from "@/pages/ContaSenhaPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { DisciplinasPage } from "@/pages/DisciplinasPage";
 import { EsqueciSenhaPage } from "@/pages/EsqueciSenhaPage";
+import { ImportPage } from "@/pages/ImportPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { RedefinirSenhaPage } from "@/pages/RedefinirSenhaPage";
@@ -37,6 +38,7 @@ export function AppRoutes() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/conta/senha" element={<ContaSenhaPage />} />
+          <Route path="/import" element={<ImportPage />} />
           <Route path="/alunos" element={<AlunosPage />} />
           <Route path="/turmas" element={<TurmasPage />} />
           <Route path="/turmas/:id" element={<TurmaDetalhePage />} />

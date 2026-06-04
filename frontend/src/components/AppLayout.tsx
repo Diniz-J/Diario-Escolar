@@ -11,6 +11,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { useAuth } from "@/features/auth/useAuth";
+import { usePermissoes } from "@/features/auth/usePermissoes";
 import { cn } from "@/lib/utils";
 
 // Layout para todas as rotas autenticadas — paleta olive/linho (Diário
@@ -57,6 +58,7 @@ interface SidebarBodyProps {
 // Cria contraste forte com o conteúdo principal em linho, hierarquia
 // visual clara e dá identidade à navegação.
 function SidebarBody({ perfilLabel, onNavigate, onLogout }: SidebarBodyProps) {
+  const { podeImportar } = usePermissoes();
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
       {/* Marca — placeholder até definirmos o logo real. Por ora, só
@@ -107,6 +109,15 @@ function SidebarBody({ perfilLabel, onNavigate, onLogout }: SidebarBodyProps) {
           className="h-px w-8 mb-4"
           style={{ background: "var(--ferrugem)" }}
         />
+        {podeImportar && (
+          <NavLink
+            to="/import"
+            onClick={onNavigate}
+            className="block text-sm text-creme/75 hover:text-creme transition-colors mb-2"
+          >
+            Importar e exportar
+          </NavLink>
+        )}
         <NavLink
           to="/conta/senha"
           onClick={onNavigate}
