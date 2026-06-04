@@ -107,6 +107,61 @@ class ImportExportViewSetMixin:
         """Override pra passar parâmetros extras pro Resource."""
         return {}
 
+    def _validar_escola_habilitada(
+        self, escola_id: int | None
+    ) -> Response | None:
+        """Garante que a escola alvo contratou o pacote de import/export.
+
+        Import/export em massa é serviço operado **exclusivamente** pelo
+        admin global (Diniz) — não fica aberto pra diretor mexer sozinho.
+        O `Escola.importacao_em_lote_habilitada` é o flag comercial que
+        marca quais escolas estão dentro do pacote contratado.
+
+        Retorna `Response` com erro se:
+        - `escola_id` é None (sem alvo definido — admin precisa passar
+          `?escola=<id>`);
+        - escola não existe;
+        - escola existe mas o flag está desligado.
+
+        Retorna `None` se tudo OK — chamadora segue o fluxo normal.
+        """
+        if escola_id is None:
+            return Response(
+                {
+                    "detail": (
+                        "Selecione a escola alvo antes de operar "
+                        "import/export."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Import lazy pra evitar ciclo com apps.escola (que importa este
+        # módulo via apps.escola.views).
+        from apps.escola.models import Escola
+
+        habilitada = (
+            Escola.objects.filter(pk=escola_id)
+            .values_list("importacao_em_lote_habilitada", flat=True)
+            .first()
+        )
+        if habilitada is None:
+            return Response(
+                {"detail": "Escola não encontrada."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if not habilitada:
+            return Response(
+                {
+                    "detail": (
+                        "Esta escola não tem o pacote de importação em "
+                        "lote contratado. Procure o administrador do "
+                        "sistema pra habilitar."
+                    )
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return None
+
     # ------------------------------------------------------------------ #
     # Actions                                                            #
     # ------------------------------------------------------------------ #
@@ -125,6 +180,9 @@ class ImportExportViewSetMixin:
         if erro:
             return erro
         contexto = self._contexto(request)
+        erro_escola = self._validar_escola_habilitada(contexto.escola_id)
+        if erro_escola:
+            return erro_escola
         return executar_export(
             resource_class=self.import_export_resource,
             contexto=contexto,
@@ -143,6 +201,14 @@ class ImportExportViewSetMixin:
         formato, erro = self._validar_formato(request)
         if erro:
             return erro
+        # Template é só esqueleto (sem dado), mas o gating é comercial:
+        # só baixa template pra escola que contratou o pacote. Mantém
+        # UX consistente — quem não tem acesso à feature não tem acesso
+        # a NADA da feature.
+        contexto = self._contexto(request)
+        erro_escola = self._validar_escola_habilitada(contexto.escola_id)
+        if erro_escola:
+            return erro_escola
         return executar_template(
             resource_class=self.import_export_resource,
             formato=formato,
@@ -175,16 +241,9 @@ class ImportExportViewSetMixin:
             request.query_params.get("confirmar", "").lower() == "true"
         )
         contexto = self._contexto(request, com_extras=True)
-        if contexto.escola_id is None:
-            return Response(
-                {
-                    "detail": (
-                        "Sua conta não está vinculada a uma escola. "
-                        "Importes em massa exigem escopo de escola."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        erro_escola = self._validar_escola_habilitada(contexto.escola_id)
+        if erro_escola:
+            return erro_escola
         return executar_import(
             resource_class=self.import_export_resource,
             contexto=contexto,
@@ -193,18 +252,18 @@ class ImportExportViewSetMixin:
         )
 
     def get_permissions(self):
-        """Escrita pro `import`, leitura pro `export`/`template`.
+        """Import/export/template são admin-only.
 
-        Reaproveita `READ_PERMISSION`/`WRITE_PERMISSION` do
-        `ReadWritePermissionMixin` quando presentes; caso contrário cai
-        pro padrão do ViewSet base.
+        Decisão de produto: a feature inteira é serviço operado
+        exclusivamente pelo admin global (Diniz) — escola não mexe
+        sozinha, mesmo que tenha contratado o pacote. O flag
+        `Escola.importacao_em_lote_habilitada` é a segunda camada
+        (gate comercial), validada em `_validar_escola_habilitada`.
         """
-        if self.action == "importar":
-            write_perm = getattr(self, "WRITE_PERMISSION", None)
-            if write_perm:
-                return [write_perm()]
-        elif self.action in ("export", "template"):
-            read_perm = getattr(self, "READ_PERMISSION", None)
-            if read_perm:
-                return [read_perm()]
+        # Import lazy pra evitar circular import (apps.common → apps.common.permissions
+        # não cicla, mas mantemos o padrão consistente com o resto do mixin).
+        from apps.common.permissions import IsAdmin
+
+        if self.action in ("importar", "export", "template"):
+            return [IsAdmin()]
         return super().get_permissions()

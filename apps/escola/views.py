@@ -38,6 +38,10 @@ class EscolaViewSet(ReadWritePermissionMixin, viewsets.ModelViewSet):
 
     queryset = Escola.objects.all().order_by("nome")
     serializer_class = EscolaSerializer
+    filter_backends = [DjangoFilterBackend]
+    # `importacao_em_lote_habilitada` é o filtro que a tela /import usa
+    # pra listar só as escolas elegíveis ao pacote contratado.
+    filterset_fields = ["ativa", "importacao_em_lote_habilitada"]
     READ_PERMISSION = IsAdminOrDiretor
     WRITE_PERMISSION = IsAdmin
 

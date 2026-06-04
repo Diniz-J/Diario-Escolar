@@ -13,8 +13,15 @@ from .models import Aluno, Disciplina, Escola, Lecionamento, Professor, Turma
 
 @admin.register(Escola)
 class EscolaAdmin(admin.ModelAdmin):
-    list_display = ("nome", "cnpj", "ativa", "criado_em")
-    list_filter = ("ativa",)
+    list_display = (
+        "nome",
+        "cnpj",
+        "ativa",
+        "importacao_em_lote_habilitada",
+        "criado_em",
+    )
+    list_filter = ("ativa", "importacao_em_lote_habilitada")
+    list_editable = ("importacao_em_lote_habilitada",)
     # search_fields é dependência dos autocomplete_fields nos outros admins.
     search_fields = ("nome", "cnpj")
     ordering = ("nome",)

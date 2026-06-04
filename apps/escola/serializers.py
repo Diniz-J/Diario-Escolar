@@ -17,6 +17,7 @@ class EscolaSerializer(serializers.ModelSerializer):
             "nome",
             "cnpj",
             "ativa",
+            "importacao_em_lote_habilitada",
             "criado_em",
             "atualizado_em",
         ]

@@ -35,6 +35,11 @@ interface ImportInput {
   entidade: EntidadeImportExport;
   arquivo: File;
   confirmar: boolean;
+  // Escola alvo — admin global precisa passar via `?escola=<id>` porque
+  // o JWT dele não tem `escola_id`. Tela /import só lista escolas com
+  // `importacao_em_lote_habilitada=true`, então o select já filtra
+  // pelo pacote contratado.
+  escolaId: number;
   // Só faz sentido pra `alunos` (cria turma faltante automaticamente).
   extras?: {
     turno_padrao?: string;
@@ -56,7 +61,9 @@ export function useImportar() {
       if (input.extras?.ano_letivo_padrao) {
         formData.append("ano_letivo_padrao", input.extras.ano_letivo_padrao);
       }
-      const url = `/${input.entidade}/import/${input.confirmar ? "?confirmar=true" : ""}`;
+      const params = new URLSearchParams({ escola: String(input.escolaId) });
+      if (input.confirmar) params.set("confirmar", "true");
+      const url = `/${input.entidade}/import/?${params.toString()}`;
       const { data } = await api.post<ImportResultado>(url, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
@@ -93,8 +100,13 @@ export function useBaixarTemplate() {
     mutationFn: async (input: {
       entidade: EntidadeImportExport;
       formato: "csv" | "xlsx";
+      escolaId: number;
     }) => {
-      const url = `/${input.entidade}/template/?formato=${input.formato}`;
+      const params = new URLSearchParams({
+        formato: input.formato,
+        escola: String(input.escolaId),
+      });
+      const url = `/${input.entidade}/template/?${params.toString()}`;
       await baixarComoArquivo(
         url,
         `${input.entidade}_modelo.${input.formato}`,
@@ -108,8 +120,13 @@ export function useExportar() {
     mutationFn: async (input: {
       entidade: EntidadeImportExport;
       formato: "csv" | "xlsx";
+      escolaId: number;
     }) => {
-      const url = `/${input.entidade}/export/?formato=${input.formato}`;
+      const params = new URLSearchParams({
+        formato: input.formato,
+        escola: String(input.escolaId),
+      });
+      const url = `/${input.entidade}/export/?${params.toString()}`;
       await baixarComoArquivo(
         url,
         `${input.entidade}.${input.formato}`,
