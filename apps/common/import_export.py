@@ -127,6 +127,11 @@ class BaseEscolaResource(resources.ModelResource):
         um `base_error` que faz `has_errors()=True`.
         """
         super().before_import(dataset, **kwargs)
+        # Dataset vazio (só header, sem rows) — `append_col` com lista
+        # vazia ainda altera headers, mas evitamos pra não surpreender
+        # nada que dependa de "dataset intocado".
+        if not dataset.height:
+            return
         if (
             self.contexto
             and self.contexto.escola_id is not None
@@ -161,6 +166,16 @@ class BaseEscolaResource(resources.ModelResource):
         if self.contexto and self.contexto.escola_id is not None:
             if not getattr(instance, "escola_id", None):
                 instance.escola_id = self.contexto.escola_id
+
+    def executar_pos_commit(self) -> None:
+        """Hook chamado pela view DEPOIS do commit do savepoint.
+
+        Default: no-op. Subclasses sobrescrevem pra disparar side-effects
+        externos (ex.: envio de email no `ProfessorResource`). Não usamos
+        `transaction.on_commit` da view porque a suíte de testes do Django
+        rola back a transação outer e callbacks nunca rodariam.
+        """
+        return None
 
     def skip_row(self, instance, original, row, import_validation_errors=None):
         """Pula linha cuja chave natural já existe no banco.
@@ -358,13 +373,10 @@ def executar_import(
         if persistir:
             transaction.savepoint_commit(sid)
             # Hook pra side-effects externos (ex.: envio de email no
-            # ProfessorResource). Roda só após commit do savepoint pra
-            # garantir que o que estamos notificando realmente persistiu.
-            # Não usamos `transaction.on_commit` porque TestCase rola back
-            # a outer transaction — callbacks nunca rodariam na suíte.
-            pos_commit = getattr(resource, "executar_pos_commit", None)
-            if callable(pos_commit):
-                pos_commit()
+            # ProfessorResource). Definido em `BaseEscolaResource` como
+            # no-op — qualquer resource pode sobrescrever sem precisar
+            # de string-based dispatch aqui.
+            resource.executar_pos_commit()
         else:
             # Dry-run, ou confirmação com erros: descarta TUDO que rolou
             # dentro do savepoint — inclui criação de Turma faltante no

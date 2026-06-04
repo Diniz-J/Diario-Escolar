@@ -349,6 +349,56 @@ class ImportProfessorTests(_Base):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("novo@example.com", mail.outbox[0].to)
 
+    def test_dry_run_professor_nao_dispara_email(self):
+        """Pré-visualização não pode mandar email — só na confirmação."""
+        csv = _csv_bytes(
+            [
+                "username,first_name,last_name,email,ativo",
+                "preview_prof,Preview,Professor,preview@example.com,true",
+            ]
+        )
+        resp = self._post_upload(
+            ProfessorViewSet, _arquivo("p.csv", csv), confirmar=False
+        )
+        self.assertEqual(resp.status_code, 200)
+        # `criados` reporta o que SERIA criado; persistido deve ser False.
+        self.assertEqual(resp.data["criados"], 1)
+        self.assertFalse(resp.data["persistido"])
+        # Nenhum side-effect: nem email, nem Usuario salvo no banco.
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertFalse(
+            Usuario.objects.filter(username="preview_prof").exists()
+        )
+
+    def test_reimport_professor_mesmo_csv_e_idempotente_e_nao_redispara_email(self):
+        """2º import do mesmo CSV pula o professor (skip_row na chave).
+
+        Documenta a contrapartida da unicidade global de username:
+        re-rodar o mesmo arquivo NA MESMA escola é seguro (idempotente).
+        A falha por username duplicado em outra escola fica coberta no
+        `test_import_professor_username_duplicado_falha_linha`.
+        """
+        csv = _csv_bytes(
+            [
+                "username,first_name,last_name,email,ativo",
+                "novo_prof,Novo,Professor,novo@example.com,true",
+            ]
+        )
+        resp1 = self._post_upload(
+            ProfessorViewSet, _arquivo("p.csv", csv), confirmar=True
+        )
+        self.assertEqual(resp1.data["criados"], 1)
+        self.assertEqual(len(mail.outbox), 1)
+
+        # 2º import: nada novo, professor é pulado.
+        resp2 = self._post_upload(
+            ProfessorViewSet, _arquivo("p.csv", csv), confirmar=True
+        )
+        self.assertEqual(resp2.data["criados"], 0)
+        self.assertEqual(len(resp2.data["pulados"]), 1)
+        # Não dispara email de novo.
+        self.assertEqual(len(mail.outbox), 1)
+
     def test_import_professor_username_duplicado_falha_linha(self):
         # Cria primeiro um usuário com o username pra forçar conflito.
         Usuario.objects.create_user(
@@ -432,6 +482,103 @@ class ImportLecionamentoTests(_Base):
 # ===================================================================== #
 # Disciplina + Turma (smoke — confirma que o ciclo end-to-end roda)      #
 # ===================================================================== #
+
+
+class ImportAlunoCachePerformanceTests(_Base):
+    def test_cache_de_turma_evita_n_mais_1_em_arquivo_grande(self):
+        """10 alunos pra mesma turma devem disparar 1 query de turma, não 10."""
+        linhas = [
+            "matricula,nome_completo,turma_nome,ano_letivo,nome_responsavel,email_responsavel",
+        ]
+        for i in range(10):
+            linhas.append(
+                f"CACHE{i:03d},Cache Aluno {i},1º A,2026,R,r@r.com"
+            )
+        csv = _csv_bytes(linhas)
+
+        # Snapshot do contador de queries durante o import.
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(connection) as ctx:
+            resp = self._post_upload(
+                AlunoViewSet, _arquivo("alunos.csv", csv), confirmar=True
+            )
+        self.assertEqual(resp.data["criados"], 10)
+
+        sqls = [q["sql"] for q in ctx.captured_queries]
+        # Quantas vezes consultamos `escola_turma` filtrando por nome?
+        # 1 hit do cache miss inicial; 9 hits do cache (zero queries).
+        # A heurística é frouxa pra acomodar variações de filtros do ORM.
+        turma_lookups = [
+            s for s in sqls
+            if 'FROM "escola_turma"' in s and "nome" in s
+        ]
+        self.assertLessEqual(
+            len(turma_lookups),
+            2,
+            f"Cache de turma não está evitando N+1: {len(turma_lookups)} queries",
+        )
+
+
+class ImportErroNoCabecalhoTests(_Base):
+    def test_base_error_aparece_na_resposta(self):
+        """Erros de header (ex.: coluna obrigatória ausente) chegam em `erros`.
+
+        O `_coletar_erros` agora inclui `result.base_errors` — antes
+        sumia silenciosamente. Aqui upload sem `matricula` no header
+        dispara base_error.
+        """
+        csv = _csv_bytes(
+            [
+                "nome_completo,turma_nome,ano_letivo,nome_responsavel,email_responsavel",
+                "Sem Matricula,1º A,2026,R,r@r.com",
+            ]
+        )
+        resp = self._post_upload(
+            AlunoViewSet, _arquivo("alunos.csv", csv), confirmar=False
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(
+            len(resp.data["erros"]) >= 1,
+            f"Esperava erros de header, veio: {resp.data}",
+        )
+
+
+class ImportXlsxSmokeTests(_Base):
+    def test_import_xlsx_processa_mesma_pipeline_que_csv(self):
+        """Smoke test do path XLSX — tablib detecta pela extensão."""
+        import io
+
+        import tablib
+
+        ds = tablib.Dataset(
+            headers=[
+                "matricula",
+                "nome_completo",
+                "turma_nome",
+                "ano_letivo",
+                "nome_responsavel",
+                "email_responsavel",
+            ]
+        )
+        ds.append(("XLSX001", "Aluno XLSX", "1º A", 2026, "R", "r@r.com"))
+        binario = io.BytesIO(ds.export("xlsx")).getvalue()
+
+        arquivo = SimpleUploadedFile(
+            "alunos.xlsx",
+            binario,
+            content_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+        )
+        resp = self._post_upload(AlunoViewSet, arquivo, confirmar=True)
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data["criados"], 1)
+        self.assertTrue(
+            Aluno.objects.filter(matricula="XLSX001").exists()
+        )
 
 
 class ImportDisciplinaTurmaTests(_Base):

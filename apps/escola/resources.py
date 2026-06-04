@@ -17,14 +17,15 @@ o admin cadastra manualmente.
 from __future__ import annotations
 
 import logging
-import secrets
+import threading
 
+from django.conf import settings
 from django.db import transaction
 from import_export import fields
 from import_export.widgets import BooleanWidget, IntegerWidget
 
-from apps.accounts.models import PasswordResetToken, Usuario
-from apps.accounts.services import enviar_link_redefinicao
+from apps.accounts.models import Usuario
+from apps.accounts.services import enviar_email_definicao_de_senha
 from apps.common.import_export import BaseEscolaResource
 
 from .models import Aluno, Disciplina, Lecionamento, Professor, Turma
@@ -238,6 +239,12 @@ class AlunoResource(BaseEscolaResource):
             novo.append(linha)
         return novo
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Cache local pra evitar N+1 quando muitos alunos compartilham
+        # poucas turmas. Chave: `(nome, ano_letivo)` → Turma.
+        self._turmas_cache: dict[tuple[str, int], Turma] = {}
+
     def before_import_row(self, row, **kwargs):
         super().before_import_row(row, **kwargs)
 
@@ -274,30 +281,45 @@ class AlunoResource(BaseEscolaResource):
             )
         ano_letivo = int(ano_linha)
 
+        chave = (turma_nome, ano_letivo)
+        turma = self._turmas_cache.get(chave)
+        if turma is not None:
+            row["turma"] = turma.id
+            return
         turma = _turma_por_nome_ano(escola_id, turma_nome, ano_letivo)
-        if turma is None:
-            turno_padrao = (self.contexto.extras or {}).get("turno_padrao")
-            if not turno_padrao:
-                raise ValueError(
-                    f"Turma '{turma_nome}' ({ano_letivo}) não existe e o "
-                    "campo 'Turno padrão' não foi preenchido. Defina o turno "
-                    "padrão no formulário de import pra criar a turma "
-                    "automaticamente."
-                )
-            turno = _normalizar_turno(turno_padrao)
-            turma = Turma.objects.create(
-                escola_id=escola_id,
-                nome=turma_nome,
-                ano_letivo=ano_letivo,
-                turno=turno,
-                ativa=True,
+        if turma is not None:
+            # Hit no banco — popula cache pra próximas linhas com a mesma
+            # turma e SAI antes de qualquer validação que possa levantar.
+            self._turmas_cache[chave] = turma
+            row["turma"] = turma.id
+            return
+        # Turma não existe — exige `turno_padrao` no upload pra criar.
+        turno_padrao = (self.contexto.extras or {}).get("turno_padrao")
+        if not turno_padrao:
+            raise ValueError(
+                f"Turma '{turma_nome}' ({ano_letivo}) não existe e o "
+                "campo 'Turno padrão' não foi preenchido. Defina o turno "
+                "padrão no formulário de import pra criar a turma "
+                "automaticamente."
             )
+        turno = _normalizar_turno(turno_padrao)
+        # `get_or_create` em vez de `create` puro pra cobrir race raras
+        # (dois imports paralelos do mesmo arquivo) — evita
+        # IntegrityError barulhento e devolve a turma criada por outro
+        # caller se for o caso.
+        turma, criada = Turma.objects.get_or_create(
+            escola_id=escola_id,
+            nome=turma_nome,
+            ano_letivo=ano_letivo,
+            defaults={"turno": turno, "ativa": True},
+        )
+        if criada:
             logger.info(
                 "Turma criada automaticamente no import de alunos: %s/%s",
                 turma_nome,
                 ano_letivo,
             )
-
+        self._turmas_cache[chave] = turma
         row["turma"] = turma.id
 
     def _descricao_linha(self, row) -> str:
@@ -387,6 +409,19 @@ class ProfessorResource(BaseEscolaResource):
                 linha[headers.index(nome)] = valor
         return linha
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Acumula usuários criados pra notificar SÓ depois do commit final
+        # do savepoint externo (em `executar_import`). Não usamos
+        # `transaction.on_commit` porque TestCase rola back a transação
+        # outer e callbacks nunca rodariam — quebraria a suíte. A view
+        # chama `executar_pos_commit` após `savepoint_commit`.
+        #
+        # Convenção: a instance do resource é descartável (criada por
+        # `executar_import` e usada uma vez). Reuso entre requests vazaria
+        # essa lista — não fazer.
+        self._notificar_apos_commit: list[Usuario] = []
+
     def init_instance(self, row=None):
         """Cria Professor + Usuario juntos antes da pipeline normal.
 
@@ -421,30 +456,24 @@ class ProfessorResource(BaseEscolaResource):
                 f"Já existe usuário com username '{username}'."
             )
 
-        with transaction.atomic():
-            usuario = Usuario.objects.create(
-                username=username,
-                first_name=(row.get("first_name") or "").strip(),
-                last_name=(row.get("last_name") or "").strip(),
-                email=email,
-                perfil=Usuario.Perfil.PROFESSOR,
-                escola_id=escola_id,
-            )
-            usuario.set_password(secrets.token_urlsafe(32))
-            usuario.save(update_fields=["password"])
-            instance.usuario = usuario
-            instance.escola_id = escola_id
-            instance.ativo = row.get("ativo", True)
+        # 1 INSERT só — `set_unusable_password()` bloqueia totalmente o
+        # login até o reset chegar via email; `save()` em instance nova
+        # com o hash já setado economiza o UPDATE extra que rolaria com
+        # `objects.create + set_password + save(update_fields=password)`.
+        usuario = Usuario(
+            username=username,
+            first_name=(row.get("first_name") or "").strip(),
+            last_name=(row.get("last_name") or "").strip(),
+            email=email,
+            perfil=Usuario.Perfil.PROFESSOR,
+            escola_id=escola_id,
+        )
+        usuario.set_unusable_password()
+        usuario.save()
+        instance.usuario = usuario
+        instance.escola_id = escola_id
+        instance.ativo = row.get("ativo", True)
         return instance
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Acumula usuários criados pra notificar SÓ depois do commit final
-        # do savepoint externo (em `executar_import`). Não usamos
-        # `transaction.on_commit` porque TestCase rola back a transação
-        # outer e callbacks nunca rodariam — quebraria a suíte. A view
-        # chama `executar_pos_commit` após `savepoint_commit`.
-        self._notificar_apos_commit: list = []
 
     def after_save_instance(self, instance, row, **kwargs):  # noqa: ARG002
         """Marca o professor pra receber email APÓS o commit final.
@@ -457,16 +486,30 @@ class ProfessorResource(BaseEscolaResource):
         self._notificar_apos_commit.append(instance.usuario)
 
     def executar_pos_commit(self) -> None:
-        """Disparado pela view `executar_import` após o savepoint commit."""
-        for usuario in self._notificar_apos_commit:
-            try:
-                _token_obj, token_cru = PasswordResetToken.gerar(usuario)
-                enviar_link_redefinicao(usuario, token_cru)
-            except Exception:  # noqa: BLE001 — log e segue
-                logger.exception(
-                    "Falha ao enviar email de definição de senha",
-                    extra={"usuario_id": usuario.id},
-                )
+        """Disparado pela view `executar_import` após o savepoint commit.
+
+        Em prod, cada email roda em thread daemon nomeada (fire-and-forget)
+        pra não pendurar a resposta HTTP enquanto Brevo responde. Em testes
+        (`settings.TESTING`), envio é síncrono pra `mail.outbox` ser
+        determinístico. Mesma estratégia do `apps.ocorrencias.services`.
+
+        `try/finally` garante que a lista seja limpa mesmo se uma falha
+        levantar — evita vazamento se o resource for reusado.
+        """
+        testing = getattr(settings, "TESTING", False)
+        try:
+            for usuario in self._notificar_apos_commit:
+                if testing:
+                    enviar_email_definicao_de_senha(usuario)
+                else:
+                    threading.Thread(
+                        target=enviar_email_definicao_de_senha,
+                        args=(usuario,),
+                        daemon=True,
+                        name=f"def-senha-prof-{usuario.id}",
+                    ).start()
+        finally:
+            self._notificar_apos_commit.clear()
         self._notificar_apos_commit.clear()
 
     def _descricao_linha(self, row) -> str:
