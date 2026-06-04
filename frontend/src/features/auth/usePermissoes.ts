@@ -21,7 +21,13 @@ export function usePermissoes() {
     perfil != null &&
     (PERFIS_NIVEL_DIRETOR as readonly string[]).includes(perfil);
 
+  // Import em massa é admin-only no backend (ver ImportExportViewSetMixin
+  // com `WRITE_PERMISSION`). Diretor pode exportar mas não importar
+  // — esconder o item da sidebar pra perfis não-admin evita 403 visível.
+  const podeImportar = perfil === "admin";
+
   return {
     podeModificarCadastros,
+    podeImportar,
   };
 }
