@@ -48,13 +48,23 @@ def _arquivo(nome: str, conteudo: bytes, content_type: str = "text/csv") -> Simp
 
 
 class _Base(TestCase):
-    """Setup compartilhado: 2 escolas pra cobrir escopo + IDOR."""
+    """Setup compartilhado: 2 escolas pra cobrir escopo + IDOR.
+
+    Import/export é admin-only e ainda exige `importacao_em_lote_habilitada=True`
+    na escola alvo. Por isso o setup:
+    - `escola_a` → flag ligado (escola "contratou o pacote");
+    - `escola_b` → flag desligado (cliente sem pacote, pra cobrir o 403);
+    - `admin_global` → user padrão dos helpers `_get`/`_post_upload`,
+      sem `escola` vinculada (admin SaaS); mira a escola via `?escola=<id>`.
+    """
 
     @classmethod
     def setUpTestData(cls) -> None:
         cls.factory = APIRequestFactory()
 
-        cls.escola_a = Escola.objects.create(nome="Escola A")
+        cls.escola_a = Escola.objects.create(
+            nome="Escola A", importacao_em_lote_habilitada=True
+        )
         cls.escola_b = Escola.objects.create(nome="Escola B")
 
         cls.turma_a = Turma.objects.create(
@@ -88,6 +98,13 @@ class _Base(TestCase):
             perfil=Usuario.Perfil.PROFESSOR,
             escola=cls.escola_a,
         )
+        # Admin global — sem `escola`; opera import/export mirando a
+        # escola alvo via `?escola=<id>` (usado por default nos helpers).
+        cls.admin_global = Usuario.objects.create_user(
+            username="admin_g",
+            password="x",
+            perfil=Usuario.Perfil.ADMIN,
+        )
 
         # Aluno existente na Escola A pra testar dedup.
         Aluno.objects.create(
@@ -99,10 +116,39 @@ class _Base(TestCase):
             email_responsavel="resp1@example.com",
         )
 
-    def _get(self, viewset_cls, action_method, query="", user=None):
-        req = self.factory.get(f"/?{query}")
+    def _montar_query(
+        self, user, extras_query: str = "", escola_id: int | None = None
+    ) -> str:
+        """Combina `?escola=<id>` com a query passada pela chamadora.
+
+        Default: quando o user é admin global, mira `escola_a` (escola
+        habilitada). Pra cenários de IDOR/flag desligado, a chamadora
+        passa `escola_id` explícito.
+        """
+        partes = []
+        # Admin sem `escola` precisa de `?escola=<id>` pro contexto saber
+        # qual tenant é o alvo. Default = escola_a (a habilitada).
+        if escola_id is None and getattr(user, "escola_id", None) is None:
+            escola_id = self.escola_a.id
+        if escola_id is not None:
+            partes.append(f"escola={escola_id}")
+        if extras_query:
+            partes.append(extras_query)
+        return "&".join(partes)
+
+    def _get(
+        self,
+        viewset_cls,
+        action_method,
+        query="",
+        user=None,
+        escola_id: int | None = None,
+    ):
+        user = user or self.admin_global
+        url = f"/?{self._montar_query(user, query, escola_id)}"
+        req = self.factory.get(url)
         view = viewset_cls.as_view({"get": action_method})
-        force_authenticate(req, user=user or self.diretor_a)
+        force_authenticate(req, user=user)
         return view(req)
 
     def _post_upload(
@@ -113,12 +159,19 @@ class _Base(TestCase):
         confirmar: bool = False,
         user=None,
         extras: dict | None = None,
+        escola_id: int | None = None,
     ):
+        user = user or self.admin_global
         data = {"arquivo": arquivo, **(extras or {})}
-        query = "?confirmar=true" if confirmar else ""
-        req = self.factory.post(f"/{query}", data, format="multipart")
+        query = self._montar_query(
+            user,
+            "confirmar=true" if confirmar else "",
+            escola_id,
+        )
+        url = f"/?{query}" if query else "/"
+        req = self.factory.post(url, data, format="multipart")
         view = viewset_cls.as_view({"post": "importar"})
-        force_authenticate(req, user=user or self.diretor_a)
+        force_authenticate(req, user=user)
         return view(req)
 
 
@@ -277,14 +330,57 @@ class ImportAlunoTests(_Base):
 
 
 class ImportExportPermissionTests(_Base):
-    def test_professor_pode_exportar(self):
+    """Import/export é admin-only + gating comercial por escola.
+
+    Cobre as duas camadas:
+    - **Perfil**: só admin (diretor/secretaria/professor/inspetor = 403);
+    - **Flag comercial**: admin precisa mirar escola com
+      `importacao_em_lote_habilitada=True` — escola sem pacote = 403.
+    """
+
+    # ---- Camada 1: perfil ---- #
+
+    def test_diretor_nao_pode_exportar(self):
+        """Diretor perdeu acesso ao export: feature virou serviço do admin."""
+        resp = self._get(
+            AlunoViewSet,
+            "export",
+            query="formato=csv",
+            user=self.diretor_a,
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_diretor_nao_pode_importar(self):
+        csv = _csv_bytes(
+            [
+                "matricula,nome_completo,turma_nome,ano_letivo,nome_responsavel,email_responsavel",
+                "2026010,X,1º A,2026,R,r@r.com",
+            ]
+        )
+        resp = self._post_upload(
+            AlunoViewSet,
+            _arquivo("a.csv", csv),
+            user=self.diretor_a,
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_diretor_nao_pode_baixar_template(self):
+        resp = self._get(
+            AlunoViewSet,
+            "template",
+            query="formato=csv",
+            user=self.diretor_a,
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_professor_nao_pode_exportar(self):
         resp = self._get(
             AlunoViewSet,
             "export",
             query="formato=csv",
             user=self.professor_a,
         )
-        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.status_code, 403)
 
     def test_professor_nao_pode_importar(self):
         csv = _csv_bytes(
@@ -300,20 +396,60 @@ class ImportExportPermissionTests(_Base):
         )
         self.assertEqual(resp.status_code, 403)
 
-    def test_export_de_outra_escola_nao_vaza(self):
-        # Aluno só na escola B.
-        Aluno.objects.create(
-            escola=self.escola_b,
-            turma=self.turma_b,
-            matricula="b001",
-            nome_completo="Vazaria",
-            nome_responsavel="r",
-            email_responsavel="r@r.com",
-        )
+    # ---- Camada 2: flag comercial por escola ---- #
+
+    def test_admin_em_escola_sem_pacote_recebe_403_no_export(self):
+        """Admin tem perfil ok, mas a escola alvo não contratou o pacote."""
         resp = self._get(
-            AlunoViewSet, "export", query="formato=csv", user=self.diretor_a
+            AlunoViewSet,
+            "export",
+            query="formato=csv",
+            escola_id=self.escola_b.id,  # flag desligado no setUpTestData
         )
-        self.assertNotIn("Vazaria", resp.content.decode("utf-8-sig"))
+        self.assertEqual(resp.status_code, 403)
+        self.assertIn("pacote", resp.data["detail"].lower())
+
+    def test_admin_em_escola_sem_pacote_recebe_403_no_import(self):
+        csv = _csv_bytes(
+            [
+                "matricula,nome_completo,turma_nome,ano_letivo,nome_responsavel,email_responsavel",
+                "2026010,X,1º A,2026,R,r@r.com",
+            ]
+        )
+        resp = self._post_upload(
+            AlunoViewSet,
+            _arquivo("a.csv", csv),
+            escola_id=self.escola_b.id,
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_admin_em_escola_sem_pacote_recebe_403_no_template(self):
+        resp = self._get(
+            AlunoViewSet,
+            "template",
+            query="formato=csv",
+            escola_id=self.escola_b.id,
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_admin_sem_escola_alvo_recebe_400(self):
+        """Sem `?escola=<id>` o admin não tem alvo — 400, não 500."""
+        # Bate direto na view sem passar pelos helpers (que injetam
+        # `?escola=<id>` automático pra admin).
+        req = self.factory.get("/?formato=csv")
+        view = AlunoViewSet.as_view({"get": "export"})
+        force_authenticate(req, user=self.admin_global)
+        resp = view(req)
+        self.assertEqual(resp.status_code, 400)
+
+    def test_admin_em_escola_inexistente_recebe_404(self):
+        resp = self._get(
+            AlunoViewSet,
+            "export",
+            query="formato=csv",
+            escola_id=999999,
+        )
+        self.assertEqual(resp.status_code, 404)
 
 
 # ===================================================================== #

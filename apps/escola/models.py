@@ -20,6 +20,12 @@ class Escola(TimeStampedModel):
         validators=[validar_cnpj],
     )
     ativa = models.BooleanField(default=True)
+    # Toggle comercial: import/export em massa é serviço exclusivo do
+    # admin global (operador do SaaS). Esse flag marca quais escolas
+    # contrataram o pacote — só elas aparecem como alvo elegível na
+    # tela `/import` e só nelas o backend aceita as actions
+    # `import/export/template`. Default False: contratado por opt-in.
+    importacao_em_lote_habilitada = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = "escola"

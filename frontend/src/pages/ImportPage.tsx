@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useEscolasElegiveisImportacao } from "@/features/escolas/hooks";
 import {
   ENTIDADES,
   useBaixarTemplate,
@@ -38,8 +39,22 @@ export function ImportPage() {
   const [anoPadrao, setAnoPadrao] = useState(
     String(new Date().getFullYear()),
   );
+  const [escolaId, setEscolaId] = useState<string>("");
   const [resultado, setResultado] = useState<ImportResultado | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+
+  // Escolas que contrataram o pacote — gating comercial. Backend
+  // devolve 403 pra qualquer outra. Sem opções aqui = ninguém habilitado.
+  const escolasQuery = useEscolasElegiveisImportacao();
+  const escolas = escolasQuery.data ?? [];
+
+  // Auto-seleciona quando há só uma escola elegível — operação típica
+  // do dia a dia quando só uma escola contratou o pacote.
+  useEffect(() => {
+    if (!escolaId && escolas.length === 1) {
+      setEscolaId(String(escolas[0].id));
+    }
+  }, [escolaId, escolas]);
 
   const importar = useImportar();
   const baixarTemplate = useBaixarTemplate();
@@ -56,6 +71,10 @@ export function ImportPage() {
 
   async function executar(confirmar: boolean) {
     setErro(null);
+    if (!escolaId) {
+      setErro("Selecione a escola alvo antes de continuar.");
+      return;
+    }
     if (!arquivo) {
       setErro("Selecione um arquivo CSV ou XLSX.");
       return;
@@ -65,6 +84,7 @@ export function ImportPage() {
         entidade,
         arquivo,
         confirmar,
+        escolaId: Number(escolaId),
         extras: mostrarExtras
           ? { turno_padrao: turnoPadrao, ano_letivo_padrao: anoPadrao }
           : undefined,
@@ -121,10 +141,43 @@ export function ImportPage() {
         </p>
       </header>
 
+      {escolasQuery.isSuccess && escolas.length === 0 && (
+        <p className="text-sm px-3 py-2 rounded-md bg-paper border border-border text-sepia">
+          Nenhuma escola elegível ao pacote de importação em lote. Habilite o
+          flag <code>importacao_em_lote_habilitada</code> no /admin/ pra
+          liberar.
+        </p>
+      )}
+
       <form
         onSubmit={handleSubmit}
         className="bg-paper rounded-lg border border-border p-6 space-y-5"
       >
+        <div className="space-y-2">
+          <Label
+            htmlFor="escola"
+            className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+          >
+            Escola alvo
+          </Label>
+          <Select
+            value={escolaId}
+            onValueChange={setEscolaId}
+            disabled={escolas.length === 0}
+          >
+            <SelectTrigger id="escola" className="bg-paper">
+              <SelectValue placeholder="Selecione a escola" />
+            </SelectTrigger>
+            <SelectContent>
+              {escolas.map((e) => (
+                <SelectItem key={e.id} value={String(e.id)}>
+                  {e.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="space-y-2">
           <Label
             htmlFor="entidade"
@@ -223,9 +276,13 @@ export function ImportPage() {
               variant="ghost"
               size="sm"
               onClick={() =>
-                baixarTemplate.mutate({ entidade, formato: "csv" })
+                baixarTemplate.mutate({
+                  entidade,
+                  formato: "csv",
+                  escolaId: Number(escolaId),
+                })
               }
-              disabled={baixarTemplate.isPending}
+              disabled={!escolaId || baixarTemplate.isPending}
             >
               Baixar modelo CSV
             </Button>
@@ -234,22 +291,30 @@ export function ImportPage() {
               variant="ghost"
               size="sm"
               onClick={() =>
-                exportar.mutate({ entidade, formato: "csv" })
+                exportar.mutate({
+                  entidade,
+                  formato: "csv",
+                  escolaId: Number(escolaId),
+                })
               }
-              disabled={exportar.isPending}
+              disabled={!escolaId || exportar.isPending}
             >
               Exportar atual
             </Button>
           </div>
           <div className="flex gap-3">
-            <Button type="submit" variant="outline" disabled={importar.isPending}>
+            <Button
+              type="submit"
+              variant="outline"
+              disabled={!escolaId || importar.isPending}
+            >
               {importar.isPending && !resultado?.persistido
                 ? "Analisando..."
                 : "Pré-visualizar"}
             </Button>
             <Button
               type="button"
-              disabled={!semErros || importar.isPending}
+              disabled={!escolaId || !semErros || importar.isPending}
               onClick={() => void executar(true)}
             >
               {importar.isPending && resultado != null

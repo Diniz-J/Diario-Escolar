@@ -42,6 +42,11 @@ export interface Escola {
   nome: string;
   cnpj: string | null;
   ativa: boolean;
+  // Toggle comercial: marca escolas que contrataram o pacote de
+  // import/export em massa. Sem isso, o backend devolve 403 pras 3
+  // actions (import/export/template). Operação é exclusiva do admin
+  // global — esse field só é editável via /admin/ do Django.
+  importacao_em_lote_habilitada: boolean;
   criado_em: string;
   atualizado_em: string;
 }
