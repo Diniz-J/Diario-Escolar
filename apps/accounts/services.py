@@ -4,9 +4,32 @@ import logging
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 
-from .models import Usuario
+from .models import PasswordResetToken, Usuario
 
 logger = logging.getLogger(__name__)
+
+
+def enviar_email_definicao_de_senha(usuario: Usuario) -> None:
+    """Gera token + envia link de definição de senha pro usuário.
+
+    Wrapper sobre `PasswordResetToken.gerar` + `enviar_link_redefinicao`.
+    Útil pra fluxos onde a senha é definida pela 1ª vez (ex.: professor
+    importado em massa) e a chamada de gerar+enviar sempre anda junta.
+    Erros viram `logger.exception` (capturado pelo Sentry); nunca propaga
+    pra não quebrar o fluxo de criação que disparou o envio.
+    """
+    try:
+        _token_obj, token_cru = PasswordResetToken.gerar(usuario)
+        enviar_link_redefinicao(usuario, token_cru)
+        logger.info(
+            "Link de definição de senha enviado",
+            extra={"usuario_id": usuario.id},
+        )
+    except Exception:  # noqa: BLE001 — log e segue
+        logger.exception(
+            "Falha ao enviar email de definição de senha",
+            extra={"usuario_id": usuario.id},
+        )
 
 
 def enviar_link_redefinicao(usuario: Usuario, token_cru: str) -> None:
