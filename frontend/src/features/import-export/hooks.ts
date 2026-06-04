@@ -72,8 +72,12 @@ async function baixarComoArquivo(
   nomeSugerido: string,
 ): Promise<void> {
   const resp = await api.get(url, { responseType: "blob" });
+  const contentType = resp.headers["content-type"];
   const blob = new Blob([resp.data], {
-    type: resp.headers["content-type"] ?? "application/octet-stream",
+    type:
+      typeof contentType === "string"
+        ? contentType
+        : "application/octet-stream",
   });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
