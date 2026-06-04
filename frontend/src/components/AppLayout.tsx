@@ -64,7 +64,6 @@ function SidebarBody({
   onLogout,
   podeImportar,
 }: SidebarBodyProps) {
-  const { podeImportar } = usePermissoes();
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
       {/* Marca — placeholder até definirmos o logo real. Por ora, só
