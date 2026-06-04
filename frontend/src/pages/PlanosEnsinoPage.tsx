@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { ExportarMenu } from "@/components/ExportarMenu";
 import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,7 +80,10 @@ export function PlanosEnsinoPage() {
           </h1>
           <div className="h-px w-10 bg-ferrugem" />
         </div>
-        <Button onClick={() => setCreateOpen(true)}>Novo plano</Button>
+        <div className="flex items-center gap-2">
+          <ExportarMenu entidade="planos-ensino" />
+          <Button onClick={() => setCreateOpen(true)}>Novo plano</Button>
+        </div>
       </header>
 
       <PlanoEnsinoCreateDialog
