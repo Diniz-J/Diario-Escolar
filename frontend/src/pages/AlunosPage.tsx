@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/table";
 import { AlunoDeleteDialog } from "@/features/alunos/AlunoDeleteDialog";
 import { AlunoFormDialog } from "@/features/alunos/AlunoFormDialog";
+import { useBaixarBoletimPDF } from "@/features/boletins/hooks";
 import {
   useAlunosPaginated,
   useUpdateAluno,
@@ -55,6 +56,7 @@ export function AlunosPage() {
   const turmasQuery = useTurmas();
   const updateMutation = useUpdateAluno();
   const { podeModificarCadastros } = usePermissoes();
+  const baixarBoletimPDF = useBaixarBoletimPDF();
   const [busca, setBusca] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   // Aluno em edição: null fecha o dialog; objeto abre em modo edição.
@@ -259,37 +261,50 @@ export function AlunosPage() {
                     // dispara a navegação pro boletim.
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {podeModificarCadastros && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon-sm">
-                            ⋯
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon-sm">
+                          ⋯
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {/* "Baixar boletim" disponível pra qualquer
+                            perfil que vê a lista (READ amplo). PDF
+                            anual — pro bimestre específico, abrir o
+                            boletim via "Ver boletim". */}
+                        <DropdownMenuItem
+                          onClick={() =>
+                            baixarBoletimPDF.mutate({ alunoId: aluno.id })
+                          }
+                          disabled={baixarBoletimPDF.isPending}
+                        >
+                          Baixar boletim (PDF)
+                        </DropdownMenuItem>
+                        {podeModificarCadastros && (
                           <DropdownMenuItem onClick={() => setEditando(aluno)}>
                             Editar
                           </DropdownMenuItem>
-                          {aluno.ativo ? (
-                            <DropdownMenuItem
-                              onClick={() => setExcluindo(aluno)}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              Excluir
-                            </DropdownMenuItem>
-                          ) : (
-                            // Aluno inativo: oferece reativar em vez de
-                            // excluir. Mesmo endpoint da edição (PATCH).
-                            <DropdownMenuItem
-                              onClick={() => reativar(aluno)}
-                              disabled={updateMutation.isPending}
-                            >
-                              Reativar
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
+                        )}
+                        {podeModificarCadastros && aluno.ativo && (
+                          <DropdownMenuItem
+                            onClick={() => setExcluindo(aluno)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            Excluir
+                          </DropdownMenuItem>
+                        )}
+                        {podeModificarCadastros && !aluno.ativo && (
+                          // Aluno inativo: oferece reativar em vez de
+                          // excluir. Mesmo endpoint da edição (PATCH).
+                          <DropdownMenuItem
+                            onClick={() => reativar(aluno)}
+                            disabled={updateMutation.isPending}
+                          >
+                            Reativar
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))

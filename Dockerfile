@@ -17,6 +17,19 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# Dependências de sistema do WeasyPrint (renderização do boletim em PDF).
+# `libpango-1.0-0` + `libpangoft2-1.0-0` cobrem layout/fontes. `libharfbuzz0b`
+# cobre shaping. `fonts-dejavu` garante fonte padrão pra evitar boletim
+# em "tofu" quando o sistema tá sem fontes. Versão >= 60 do WeasyPrint
+# não precisa mais de libcairo. Cleanup do apt lists pra manter a
+# imagem leve.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libharfbuzz0b \
+    fonts-dejavu \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
