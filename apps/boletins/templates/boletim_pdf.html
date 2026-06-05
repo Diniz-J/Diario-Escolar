@@ -1,14 +1,5 @@
-{% comment %}
-Template renderizado em PDF via WeasyPrint. CSS inline + tabelas pra
-controlar layout em formato A4. Tom alinhado com a identidade Diário
-Diniz: paleta olive/linho/ferrugem em valores HEX fixos (WeasyPrint
-não consome CSS variables sem cuidado especial).
-
-Atenção a comentários: o `{# ... #}` do Django é **single-line apenas**.
-Pra bloco multilinha use `{% comment %}` / `{% endcomment %}` como aqui
-(senão o texto aparece literal no PDF — clássico furo de WeasyPrint).
-{% endcomment %}
 <!DOCTYPE html>
+{# Boletim em PDF via WeasyPrint. CSS inline + tabelas pra A4 (gap/flex não rola). #}
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
