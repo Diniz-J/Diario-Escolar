@@ -240,6 +240,20 @@ class EscopoEIdorTests(_Base):
         )
         self.assertEqual(resp.status_code, 400)
 
+    def test_admin_sem_escola_recebe_400_em_vez_de_500(self):
+        """Admin global (sem `escola_id`) que esquece de passar escola
+        no payload deve receber 400 explicito, nao IntegrityError 500.
+
+        Cenario real: admin operando direto na API, ou usuario com JWT
+        antigo (gerado antes de ele ser vinculado a uma escola). Sem
+        este guard o INSERT explode no banco com mensagem opaca.
+        """
+        resp = self._request(
+            "create", payload=self._payload_avaliacao(), user=self.admin
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("escola", resp.data)
+
 
 # ===================================================================== #
 # Lançamento em lote                                                     #

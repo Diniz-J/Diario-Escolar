@@ -167,6 +167,31 @@ class AvaliacaoSerializer(
             "Você só pode criar avaliações na sua própria escola.",
         )
 
+    def validate(self, attrs: dict) -> dict:
+        """Garante que `escola` foi resolvida antes de ir pro banco.
+
+        Cenário: usuário admin global (sem `escola_id` no JWT) ou
+        usuário com sessão antiga onde o JWT carrega `escola_id=None`.
+        Nesses casos o `AutoEscopoEscolaMixin` não injeta nada — sem
+        este guard, o INSERT falha com IntegrityError 500 do Postgres
+        em vez de devolver 400 com mensagem útil pra UI.
+
+        Pra create (sem `self.instance`), `attrs["escola"]` precisa estar
+        presente. Em update parcial (PATCH com `self.instance`), permite
+        omitir — mantém a escola da instância.
+        """
+        if self.instance is None and not attrs.get("escola"):
+            raise serializers.ValidationError(
+                {
+                    "escola": (
+                        "Sua conta não está vinculada a uma escola. "
+                        "Faça logout e login novamente, ou peça pra um "
+                        "administrador definir sua escola."
+                    )
+                }
+            )
+        return attrs
+
     def get_total_alunos(self, obj: Avaliacao) -> int:
         # Conta as NotaAvaliacao da avaliação — equivale ao total de
         # alunos da turma no momento da criação (auto-geradas).
