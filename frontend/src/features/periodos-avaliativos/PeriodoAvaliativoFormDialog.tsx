@@ -147,7 +147,7 @@ export function PeriodoAvaliativoFormDialog({
   }
 
   const mostrarEscolaSelect =
-    ehAdminGlobal && (escolasQuery.data?.length ?? 0) > 1;
+    ehAdminGlobal;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
