@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAuth } from "@/features/auth/useAuth";
+import { usePermissoes } from "@/features/auth/usePermissoes";
 import { useEscolas } from "@/features/escolas/hooks";
 import type { Turma, TurmaInput, Turno } from "@/types/api";
 
@@ -44,12 +44,12 @@ export function TurmaFormDialog({
   onOpenChange,
   turma,
 }: TurmaFormDialogProps) {
-  const { user } = useAuth();
-  // Auto-scope: quando o usuário tem escola no JWT (diretor/professor/
-  // secretaria/inspetor), o backend deduz a escola — não enviamos no
-  // payload e escondemos o select. Admin global (escola_id=null)
-  // continua escolhendo manualmente.
-  const escolaAuto = user?.escola_id ?? null;
+  // Select de escola **só** pra `perfil === "admin"`. Diretor/secretaria/
+  // professor/inspetor nunca veem nem enviam — backend deduz a escola
+  // do JWT via `AutoEscopoEscolaMixin`. Gate estrito por perfil pra
+  // garantir que usuário não-admin sem `escola_id` (cenário de borda)
+  // jamais veja a UI de seleção.
+  const { ehAdminGlobal } = usePermissoes();
   const escolasQuery = useEscolas();
   const createMutation = useCreateTurma();
   const updateMutation = useUpdateTurma();
@@ -97,7 +97,7 @@ export function TurmaFormDialog({
       setErro("Selecione um turno.");
       return;
     }
-    if (!escolaAuto && !escolaId) {
+    if (ehAdminGlobal && !escolaId) {
       setErro("Selecione uma escola.");
       return;
     }
@@ -108,9 +108,10 @@ export function TurmaFormDialog({
     }
 
     const payload: TurmaInput = {
-      // Quando o usuário tem escola no perfil, o backend deduz —
-      // omitimos `escola` do payload. Admin global envia explicitamente.
-      ...(escolaAuto == null && escolaId
+      // `escola` SÓ pra admin global. Demais perfis: backend deduz
+      // via JWT (AutoEscopoEscolaMixin). Mesmo defensivo: se outro
+      // perfil tiver `escolaId` no estado por algum bug, NÃO envia.
+      ...(ehAdminGlobal && escolaId
         ? { escola: parseInt(escolaId, 10) }
         : {}),
       nome,
@@ -144,7 +145,7 @@ export function TurmaFormDialog({
   // (admin global) E há mais de uma escola disponível. Pra qualquer
   // outro perfil, o backend resolve automaticamente.
   const mostrarEscolaSelect =
-    escolaAuto == null && (escolasQuery.data?.length ?? 0) > 1;
+    ehAdminGlobal && (escolasQuery.data?.length ?? 0) > 1;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

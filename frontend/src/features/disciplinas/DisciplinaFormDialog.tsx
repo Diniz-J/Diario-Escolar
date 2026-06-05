@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAuth } from "@/features/auth/useAuth";
+import { usePermissoes } from "@/features/auth/usePermissoes";
 import { useEscolas } from "@/features/escolas/hooks";
 import type { Disciplina, DisciplinaInput } from "@/types/api";
 
@@ -37,10 +37,11 @@ export function DisciplinaFormDialog({
   onOpenChange,
   disciplina,
 }: DisciplinaFormDialogProps) {
-  const { user } = useAuth();
-  // Auto-scope: usuário com escola no JWT não precisa selecionar;
-  // backend deduz. Admin global continua escolhendo.
-  const escolaAuto = user?.escola_id ?? null;
+  // Estritamente `perfil === "admin"` enxerga o select de escola e
+  // envia escola no payload. Outros perfis NUNCA — backend deduz via
+  // `AutoEscopoEscolaMixin`. Ver usePermissoes pro porquê desse gate
+  // explícito (segurança contra usuário não-admin com escola_id=null).
+  const { ehAdminGlobal } = usePermissoes();
   const escolasQuery = useEscolas();
   const createMutation = useCreateDisciplina();
   const updateMutation = useUpdateDisciplina();
@@ -71,17 +72,17 @@ export function DisciplinaFormDialog({
     event.preventDefault();
     setErro(null);
 
-    if (!escolaAuto && !escolaId) {
+    if (ehAdminGlobal && !escolaId) {
       setErro("Selecione uma escola.");
       return;
     }
 
     // `ativa` é omitido: no create o backend usa default=True; no edit
     // mantém o valor atual porque o endpoint é PATCH parcial.
-    // `escola` é omitido quando o usuário tem escola no perfil — backend
-    // deduz via `AutoEscopoEscolaMixin`.
+    // `escola` no payload SÓ pra admin global. Outros perfis: backend
+    // deduz via `AutoEscopoEscolaMixin` a partir do JWT.
     const payload: DisciplinaInput = {
-      ...(escolaAuto == null && escolaId
+      ...(ehAdminGlobal && escolaId
         ? { escola: parseInt(escolaId, 10) }
         : {}),
       nome,
@@ -110,7 +111,7 @@ export function DisciplinaFormDialog({
 
   // Select de escola só pra admin global com múltiplas escolas.
   const mostrarEscolaSelect =
-    escolaAuto == null && (escolasQuery.data?.length ?? 0) > 1;
+    ehAdminGlobal && (escolasQuery.data?.length ?? 0) > 1;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
