@@ -1,7 +1,13 @@
-{# Template renderizado em PDF via WeasyPrint. CSS inline + tabelas
-   pra controlar layout em formato A4. Tom alinhado com a identidade
-   Diário Diniz: paleta olive/linho/ferrugem em valores HEX fixos
-   (WeasyPrint não consome CSS variables sem cuidado especial). #}
+{% comment %}
+Template renderizado em PDF via WeasyPrint. CSS inline + tabelas pra
+controlar layout em formato A4. Tom alinhado com a identidade Diário
+Diniz: paleta olive/linho/ferrugem em valores HEX fixos (WeasyPrint
+não consome CSS variables sem cuidado especial).
+
+Atenção a comentários: o `{# ... #}` do Django é **single-line apenas**.
+Pra bloco multilinha use `{% comment %}` / `{% endcomment %}` como aqui
+(senão o texto aparece literal no PDF — clássico furo de WeasyPrint).
+{% endcomment %}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -53,13 +59,20 @@
       background: #b07d62;
       margin: 8pt 0 14pt 0;
     }
+    /* WeasyPrint não respeita `gap` em flex — usamos tabela invisível
+       pra alinhar pares "label / valor" em grade horizontal. */
     .meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12pt;
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 16pt 0;
       font-size: 9pt;
       color: #6b6859;
       margin-bottom: 16pt;
+    }
+    .meta td {
+      padding: 0;
+      vertical-align: top;
+      border: none;
     }
     .meta .label {
       font-size: 7pt;
@@ -67,6 +80,7 @@
       letter-spacing: 0.18em;
       color: #6b6859;
       display: block;
+      margin-bottom: 2pt;
     }
     .meta .valor {
       color: #2d2a24;
@@ -157,34 +171,34 @@
   <h1>Boletim escolar</h1>
   <div class="filete"></div>
 
-  <div class="meta">
-    <div>
-      <span class="label">Aluno</span>
-      <span class="valor">{{ aluno.nome_completo }}</span>
-    </div>
-    <div>
-      <span class="label">Matrícula</span>
-      <span class="valor">{{ aluno.matricula }}</span>
-    </div>
-    {% if turma.nome %}
-    <div>
-      <span class="label">Turma</span>
-      <span class="valor">{{ turma.nome }}{% if turma.ano_letivo %} — {{ turma.ano_letivo }}{% endif %}</span>
-    </div>
-    {% endif %}
-    {% if escola.nome %}
-    <div>
-      <span class="label">Escola</span>
-      <span class="valor">{{ escola.nome }}</span>
-    </div>
-    {% endif %}
-    <div>
-      <span class="label">Período</span>
-      <span class="valor">
-        {% if periodo.nome %}{{ periodo.nome }}{% if periodo.ano_letivo %} ({{ periodo.ano_letivo }}){% endif %}{% elif periodo.data_inicio or periodo.data_fim %}{{ periodo.data_inicio|default:"—" }} a {{ periodo.data_fim|default:"—" }}{% else %}Anual{% endif %}
-      </span>
-    </div>
-  </div>
+  <table class="meta">
+    <tr>
+      <td>
+        <span class="label">Aluno</span>
+        <span class="valor">{{ aluno.nome_completo }}</span>
+      </td>
+      <td>
+        <span class="label">Matrícula</span>
+        <span class="valor">{{ aluno.matricula }}</span>
+      </td>
+      {% if turma.nome %}
+      <td>
+        <span class="label">Turma</span>
+        <span class="valor">{{ turma.nome }}{% if turma.ano_letivo %} — {{ turma.ano_letivo }}{% endif %}</span>
+      </td>
+      {% endif %}
+      {% if escola.nome %}
+      <td>
+        <span class="label">Escola</span>
+        <span class="valor">{{ escola.nome }}</span>
+      </td>
+      {% endif %}
+      <td>
+        <span class="label">Período</span>
+        <span class="valor">{% if periodo.nome %}{{ periodo.nome }}{% if periodo.ano_letivo %} ({{ periodo.ano_letivo }}){% endif %}{% elif periodo.data_inicio or periodo.data_fim %}{{ periodo.data_inicio|default:"—" }} a {{ periodo.data_fim|default:"—" }}{% else %}Anual{% endif %}</span>
+      </td>
+    </tr>
+  </table>
 
   <h2>Frequência</h2>
   <div class="frequencia-grid">
