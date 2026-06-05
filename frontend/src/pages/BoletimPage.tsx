@@ -51,9 +51,12 @@ type ExportAlvo = "pdf" | "csv" | "xlsx" | null;
 // mostra avaliações individuais + média final que o professor lançou.
 //
 // Botões na header:
-// - "Imprimir": window.print() (CSS print esconde sidebar/botões)
 // - "Baixar boletim (PDF)": gera PDF via WeasyPrint no backend
 // - "Exportar avaliações": dropdown CSV/XLSX plano
+// Cada um abre um dialog `NomeArquivoDialog` pra customizar o nome
+// antes do download. Imprimir foi removido — o PDF cobre com layout
+// muito superior, e Ctrl+P do browser continua funcionando se alguém
+// quiser imprimir a tela.
 export function BoletimPage() {
   const params = useParams<{ alunoId: string }>();
   const alunoId = params.alunoId ? parseInt(params.alunoId, 10) : undefined;
