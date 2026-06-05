@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAuth } from "@/features/auth/useAuth";
+import { usePermissoes } from "@/features/auth/usePermissoes";
 import { useDisciplinas } from "@/features/disciplinas/hooks";
 import { useEscolas } from "@/features/escolas/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
@@ -48,12 +48,12 @@ export function AvaliacaoFormDialog({
   onOpenChange,
   avaliacao,
 }: AvaliacaoFormDialogProps) {
-  const { user } = useAuth();
-  // Auto-scope: usuário com escola no JWT não precisa selecionar;
-  // backend deduz via `AutoEscopoEscolaMixin`. Admin global (sem
-  // `escola_id`) precisa escolher explicitamente — mesmo padrão de
-  // DisciplinaFormDialog.
-  const escolaAuto = user?.escola_id ?? null;
+  // **Estritamente** o perfil `admin` enxerga o select de escola.
+  // Diretor/secretaria/professor/inspetor NUNCA — mesmo se algum dia
+  // tiver `escola_id=null` por bug, esses perfis não podem ver UI
+  // de "escolha de escola" (decisão crítica de produto). Backend
+  // continua sendo a fonte de verdade da permissão; isso é só UX.
+  const { ehAdminGlobal } = usePermissoes();
   const escolasQuery = useEscolas();
   const turmasQuery = useTurmas();
   const disciplinasQuery = useDisciplinas();
@@ -95,12 +95,14 @@ export function AvaliacaoFormDialog({
       setPeso("1");
       setTurmaId("");
       setDisciplinaId("");
-      // Pra admin global: pré-seleciona quando só existe uma escola.
-      // Pra diretor/professor: campo não aparece (auto via JWT).
+      // Pré-seleção só faz sentido pra admin global (só ele vê o
+      // campo). Quando há 1 escola, já vai marcada.
       const escolas = escolasQuery.data;
-      setEscolaId(escolas?.length === 1 ? String(escolas[0].id) : "");
+      setEscolaId(
+        ehAdminGlobal && escolas?.length === 1 ? String(escolas[0].id) : "",
+      );
     }
-  }, [open, avaliacao, escolasQuery.data]);
+  }, [open, avaliacao, escolasQuery.data, ehAdminGlobal]);
 
   const enviando = createMutation.isPending || updateMutation.isPending;
 
@@ -112,15 +114,16 @@ export function AvaliacaoFormDialog({
       setErro("Selecione turma e disciplina.");
       return;
     }
-    if (!escolaAuto && !escolaId) {
+    if (ehAdminGlobal && !escolaId) {
       setErro("Selecione uma escola.");
       return;
     }
 
     const payload: AvaliacaoInput = {
-      // `escola` é enviado só pra admin global (sem `escola_id` no JWT).
-      // Quando tem auto, o backend deduz via AutoEscopoEscolaMixin.
-      ...(escolaAuto == null && escolaId
+      // `escola` no payload só pra admin global. Demais perfis: backend
+      // deduz via AutoEscopoEscolaMixin a partir do JWT — não enviamos
+      // mesmo que o estado local tenha algo (defesa contra bug futuro).
+      ...(ehAdminGlobal && escolaId
         ? { escola: parseInt(escolaId, 10) }
         : {}),
       turma: parseInt(turmaId, 10),
@@ -161,10 +164,11 @@ export function AvaliacaoFormDialog({
     (d) => d.ativa,
   );
 
-  // Mostra select de escola só pra admin global com múltiplas escolas
-  // — mesma regra do DisciplinaFormDialog.
+  // Select de escola: **só** pra `perfil === "admin"` E com múltiplas
+  // escolas cadastradas. Outros perfis NUNCA enxergam — checagem
+  // estrita por perfil, não por "ausência de escola_id".
   const mostrarEscolaSelect =
-    escolaAuto == null && (escolasQuery.data?.length ?? 0) > 1;
+    ehAdminGlobal && (escolasQuery.data?.length ?? 0) > 1;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
