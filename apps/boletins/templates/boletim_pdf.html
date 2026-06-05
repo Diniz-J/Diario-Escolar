@@ -1,0 +1,288 @@
+{# Template renderizado em PDF via WeasyPrint. CSS inline + tabelas
+   pra controlar layout em formato A4. Tom alinhado com a identidade
+   Diário Diniz: paleta olive/linho/ferrugem em valores HEX fixos
+   (WeasyPrint não consome CSS variables sem cuidado especial). #}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Boletim — {{ aluno.nome_completo }}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 1.5cm 1.8cm;
+      @bottom-right {
+        content: "Página " counter(page) " de " counter(pages);
+        font-family: "DejaVu Sans", sans-serif;
+        font-size: 8pt;
+        color: #6b6859;
+      }
+    }
+    body {
+      font-family: "DejaVu Sans", sans-serif;
+      color: #2d2a24;
+      font-size: 10pt;
+      line-height: 1.4;
+    }
+    .marca {
+      font-size: 8pt;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: #4d5a2e;
+    }
+    .marca .dot {
+      display: inline-block;
+      width: 5px;
+      height: 5px;
+      background: #b07d62;
+      border-radius: 50%;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    h1 {
+      font-family: Georgia, "DejaVu Serif", serif;
+      font-size: 22pt;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      margin: 4pt 0 0 0;
+      color: #2d2a24;
+    }
+    .filete {
+      height: 1px;
+      width: 40px;
+      background: #b07d62;
+      margin: 8pt 0 14pt 0;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12pt;
+      font-size: 9pt;
+      color: #6b6859;
+      margin-bottom: 16pt;
+    }
+    .meta .label {
+      font-size: 7pt;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: #6b6859;
+      display: block;
+    }
+    .meta .valor {
+      color: #2d2a24;
+      font-weight: 500;
+    }
+    h2 {
+      font-family: Georgia, "DejaVu Serif", serif;
+      font-size: 13pt;
+      font-weight: 500;
+      margin-top: 18pt;
+      margin-bottom: 6pt;
+      color: #2d2a24;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9pt;
+      margin-bottom: 8pt;
+    }
+    th {
+      background: #ebe2d1;
+      color: #6b6859;
+      font-size: 7pt;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      font-weight: 600;
+      text-align: left;
+      padding: 6pt 8pt;
+      border-bottom: 1px solid #d9cfb8;
+    }
+    td {
+      padding: 6pt 8pt;
+      border-bottom: 1px solid #ebe2d1;
+      color: #2d2a24;
+    }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .disciplina-bloco {
+      page-break-inside: avoid;
+      margin-bottom: 14pt;
+    }
+    .disciplina-nome {
+      font-family: Georgia, "DejaVu Serif", serif;
+      font-size: 11pt;
+      font-weight: 500;
+      color: #2d2a24;
+      margin-top: 14pt;
+      margin-bottom: 4pt;
+    }
+    .nota-final {
+      background: #f5efe0;
+      padding: 4pt 8pt;
+      border-radius: 2pt;
+      font-weight: 600;
+      color: #3a4524;
+    }
+    .vazio {
+      color: #6b6859;
+      font-style: italic;
+      font-size: 9pt;
+    }
+    .frequencia-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8pt;
+      margin-bottom: 12pt;
+    }
+    .freq-card {
+      background: #f5efe0;
+      padding: 6pt 10pt;
+      border-radius: 2pt;
+    }
+    .freq-card .valor {
+      font-family: Georgia, serif;
+      font-size: 18pt;
+      font-weight: 500;
+    }
+    .freq-card .label {
+      font-size: 7pt;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: #6b6859;
+    }
+  </style>
+</head>
+<body>
+
+  <p class="marca"><span class="dot"></span>diário diniz</p>
+  <h1>Boletim escolar</h1>
+  <div class="filete"></div>
+
+  <div class="meta">
+    <div>
+      <span class="label">Aluno</span>
+      <span class="valor">{{ aluno.nome_completo }}</span>
+    </div>
+    <div>
+      <span class="label">Matrícula</span>
+      <span class="valor">{{ aluno.matricula }}</span>
+    </div>
+    {% if turma.nome %}
+    <div>
+      <span class="label">Turma</span>
+      <span class="valor">{{ turma.nome }}{% if turma.ano_letivo %} — {{ turma.ano_letivo }}{% endif %}</span>
+    </div>
+    {% endif %}
+    {% if escola.nome %}
+    <div>
+      <span class="label">Escola</span>
+      <span class="valor">{{ escola.nome }}</span>
+    </div>
+    {% endif %}
+    <div>
+      <span class="label">Período</span>
+      <span class="valor">
+        {% if periodo.nome %}{{ periodo.nome }}{% if periodo.ano_letivo %} ({{ periodo.ano_letivo }}){% endif %}{% elif periodo.data_inicio or periodo.data_fim %}{{ periodo.data_inicio|default:"—" }} a {{ periodo.data_fim|default:"—" }}{% else %}Anual{% endif %}
+      </span>
+    </div>
+  </div>
+
+  <h2>Frequência</h2>
+  <div class="frequencia-grid">
+    <div class="freq-card">
+      <div class="label">Presentes</div>
+      <div class="valor">{{ frequencia.presentes }}</div>
+    </div>
+    <div class="freq-card">
+      <div class="label">Justificados</div>
+      <div class="valor">{{ frequencia.justificados }}</div>
+    </div>
+    <div class="freq-card">
+      <div class="label">Atrasos</div>
+      <div class="valor">{{ frequencia.retardatarios }}</div>
+    </div>
+    <div class="freq-card">
+      <div class="label">Faltas</div>
+      <div class="valor">{{ frequencia.ausentes }}</div>
+    </div>
+    <div class="freq-card">
+      <div class="label">% Presença</div>
+      <div class="valor">{{ frequencia.percentual_presenca }}%</div>
+    </div>
+  </div>
+
+  <h2>Notas por disciplina</h2>
+  {% if notas_por_disciplina %}
+    {% for bloco in notas_por_disciplina %}
+      <div class="disciplina-bloco">
+        <div class="disciplina-nome">{{ bloco.disciplina.nome }}</div>
+
+        {% if bloco.notas_finais_por_periodo %}
+          <table>
+            <thead>
+              <tr>
+                <th>Período</th>
+                <th class="num">Nota final</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for nf in bloco.notas_finais_por_periodo %}
+              <tr>
+                <td>{{ nf.periodo_nome }}</td>
+                <td class="num"><span class="nota-final">{{ nf.nota_final }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% endif %}
+
+        {% if bloco.avaliacoes %}
+          <table>
+            <thead>
+              <tr>
+                <th>Avaliação</th>
+                <th>Tipo</th>
+                <th>Data</th>
+                <th class="num">Nota</th>
+                <th class="num">Máx.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for av in bloco.avaliacoes %}
+              <tr>
+                <td>{{ av.titulo }}{% if av.periodo_nome %} <span class="vazio">— {{ av.periodo_nome }}</span>{% endif %}</td>
+                <td>{{ av.tipo_display }}</td>
+                <td>{{ av.data }}</td>
+                <td class="num">{{ av.nota_obtida }}</td>
+                <td class="num">{{ av.nota_maxima }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="vazio">Nenhuma avaliação individual lançada nesta janela.</p>
+        {% endif %}
+      </div>
+    {% endfor %}
+  {% else %}
+    <p class="vazio">Nenhuma nota lançada no período.</p>
+  {% endif %}
+
+  <h2>Ocorrências disciplinares</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Status</th>
+        <th class="num">Quantidade</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Abertas</td><td class="num">{{ ocorrencias.abertas }}</td></tr>
+      <tr><td>Em andamento</td><td class="num">{{ ocorrencias.em_andamento }}</td></tr>
+      <tr><td>Resolvidas</td><td class="num">{{ ocorrencias.resolvidas }}</td></tr>
+      <tr><td>Arquivadas</td><td class="num">{{ ocorrencias.arquivadas }}</td></tr>
+      <tr><td><strong>Total</strong></td><td class="num"><strong>{{ ocorrencias.total }}</strong></td></tr>
+    </tbody>
+  </table>
+
+</body>
+</html>

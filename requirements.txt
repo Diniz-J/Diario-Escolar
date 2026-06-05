@@ -36,3 +36,8 @@ sentry-sdk[django]>=2.20,<3
 # ViewSets). `tablib[xlsx]` puxa `openpyxl` pra ler/escrever XLSX.
 django-import-export>=4.0,<5.0
 tablib[xlsx]>=3.5,<4.0
+# Renderiza HTML+CSS em PDF — usado pra gerar o boletim individual do
+# aluno em formato impressionável. Versão >= 60 não depende mais de
+# libcairo (mudou pro Skia), mas ainda precisa de libpango/harfbuzz no
+# sistema. Ver Dockerfile (apt install) e DEPLOY.md.
+weasyprint>=62,<64

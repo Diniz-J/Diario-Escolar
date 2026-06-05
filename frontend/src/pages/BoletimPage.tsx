@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -16,18 +31,60 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useBoletim } from "@/features/boletins/hooks";
+import {
+  useBaixarBoletimPDF,
+  useBoletim,
+  useExportarAvaliacoesAluno,
+} from "@/features/boletins/hooks";
+import { usePeriodosAvaliativos } from "@/features/periodos-avaliativos/hooks";
+
+// Valor especial pro <Select> que representa "anual" (sem filtro).
+const PERIODO_ANUAL = "anual";
 
 // Página /boletim/:alunoId — visão consolidada do aluno (frequência,
-// notas por disciplina e ocorrências). Botão "Imprimir" dispara
-// `window.print()`; as classes `print:*` no JSX e o CSS print no
-// index.css escondem a sidebar e os botões durante a impressão.
+// notas por disciplina e ocorrências). Sistema NÃO calcula média;
+// mostra avaliações individuais + média final que o professor lançou.
+//
+// Botões na header:
+// - "Imprimir": window.print() (CSS print esconde sidebar/botões)
+// - "Baixar boletim (PDF)": gera PDF via WeasyPrint no backend
+// - "Exportar avaliações": dropdown CSV/XLSX plano
 export function BoletimPage() {
   const params = useParams<{ alunoId: string }>();
   const alunoId = params.alunoId ? parseInt(params.alunoId, 10) : undefined;
-  const boletimQuery = useBoletim(alunoId);
+
+  const [periodoRaw, setPeriodoRaw] = useState(PERIODO_ANUAL);
+  const periodoId =
+    periodoRaw === PERIODO_ANUAL ? undefined : parseInt(periodoRaw, 10);
+
+  const boletimQuery = useBoletim(
+    alunoId,
+    periodoId ? { periodo: periodoId } : {},
+  );
+  const periodosQuery = usePeriodosAvaliativos({ ativo: true });
+  const baixarPDF = useBaixarBoletimPDF();
+  const exportarAvaliacoes = useExportarAvaliacoesAluno();
 
   const boletim = boletimQuery.data;
+
+  // Restringe os períodos do select ao ano letivo da turma do aluno
+  // pra não poluir com anos antigos.
+  const periodosDisponiveis = useMemo(() => {
+    const todos = periodosQuery.data ?? [];
+    const ano = boletim?.turma.ano_letivo ?? null;
+    if (ano == null) return todos;
+    return todos.filter((p) => p.ano_letivo === ano);
+  }, [periodosQuery.data, boletim]);
+
+  function handleBaixarPDF() {
+    if (alunoId == null) return;
+    baixarPDF.mutate({ alunoId, periodo: periodoId });
+  }
+
+  function handleExportar(formato: "csv" | "xlsx") {
+    if (alunoId == null) return;
+    exportarAvaliacoes.mutate({ alunoId, formato, periodo: periodoId });
+  }
 
   return (
     <div className="p-4 md:p-8 space-y-6 max-w-4xl mx-auto print:p-0 print:max-w-none">
@@ -42,9 +99,60 @@ export function BoletimPage() {
             </h1>
             <div className="h-px w-10 bg-ferrugem" />
           </div>
-          <Button variant="outline" onClick={() => window.print()}>
-            Imprimir
-          </Button>
+
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-1">
+              <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+                Período
+              </Label>
+              <Select value={periodoRaw} onValueChange={setPeriodoRaw}>
+                <SelectTrigger className="w-[200px] bg-paper border-border">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={PERIODO_ANUAL}>Anual</SelectItem>
+                  {periodosDisponiveis.map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.nome} ({p.ano_letivo})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button
+              variant="outline"
+              onClick={handleBaixarPDF}
+              disabled={baixarPDF.isPending}
+            >
+              {baixarPDF.isPending ? "Gerando..." : "Baixar boletim (PDF)"}
+            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  disabled={exportarAvaliacoes.isPending}
+                >
+                  {exportarAvaliacoes.isPending
+                    ? "Exportando..."
+                    : "Exportar avaliações"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleExportar("csv")}>
+                  CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExportar("xlsx")}>
+                  XLSX
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Button variant="ghost" onClick={() => window.print()}>
+              Imprimir
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -90,7 +198,21 @@ export function BoletimPage() {
                 <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
                   Turma
                 </dt>
-                <dd>{boletim.turma.nome ?? "—"}</dd>
+                <dd>
+                  {boletim.turma.nome ?? "—"}
+                  {boletim.turma.ano_letivo
+                    ? ` — ${boletim.turma.ano_letivo}`
+                    : ""}
+                </dd>
+                <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+                  Período
+                </dt>
+                <dd>
+                  {boletim.periodo.nome ??
+                    (boletim.periodo.data_inicio
+                      ? `${boletim.periodo.data_inicio} a ${boletim.periodo.data_fim ?? "—"}`
+                      : "Anual")}
+                </dd>
                 <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
                   Situação
                 </dt>
@@ -153,54 +275,95 @@ export function BoletimPage() {
               ) : (
                 <div className="space-y-6">
                   {boletim.notas_por_disciplina.map((d) => (
-                    <div key={d.disciplina.id} className="space-y-2">
-                      <div className="flex items-baseline justify-between">
-                        <h3 className="font-heading text-base tracking-tight">
-                          {d.disciplina.nome}
-                        </h3>
-                        <span className="text-sm">
-                          <span className="text-sepia">Média ponderada:</span>{" "}
-                          <strong className="tabular-nums">
-                            {d.media_ponderada}
-                          </strong>
-                        </span>
-                      </div>
-                      <div className="rounded-lg border border-border bg-paper overflow-hidden print:bg-white">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
-                                Tarefa
-                              </TableHead>
-                              <TableHead className="text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
-                                Nota
-                              </TableHead>
-                              <TableHead className="text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
-                                Máxima
-                              </TableHead>
-                              <TableHead className="text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
-                                Peso
-                              </TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {d.tarefas.map((t) => (
-                              <TableRow key={t.tarefa_id}>
-                                <TableCell>{t.titulo}</TableCell>
-                                <TableCell className="text-right tabular-nums">
-                                  {t.nota}
-                                </TableCell>
-                                <TableCell className="text-right tabular-nums text-muted-foreground">
-                                  {t.nota_maxima ?? "—"}
-                                </TableCell>
-                                <TableCell className="text-right tabular-nums text-muted-foreground">
-                                  {t.peso}
-                                </TableCell>
+                    <div key={d.disciplina.id} className="space-y-3">
+                      <h3 className="font-heading text-base tracking-tight">
+                        {d.disciplina.nome}
+                      </h3>
+
+                      {/* Bloco 1: Notas finais por período (decisão do professor) */}
+                      {d.notas_finais_por_periodo.length > 0 && (
+                        <div className="rounded-lg border border-border bg-paper overflow-hidden print:bg-white">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                                  Período
+                                </TableHead>
+                                <TableHead className="text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                                  Nota final
+                                </TableHead>
                               </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
+                            </TableHeader>
+                            <TableBody>
+                              {d.notas_finais_por_periodo.map((nf) => (
+                                <TableRow key={nf.periodo_id}>
+                                  <TableCell>{nf.periodo_nome}</TableCell>
+                                  <TableCell className="text-right tabular-nums">
+                                    <strong>{nf.nota_final}</strong>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+
+                      {/* Bloco 2: Avaliações individuais */}
+                      {d.avaliacoes.length > 0 ? (
+                        <div className="rounded-lg border border-border bg-paper overflow-hidden print:bg-white">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                                  Avaliação
+                                </TableHead>
+                                <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                                  Tipo
+                                </TableHead>
+                                <TableHead className="text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                                  Nota
+                                </TableHead>
+                                <TableHead className="text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                                  Máxima
+                                </TableHead>
+                                <TableHead className="text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal hidden md:table-cell">
+                                  Peso
+                                </TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {d.avaliacoes.map((a) => (
+                                <TableRow key={a.avaliacao_id}>
+                                  <TableCell>
+                                    {a.titulo}
+                                    {a.periodo_nome && (
+                                      <span className="text-[11px] text-sepia ml-2">
+                                        — {a.periodo_nome}
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-sepia text-sm">
+                                    {a.tipo_display}
+                                  </TableCell>
+                                  <TableCell className="text-right tabular-nums">
+                                    {a.nota_obtida}
+                                  </TableCell>
+                                  <TableCell className="text-right tabular-nums text-muted-foreground">
+                                    {a.nota_maxima}
+                                  </TableCell>
+                                  <TableCell className="text-right tabular-nums text-muted-foreground hidden md:table-cell">
+                                    {a.peso}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground italic">
+                          Nenhuma avaliação individual lançada.
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>

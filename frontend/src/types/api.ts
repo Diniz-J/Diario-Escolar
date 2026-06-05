@@ -426,19 +426,34 @@ export interface BoletimOcorrencias {
   arquivadas: number;
 }
 
-export interface BoletimTarefaItem {
-  tarefa_id: number;
+// Avaliação individual (prova/trabalho/atividade) dentro de uma
+// disciplina do boletim. Substituiu `BoletimTarefaItem` no refator
+// da frente de avaliação.
+export interface BoletimAvaliacaoItem {
+  avaliacao_id: number;
   titulo: string;
-  nota: string;
-  nota_maxima: string | null;
+  tipo: AvaliacaoTipo;
+  tipo_display: string;
+  data: string;
+  nota_maxima: string;
   peso: string;
-  data_lancamento: string;
+  nota_obtida: string;
+  periodo_nome: string | null;
+}
+
+// Média final por período (digitada pelo professor) dentro de uma
+// disciplina. `observacao` não vem aqui — é nota interna, fora do
+// boletim do responsável.
+export interface BoletimNotaFinalPeriodo {
+  periodo_id: number;
+  periodo_nome: string;
+  nota_final: string;
 }
 
 export interface BoletimDisciplina {
   disciplina: { id: number; nome: string };
-  tarefas: BoletimTarefaItem[];
-  media_ponderada: string;
+  avaliacoes: BoletimAvaliacaoItem[];
+  notas_finais_por_periodo: BoletimNotaFinalPeriodo[];
 }
 
 export interface Boletim {
@@ -448,8 +463,15 @@ export interface Boletim {
     matricula: string;
     ativo: boolean;
   };
-  turma: { id: number | null; nome: string | null };
-  periodo: { data_inicio: string | null; data_fim: string | null };
+  turma: { id: number | null; nome: string | null; ano_letivo: number | null };
+  escola: { id: number | null; nome: string | null };
+  periodo: {
+    data_inicio: string | null;
+    data_fim: string | null;
+    id: number | null;
+    nome: string | null;
+    ano_letivo: number | null;
+  };
   frequencia: BoletimFrequencia;
   notas_por_disciplina: BoletimDisciplina[];
   ocorrencias: BoletimOcorrencias;

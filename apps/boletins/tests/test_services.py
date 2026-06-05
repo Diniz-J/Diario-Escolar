@@ -4,16 +4,22 @@ from decimal import Decimal
 
 from django.test import TestCase
 
+from apps.avaliacao.models import (
+    Avaliacao,
+    NotaAvaliacao,
+    NotaPeriodo,
+    PeriodoAvaliativo,
+)
 from apps.boletins.services import (
     calcular_frequencia,
     calcular_notas_por_disciplina,
     calcular_ocorrencias,
+    listar_avaliacoes_do_aluno,
     montar_boletim,
 )
 from apps.escola.models import Aluno, Disciplina, Escola, Turma
 from apps.ocorrencias.models import Ocorrencia
 from apps.presenca.models import ItemPresenca, RegistroPresenca
-from apps.tarefas.models import EntregaTarefa, Tarefa
 
 
 class _Setup(TestCase):
@@ -104,66 +110,173 @@ class OcorrenciasTests(_Setup):
 
 
 class NotasPorDisciplinaTests(_Setup):
-    def _criar_tarefa(self, disciplina, nota_maxima, peso="1"):
-        return Tarefa.objects.create(
-            escola=self.escola, turma=self.turma,
-            disciplina=disciplina, titulo="t",
-            vale_nota=True, nota_maxima=Decimal(nota_maxima),
+    """Testes do refator pra `NotaAvaliacao` + `NotaPeriodo`.
+
+    Sistema NÃO calcula média — só agrupa o que o professor lançou.
+    """
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        super().setUpTestData()
+        cls.periodo_1 = PeriodoAvaliativo.objects.create(
+            escola=cls.escola,
+            nome="1º Bim",
+            ordem=1,
+            ano_letivo=2026,
+            data_inicio=date(2026, 2, 1),
+            data_fim=date(2026, 4, 30),
+        )
+
+    def _criar_avaliacao(
+        self, disciplina, data=None, nota_maxima="10", peso="1"
+    ):
+        return Avaliacao.objects.create(
+            escola=self.escola,
+            turma=self.turma,
+            disciplina=disciplina,
+            titulo="t",
+            data=data or date(2026, 3, 15),
+            nota_maxima=Decimal(nota_maxima),
             peso=Decimal(peso),
         )
 
-    def _criar_entrega(self, tarefa, nota):
-        return EntregaTarefa.objects.create(
-            tarefa=tarefa, aluno=self.aluno, escola=self.escola,
-            entregue=True, data_entrega=date.today(),
-            nota=Decimal(nota),
+    def _criar_nota(self, avaliacao, valor):
+        return NotaAvaliacao.objects.create(
+            escola=self.escola,
+            avaliacao=avaliacao,
+            aluno=self.aluno,
+            nota=Decimal(valor),
         )
 
-    def test_media_ponderada_simples(self):
-        t1 = self._criar_tarefa(self.disc_mat, "10", peso="2")
-        t2 = self._criar_tarefa(self.disc_mat, "10", peso="1")
-        self._criar_entrega(t1, "8")  # 8 × 2 = 16
-        self._criar_entrega(t2, "5")  # 5 × 1 = 5
-        # (16 + 5) / (2 + 1) = 21 / 3 = 7
+    def test_agrupa_avaliacoes_por_disciplina_sem_calcular_media(self):
+        av1 = self._criar_avaliacao(self.disc_mat, nota_maxima="10", peso="2")
+        av2 = self._criar_avaliacao(self.disc_mat, nota_maxima="10", peso="1")
+        self._criar_nota(av1, "8")
+        self._criar_nota(av2, "5")
+
         notas = calcular_notas_por_disciplina(self.aluno)
         self.assertEqual(len(notas), 1)
-        self.assertEqual(notas[0]["disciplina"]["nome"], "Matemática")
-        self.assertEqual(notas[0]["media_ponderada"], "7.00")
-        self.assertEqual(len(notas[0]["tarefas"]), 2)
+        bucket = notas[0]
+        self.assertEqual(bucket["disciplina"]["nome"], "Matemática")
+        # **Sem média calculada** — só lista das avaliações com nota.
+        self.assertNotIn("media_ponderada", bucket)
+        self.assertEqual(len(bucket["avaliacoes"]), 2)
+        # Sem NotaPeriodo lançada ainda — lista vazia.
+        self.assertEqual(bucket["notas_finais_por_periodo"], [])
+
+    def test_inclui_nota_final_quando_periodo_fechado(self):
+        """A média final digitada pelo professor aparece no bucket."""
+        av = self._criar_avaliacao(self.disc_mat)
+        self._criar_nota(av, "9")
+        NotaPeriodo.objects.create(
+            escola=self.escola,
+            aluno=self.aluno,
+            disciplina=self.disc_mat,
+            periodo=self.periodo_1,
+            nota_final=Decimal("8.50"),
+        )
+
+        notas = calcular_notas_por_disciplina(self.aluno)
+        self.assertEqual(len(notas), 1)
+        finais = notas[0]["notas_finais_por_periodo"]
+        self.assertEqual(len(finais), 1)
+        self.assertEqual(finais[0]["periodo_nome"], "1º Bim")
+        self.assertEqual(finais[0]["nota_final"], "8.50")
 
     def test_separa_por_disciplina(self):
-        t_mat = self._criar_tarefa(self.disc_mat, "10")
-        t_port = self._criar_tarefa(self.disc_port, "10")
-        self._criar_entrega(t_mat, "9")
-        self._criar_entrega(t_port, "6")
+        av_mat = self._criar_avaliacao(self.disc_mat)
+        av_port = self._criar_avaliacao(self.disc_port)
+        self._criar_nota(av_mat, "9")
+        self._criar_nota(av_port, "6")
+
         notas = calcular_notas_por_disciplina(self.aluno)
         self.assertEqual(len(notas), 2)
         nomes = [n["disciplina"]["nome"] for n in notas]
         # Ordenado alfabeticamente.
         self.assertEqual(nomes, ["Matemática", "Português"])
 
-    def test_ignora_tarefas_sem_nota(self):
-        t = self._criar_tarefa(self.disc_mat, "10")
-        # Entrega criada automaticamente (sem nota).
-        EntregaTarefa.objects.create(
-            tarefa=t, aluno=self.aluno, escola=self.escola,
+    def test_ignora_avaliacoes_sem_nota_lancada(self):
+        """NotaAvaliacao com `nota=NULL` (auto-criada vazia) não aparece."""
+        av = self._criar_avaliacao(self.disc_mat)
+        # Nota auto-criada vazia (sem `nota=`).
+        NotaAvaliacao.objects.create(
+            escola=self.escola, avaliacao=av, aluno=self.aluno,
         )
         notas = calcular_notas_por_disciplina(self.aluno)
         self.assertEqual(notas, [])
 
-    def test_ignora_tarefas_que_nao_valem_nota(self):
-        # `vale_nota=False` — não entra mesmo com nota presente.
-        t = Tarefa.objects.create(
-            escola=self.escola, turma=self.turma,
-            disciplina=self.disc_mat, titulo="t",
-            vale_nota=False,
+    def test_observacao_nao_vai_no_bucket(self):
+        """`NotaPeriodo.observacao` é nota interna do professor — fora do boletim."""
+        av = self._criar_avaliacao(self.disc_mat)
+        self._criar_nota(av, "7")
+        NotaPeriodo.objects.create(
+            escola=self.escola,
+            aluno=self.aluno,
+            disciplina=self.disc_mat,
+            periodo=self.periodo_1,
+            nota_final=Decimal("7.00"),
+            observacao="recuperação simples aplicada",
         )
-        # `clean()` rejeitaria, mas pulamos via .objects.create sem clean.
-        EntregaTarefa.objects.create(
-            tarefa=t, aluno=self.aluno, escola=self.escola,
-        )
+
         notas = calcular_notas_por_disciplina(self.aluno)
-        self.assertEqual(notas, [])
+        final = notas[0]["notas_finais_por_periodo"][0]
+        self.assertNotIn("observacao", final)
+
+
+class ListarAvaliacoesAlunoTests(_Setup):
+    """Testes do helper plano usado pelo export CSV/XLSX."""
+
+    def test_lista_com_e_sem_nota_lancada(self):
+        av_com_nota = Avaliacao.objects.create(
+            escola=self.escola,
+            turma=self.turma,
+            disciplina=self.disc_mat,
+            titulo="Prova 1",
+            data=date(2026, 3, 15),
+            nota_maxima=Decimal("10"),
+            peso=Decimal("1"),
+        )
+        av_sem_nota = Avaliacao.objects.create(
+            escola=self.escola,
+            turma=self.turma,
+            disciplina=self.disc_mat,
+            titulo="Prova 2",
+            data=date(2026, 4, 10),
+            nota_maxima=Decimal("10"),
+            peso=Decimal("1"),
+        )
+        NotaAvaliacao.objects.create(
+            escola=self.escola,
+            avaliacao=av_com_nota,
+            aluno=self.aluno,
+            nota=Decimal("8.5"),
+        )
+        # `av_sem_nota` sem NotaAvaliacao do aluno — não aparece.
+        NotaAvaliacao.objects.create(
+            escola=self.escola, avaliacao=av_sem_nota, aluno=self.aluno,
+        )
+
+        linhas = listar_avaliacoes_do_aluno(self.aluno)
+        # Inclui as 2 NotaAvaliacao mesmo a segunda estando sem nota.
+        self.assertEqual(len(linhas), 2)
+        # Linha sem nota vem com nota_obtida = "".
+        sem_nota = next(l for l in linhas if l["titulo"] == "Prova 2")
+        self.assertEqual(sem_nota["nota_obtida"], "")
+        com_nota = next(l for l in linhas if l["titulo"] == "Prova 1")
+        # DecimalField com 2 casas serializa "8.50" (não "8.5").
+        self.assertEqual(com_nota["nota_obtida"], "8.50")
+        # Schema esperado.
+        for chave in (
+            "disciplina",
+            "periodo",
+            "data",
+            "tipo",
+            "titulo",
+            "nota_maxima",
+            "nota_obtida",
+            "peso",
+        ):
+            self.assertIn(chave, com_nota)
 
 
 class MontarBoletimTests(_Setup):
