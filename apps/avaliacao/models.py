@@ -1,13 +1,13 @@
 """Modelos da app avaliacao.
 
-Três modelos compõem a frente de avaliação:
+Quatro modelos compõem a frente de avaliação:
 
 - `PeriodoAvaliativo` — esqueleto temporal (bimestre/trimestre/semestre).
 - `Avaliacao` — uma prova, trabalho ou atividade avaliativa lançada por
   um professor pra uma turma+disciplina, alocada num período pela data.
 - `NotaAvaliacao` — nota individual por aluno numa avaliação.
-
-`NotaPeriodo` (média final por período) entra em PR seguinte.
+- `NotaPeriodo` — média final por (aluno, disciplina, período). Digitada
+  manualmente pelo professor; é o que vai no boletim.
 
 Decisão de design: **o sistema NÃO calcula média.** Armazena nota
 individual de cada avaliação + média final POR período POR disciplina
@@ -97,24 +97,28 @@ class PeriodoAvaliativo(BaseModelEscopado):
     def estado(self) -> str:
         """Computa o estado do período em função dos dependentes.
 
-        Hoje (PR inicial), `Avaliacao` e `NotaPeriodo` ainda não existem,
-        então sempre retorna 'vazio'. A property fica preparada pra
-        evoluir nos próximos PRs:
+        - `fechado`: pelo menos uma `NotaPeriodo` com `nota_final`
+          preenchida — média final do bimestre já foi lançada pra
+          algum aluno. Hoje **não trava** edição (decisão de produto);
+          é só sinalização visual.
+        - `em_uso`: existe `Avaliacao` apontando, mas nenhuma
+          `NotaPeriodo` fechada ainda — provas lançadas, médias ainda
+          não consolidadas.
+        - `vazio`: nenhuma `Avaliacao` no período. Edição totalmente
+          livre.
 
-        - `em_uso`: existe pelo menos uma `Avaliacao` apontando pra
-          este período, mas nenhuma `NotaPeriodo` foi lançada ainda.
-        - `fechado`: já tem `NotaPeriodo` consolidada — o boletim do
-          período "saiu". Editar datas/ordem fica bloqueado; pra mexer,
-          precisa "Reabrir período" (ação explícita do admin/diretor
-          com confirmação dupla + audit).
-        - `vazio`: caso base; nenhuma avaliação ainda. Edição livre.
-
-        A regra de transição é aplicada na camada de view/serializer
-        — o model é só fonte da verdade do estado atual.
+        Quando virar "fechado", a UI vai marcar com badge específico
+        pra alertar o usuário, mas datas/ordem continuam editáveis até
+        a próxima decisão de produto (Diniz disse: 'por enquanto não
+        precisa fechar').
         """
-        # Placeholder: enquanto Avaliacao/NotaPeriodo não existem, todo
-        # período é considerado vazio. Substituir pelos `exists()` reais
-        # nos PRs seguintes.
+        # `NotaPeriodo` exige `nota_final` não-null pra contar como
+        # lançada (registros auto-criados ficam com null e não
+        # caracterizam estado fechado).
+        if self.notas_periodo.filter(nota_final__isnull=False).exists():
+            return self.ESTADO_FECHADO
+        if self.avaliacoes.exists():
+            return self.ESTADO_EM_USO
         return self.ESTADO_VAZIO
 
     # ------------------------------------------------------------------ #
@@ -423,6 +427,119 @@ class NotaAvaliacao(BaseModelEscopado):
             if self.aluno.escola_id != self.avaliacao.escola_id:
                 errors["aluno"] = (
                     "O aluno deve pertencer à mesma escola da avaliação."
+                )
+
+        if errors:
+            raise ValidationError(errors)
+
+
+# ===================================================================== #
+# NotaPeriodo                                                            #
+# ===================================================================== #
+
+
+class NotaPeriodo(BaseModelEscopado):
+    """Média final por (aluno × disciplina × período).
+
+    É o que vai no boletim entregue ao responsável. **Digitada manualmente
+    pelo professor** — o sistema não calcula. A escola decide a régua
+    (média ponderada, recuperação, conselho de classe, etc.) fora do
+    sistema e lança o resultado aqui.
+
+    Único por `(escola, aluno, disciplina, periodo)`: cada aluno tem UMA
+    nota final pra cada disciplina em cada período.
+
+    `nota_final = NULL` significa "ainda não lançada" — o registro pode
+    ser auto-criado vazio quando o professor abre a tela de lançamento
+    (endpoint `/notas-periodo/inicializar/`).
+
+    `observacao` é OPCIONAL e fica **fora do boletim do responsável**.
+    Anotação interna do professor ("recuperação simples aplicada",
+    "decisão do conselho", etc.).
+
+    Audit log via `HistoricalRecords` é parte do contrato — mudança em
+    nota final é evento crítico que precisa ter quem/quando registrado
+    (decisão do produto pra qualquer professor poder lançar sem perder
+    rastreabilidade).
+    """
+
+    aluno = models.ForeignKey(
+        "escola.Aluno",
+        on_delete=models.PROTECT,
+        related_name="notas_periodo",
+    )
+    disciplina = models.ForeignKey(
+        "escola.Disciplina",
+        on_delete=models.PROTECT,
+        related_name="notas_periodo",
+    )
+    periodo = models.ForeignKey(
+        PeriodoAvaliativo,
+        on_delete=models.PROTECT,
+        related_name="notas_periodo",
+    )
+    nota_final = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="Média final do período — digitada pelo professor.",
+    )
+    observacao = models.CharField(
+        max_length=300,
+        blank=True,
+        help_text="Nota interna do professor — não aparece no boletim do responsável.",
+    )
+
+    escola = models.ForeignKey(
+        "escola.Escola",
+        on_delete=models.PROTECT,
+        related_name="notas_periodo",
+    )
+
+    history = HistoricalRecords()
+
+    class Meta:
+        verbose_name = "nota de período"
+        verbose_name_plural = "notas de período"
+        ordering = [
+            "-periodo__ano_letivo",
+            "periodo__ordem",
+            "aluno__nome_completo",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["escola", "aluno", "disciplina", "periodo"],
+                name="nota_periodo_unique_aluno_disc_periodo",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        valor = self.nota_final if self.nota_final is not None else "—"
+        return f"{self.aluno} · {self.disciplina} · {self.periodo} = {valor}"
+
+    def clean(self) -> None:
+        """Garante alinhamento de escola entre aluno, disciplina e período."""
+        super().clean()
+        errors: dict[str, str] = {}
+
+        if self.aluno_id and self.escola_id:
+            if self.aluno.escola_id != self.escola_id:
+                errors["aluno"] = (
+                    "O aluno deve pertencer à mesma escola da nota."
+                )
+
+        if self.disciplina_id and self.escola_id:
+            if self.disciplina.escola_id != self.escola_id:
+                errors["disciplina"] = (
+                    "A disciplina deve pertencer à mesma escola."
+                )
+
+        if self.periodo_id and self.escola_id:
+            if self.periodo.escola_id != self.escola_id:
+                errors["periodo"] = (
+                    "O período deve pertencer à mesma escola."
                 )
 
         if errors:

@@ -454,3 +454,43 @@ export interface Boletim {
   notas_por_disciplina: BoletimDisciplina[];
   ocorrencias: BoletimOcorrencias;
 }
+
+// ====================================================================
+// NotaPeriodo — media final por aluno × disciplina × periodo
+// ====================================================================
+
+export interface NotaPeriodo {
+  id: number;
+  escola: number;
+  aluno: number;
+  aluno_nome: string;
+  aluno_matricula: string;
+  disciplina: number;
+  disciplina_nome: string;
+  periodo: number;
+  periodo_nome: string;
+  nota_final: string | null; // null = ainda nao lancada
+  observacao: string;
+  ultima_edicao: NotaAvaliacaoUltimaEdicao | null;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export interface LancarNotaFinalItem {
+  aluno_id: number;
+  nota_final: string | null;
+  observacao?: string;
+}
+
+export interface LancarNotasFinaisResponse {
+  atualizadas: number;
+  falhas: Array<{ aluno_id: number; motivo: string }>;
+}
+
+export interface NotaPeriodoHistoricoEvento {
+  nota_final: string | null;
+  observacao: string;
+  por: string | null;
+  em: string | null;
+  tipo: HistoricoTipo;
+}

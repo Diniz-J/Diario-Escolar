@@ -35,6 +35,7 @@ const NAV_ITEMS = [
   { to: "/ocorrencias", label: "Ocorrências" },
   { to: "/presenca", label: "Presença" },
   { to: "/avaliacoes", label: "Avaliações" },
+  { to: "/notas-finais", label: "Notas finais" },
 ];
 
 const PERFIL_LABEL: Record<string, string> = {

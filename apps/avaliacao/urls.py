@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     AvaliacaoViewSet,
     NotaAvaliacaoViewSet,
+    NotaPeriodoViewSet,
     PeriodoAvaliativoViewSet,
 )
 
@@ -16,6 +17,9 @@ router.register(
 router.register(r"avaliacoes", AvaliacaoViewSet, basename="avaliacao")
 router.register(
     r"notas-avaliacao", NotaAvaliacaoViewSet, basename="nota-avaliacao"
+)
+router.register(
+    r"notas-periodo", NotaPeriodoViewSet, basename="nota-periodo"
 )
 
 urlpatterns = router.urls

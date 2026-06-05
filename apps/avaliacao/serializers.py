@@ -6,7 +6,7 @@ from apps.common.serializers import (
     validate_escola_do_usuario,
 )
 
-from .models import Avaliacao, NotaAvaliacao, PeriodoAvaliativo
+from .models import Avaliacao, NotaAvaliacao, NotaPeriodo, PeriodoAvaliativo
 
 
 class PeriodoAvaliativoSerializer(
@@ -303,3 +303,109 @@ class LancarNotasPayloadSerializer(serializers.Serializer):
     """
 
     itens = LancarNotaItemSerializer(many=True)
+
+
+# ===================================================================== #
+# NotaPeriodo                                                            #
+# ===================================================================== #
+
+
+class NotaPeriodoSerializer(serializers.ModelSerializer):
+    """Serializa `NotaPeriodo` — uma média final por aluno/disciplina/período.
+
+    Apenas leitura via list/retrieve. Criação acontece via
+    `/notas-periodo/inicializar/`; atualização via `/lancar-em-lote/`.
+
+    Campos auxiliares expostos read-only:
+
+    - `aluno_nome`, `aluno_matricula`: poupam JOIN no frontend.
+    - `disciplina_nome`, `periodo_nome`: contextualizam o registro.
+    - `ultima_edicao` `{por, em}`: snapshot mais recente do
+      `simple_history` — audit visível pra "quem mudou X pra Y, quando".
+    """
+
+    aluno_nome = serializers.CharField(
+        source="aluno.nome_completo", read_only=True
+    )
+    aluno_matricula = serializers.CharField(
+        source="aluno.matricula", read_only=True
+    )
+    disciplina_nome = serializers.CharField(
+        source="disciplina.nome", read_only=True
+    )
+    periodo_nome = serializers.CharField(source="periodo.nome", read_only=True)
+    ultima_edicao = serializers.SerializerMethodField()
+
+    class Meta:
+        model = NotaPeriodo
+        fields = [
+            "id",
+            "escola",
+            "aluno",
+            "aluno_nome",
+            "aluno_matricula",
+            "disciplina",
+            "disciplina_nome",
+            "periodo",
+            "periodo_nome",
+            "nota_final",
+            "observacao",
+            "ultima_edicao",
+            "criado_em",
+            "atualizado_em",
+        ]
+        read_only_fields = fields  # serializer só-leitura na list/retrieve
+
+    def get_ultima_edicao(self, obj: NotaPeriodo) -> dict | None:
+        ultimo = obj.history.first()
+        if ultimo is None:
+            return None
+        user = getattr(ultimo, "history_user", None)
+        return {
+            "por": user.username if user else None,
+            "em": ultimo.history_date.isoformat()
+            if ultimo.history_date
+            else None,
+        }
+
+
+class InicializarNotasPeriodoPayloadSerializer(serializers.Serializer):
+    """Payload de `POST /notas-periodo/inicializar/`.
+
+    Garante que existe uma `NotaPeriodo` por aluno ativo da turma pra
+    aquela disciplina + período. Cria as faltantes com `nota_final=NULL`;
+    deixa intactas as existentes.
+
+    Retorna a lista completa de notas após a inicialização — o frontend
+    usa pra montar a tabela na tela de lançamento sem precisar fazer
+    GET adicional.
+    """
+
+    turma = serializers.IntegerField()
+    disciplina = serializers.IntegerField()
+    periodo = serializers.IntegerField()
+
+
+class LancarNotaFinalItemSerializer(serializers.Serializer):
+    aluno_id = serializers.IntegerField()
+    nota_final = serializers.DecimalField(
+        max_digits=5, decimal_places=2, allow_null=True, required=False
+    )
+    observacao = serializers.CharField(
+        max_length=300, required=False, allow_blank=True
+    )
+
+
+class LancarNotasFinaisPayloadSerializer(serializers.Serializer):
+    """Payload de `POST /notas-periodo/lancar-em-lote/`.
+
+    UPSERT atômico: se a `NotaPeriodo` existe pro `(aluno, disciplina,
+    periodo)`, atualiza; se não, cria. Em caso de falha em qualquer item,
+    a transação faz rollback e nada persiste — mesmo padrão do
+    `lancar-notas` da Avaliacao.
+    """
+
+    turma = serializers.IntegerField()
+    disciplina = serializers.IntegerField()
+    periodo = serializers.IntegerField()
+    itens = LancarNotaFinalItemSerializer(many=True)

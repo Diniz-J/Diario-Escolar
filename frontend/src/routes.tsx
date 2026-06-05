@@ -12,6 +12,7 @@ import { DisciplinasPage } from "@/pages/DisciplinasPage";
 import { EsqueciSenhaPage } from "@/pages/EsqueciSenhaPage";
 import { ImportPage } from "@/pages/ImportPage";
 import { LoginPage } from "@/pages/LoginPage";
+import { NotasFinaisPage } from "@/pages/NotasFinaisPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { RedefinirSenhaPage } from "@/pages/RedefinirSenhaPage";
 import { OcorrenciaDetalhePage } from "@/pages/OcorrenciaDetalhePage";
@@ -72,6 +73,7 @@ export function AppRoutes() {
             path="/avaliacoes/:id"
             element={<AvaliacaoDetalhePage />}
           />
+          <Route path="/notas-finais" element={<NotasFinaisPage />} />
           <Route path="/boletim/:alunoId" element={<BoletimPage />} />
           <Route
             path="/configuracao/periodos"
