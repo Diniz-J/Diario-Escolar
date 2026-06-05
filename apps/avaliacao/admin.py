@@ -2,7 +2,7 @@
 from django.contrib import admin
 from simple_history.admin import SimpleHistoryAdmin
 
-from .models import Avaliacao, NotaAvaliacao, PeriodoAvaliativo
+from .models import Avaliacao, NotaAvaliacao, NotaPeriodo, PeriodoAvaliativo
 
 
 @admin.register(PeriodoAvaliativo)
@@ -54,4 +54,23 @@ class NotaAvaliacaoAdmin(SimpleHistoryAdmin):
         "avaliacao__titulo",
     )
     autocomplete_fields = ("aluno", "avaliacao", "escola")
+    ordering = ("-atualizado_em",)
+
+
+@admin.register(NotaPeriodo)
+class NotaPeriodoAdmin(SimpleHistoryAdmin):
+    list_display = (
+        "aluno",
+        "disciplina",
+        "periodo",
+        "nota_final",
+        "atualizado_em",
+    )
+    list_filter = ("periodo__ano_letivo", "disciplina", "escola")
+    search_fields = (
+        "aluno__nome_completo",
+        "aluno__matricula",
+        "disciplina__nome",
+    )
+    autocomplete_fields = ("aluno", "disciplina", "escola")
     ordering = ("-atualizado_em",)

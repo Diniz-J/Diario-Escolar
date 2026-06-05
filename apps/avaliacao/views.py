@@ -13,11 +13,14 @@ from apps.common.permissions import (
 from apps.common.views import EscopoEscolaMixin, ReadWritePermissionMixin
 from apps.escola.models import Aluno
 
-from .models import Avaliacao, NotaAvaliacao, PeriodoAvaliativo
+from .models import Avaliacao, NotaAvaliacao, NotaPeriodo, PeriodoAvaliativo
 from .serializers import (
     AvaliacaoSerializer,
+    InicializarNotasPeriodoPayloadSerializer,
+    LancarNotasFinaisPayloadSerializer,
     LancarNotasPayloadSerializer,
     NotaAvaliacaoSerializer,
+    NotaPeriodoSerializer,
     PeriodoAvaliativoSerializer,
 )
 
@@ -249,3 +252,244 @@ class NotaAvaliacaoViewSet(
                 }
             )
         return Response({"eventos": eventos})
+
+
+# ===================================================================== #
+# NotaPeriodo                                                            #
+# ===================================================================== #
+
+
+class NotaPeriodoViewSet(
+    EscopoEscolaMixin,
+    _AvaliacaoReadWriteMixin,
+    viewsets.ReadOnlyModelViewSet,
+):
+    """Leitura + endpoints custom pra inicialização e lançamento em lote.
+
+    CRUD direto é proibido (sem POST/PATCH/DELETE convencionais) — o
+    ciclo de vida é controlado pelos endpoints:
+
+    - `POST /inicializar/`: cria `NotaPeriodo(nota_final=NULL)` por
+      aluno ativo da turma que ainda não tem pra aquele
+      `(disciplina, periodo)`. Retorna a lista completa.
+    - `POST /lancar-em-lote/`: UPSERT atômico das notas finais informadas.
+    - `GET /{id}/historico/`: snapshots do `simple_history` (audit log).
+
+    Filtros suportam `?turma=X&disciplina=Y&periodo=Z` pra listar a
+    matriz daquela combinação.
+    """
+
+    queryset = (
+        NotaPeriodo.objects.select_related(
+            "aluno__turma", "disciplina", "periodo", "escola"
+        )
+        .order_by("aluno__nome_completo")
+    )
+    serializer_class = NotaPeriodoSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["disciplina", "periodo", "aluno"]
+
+    def get_queryset(self):
+        """Adiciona filtro implícito por turma (via aluno__turma) em
+        cima do escopo de escola do mixin."""
+        qs = super().get_queryset()
+        turma_id = self.request.query_params.get("turma")
+        if turma_id:
+            qs = qs.filter(aluno__turma_id=turma_id)
+        return qs
+
+    @action(detail=False, methods=["post"], url_path="inicializar")
+    def inicializar(self, request):
+        """`POST /notas-periodo/inicializar/` — auto-cria vazias.
+
+        Recebe `{turma, disciplina, periodo}`. Pra cada aluno ativo da
+        turma que NÃO tem `NotaPeriodo(disciplina, periodo)`, cria uma
+        com `nota_final=NULL`. Aluno inativo é pulado (não faz sentido
+        média de ex-aluno).
+
+        Resposta: lista atualizada das notas (mesma forma da
+        `/notas-periodo/?turma=X&disciplina=Y&periodo=Z`).
+        """
+        payload = InicializarNotasPeriodoPayloadSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        turma_id = payload.validated_data["turma"]
+        disciplina_id = payload.validated_data["disciplina"]
+        periodo_id = payload.validated_data["periodo"]
+
+        # Valida que tudo pertence à escola do usuário (escopo).
+        escola_id = self._resolver_escola_id(request, turma_id)
+        if escola_id is None:
+            return Response(
+                {"detail": "Turma não encontrada ou fora do seu escopo."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        alunos_ativos_ids = Aluno.objects.filter(
+            turma_id=turma_id, ativo=True
+        ).values_list("id", flat=True)
+
+        # Identifica quais já têm nota pra evitar UniqueViolation.
+        existentes = set(
+            NotaPeriodo.objects.filter(
+                disciplina_id=disciplina_id,
+                periodo_id=periodo_id,
+                aluno_id__in=alunos_ativos_ids,
+            ).values_list("aluno_id", flat=True)
+        )
+
+        faltantes = [aid for aid in alunos_ativos_ids if aid not in existentes]
+        if faltantes:
+            with transaction.atomic():
+                NotaPeriodo.objects.bulk_create(
+                    [
+                        NotaPeriodo(
+                            escola_id=escola_id,
+                            aluno_id=aid,
+                            disciplina_id=disciplina_id,
+                            periodo_id=periodo_id,
+                        )
+                        for aid in faltantes
+                    ]
+                )
+
+        # Devolve a lista completa pro frontend popular a tabela.
+        qs = (
+            NotaPeriodo.objects.filter(
+                aluno_id__in=alunos_ativos_ids,
+                disciplina_id=disciplina_id,
+                periodo_id=periodo_id,
+            )
+            .select_related("aluno", "disciplina", "periodo")
+            .order_by("aluno__nome_completo")
+        )
+        serialized = NotaPeriodoSerializer(qs, many=True).data
+        return Response(serialized)
+
+    @action(detail=False, methods=["post"], url_path="lancar-em-lote")
+    def lancar_em_lote(self, request):
+        """`POST /notas-periodo/lancar-em-lote/` — UPSERT atômico.
+
+        Recebe `{turma, disciplina, periodo, itens: [...]}`. Pra cada
+        item, cria ou atualiza a `NotaPeriodo` correspondente. Aluno
+        que não pertence à turma falha o lote inteiro (rollback).
+
+        Resposta `{atualizadas, falhas}` igual ao `lancar-notas` da
+        Avaliação.
+        """
+        payload = LancarNotasFinaisPayloadSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        turma_id = payload.validated_data["turma"]
+        disciplina_id = payload.validated_data["disciplina"]
+        periodo_id = payload.validated_data["periodo"]
+        itens = payload.validated_data["itens"]
+
+        escola_id = self._resolver_escola_id(request, turma_id)
+        if escola_id is None:
+            return Response(
+                {"detail": "Turma não encontrada ou fora do seu escopo."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Cache de alunos da turma pra validar que cada `aluno_id` do
+        # payload pertence à turma alvo — bloqueio defensivo.
+        alunos_da_turma = set(
+            Aluno.objects.filter(turma_id=turma_id).values_list(
+                "id", flat=True
+            )
+        )
+
+        falhas: list[dict] = []
+        atualizadas = 0
+        with transaction.atomic():
+            for item in itens:
+                aluno_id = item["aluno_id"]
+                if aluno_id not in alunos_da_turma:
+                    falhas.append(
+                        {
+                            "aluno_id": aluno_id,
+                            "motivo": "Aluno não pertence à turma alvo.",
+                        }
+                    )
+                    continue
+
+                # UPSERT: get_or_create resolve a chave natural
+                # (aluno, disciplina, periodo) — escola já vem do contexto.
+                instance, _ = NotaPeriodo.objects.get_or_create(
+                    aluno_id=aluno_id,
+                    disciplina_id=disciplina_id,
+                    periodo_id=periodo_id,
+                    defaults={"escola_id": escola_id},
+                )
+                # `nota_final` pode chegar como Decimal ou None (deslançar).
+                if "nota_final" in item:
+                    instance.nota_final = item.get("nota_final")
+                if "observacao" in item:
+                    instance.observacao = item.get("observacao") or ""
+                instance.save(
+                    update_fields=["nota_final", "observacao", "atualizado_em"]
+                )
+                atualizadas += 1
+
+            if falhas:
+                transaction.set_rollback(True)
+                return Response(
+                    {"atualizadas": 0, "falhas": falhas},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        return Response(
+            {"atualizadas": atualizadas, "falhas": []},
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["get"], url_path="historico")
+    def historico(self, request, pk=None):
+        """`GET /notas-periodo/{id}/historico/` — audit log."""
+        nota: NotaPeriodo = self.get_object()
+        eventos = []
+        for snapshot in nota.history.all():
+            user = getattr(snapshot, "history_user", None)
+            eventos.append(
+                {
+                    "nota_final": (
+                        str(snapshot.nota_final)
+                        if snapshot.nota_final is not None
+                        else None
+                    ),
+                    "observacao": snapshot.observacao,
+                    "por": user.username if user else None,
+                    "em": snapshot.history_date.isoformat()
+                    if snapshot.history_date
+                    else None,
+                    "tipo": snapshot.history_type,
+                }
+            )
+        return Response({"eventos": eventos})
+
+    # ------------------------------------------------------------------ #
+    # Helpers                                                             #
+    # ------------------------------------------------------------------ #
+
+    def _resolver_escola_id(self, request, turma_id: int) -> int | None:
+        """Resolve a escola alvo do payload de lote/inicializar.
+
+        Confirma que a turma existe e está no escopo do usuário (admin
+        vê tudo; outros perfis só veem a própria escola). Retorna o
+        `escola_id` da turma — usado pra criar/atualizar `NotaPeriodo`
+        sem confiar no payload (que nem manda `escola`).
+        """
+        from apps.escola.models import Turma
+
+        qs = Turma.objects.filter(pk=turma_id)
+        user = request.user
+        if (
+            user.is_authenticated
+            and not user.is_superuser
+            and getattr(user, "perfil", None) != "admin"
+        ):
+            escola_user = getattr(user, "escola_id", None)
+            if escola_user is None:
+                return None
+            qs = qs.filter(escola_id=escola_user)
+        turma = qs.first()
+        return turma.escola_id if turma else None
