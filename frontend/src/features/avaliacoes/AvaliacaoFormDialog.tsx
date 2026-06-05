@@ -164,11 +164,12 @@ export function AvaliacaoFormDialog({
     (d) => d.ativa,
   );
 
-  // Select de escola: **só** pra `perfil === "admin"` E com múltiplas
-  // escolas cadastradas. Outros perfis NUNCA enxergam — checagem
-  // estrita por perfil, não por "ausência de escola_id".
-  const mostrarEscolaSelect =
-    ehAdminGlobal && (escolasQuery.data?.length ?? 0) > 1;
+  // Select de escola: **só** pra `perfil === "admin"`. Outros perfis
+  // NUNCA enxergam. Mostramos pra admin SEMPRE — mesmo com 1 escola só
+  // — pra deixar explícito em qual escola o registro está sendo criado.
+  // Quando há 1 escola, vem pré-selecionada pelo useEffect; quando há
+  // 2+, o admin escolhe.
+  const mostrarEscolaSelect = ehAdminGlobal;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
