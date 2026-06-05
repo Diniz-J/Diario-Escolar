@@ -20,7 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAuth } from "@/features/auth/useAuth";
 import { useDisciplinas } from "@/features/disciplinas/hooks";
+import { useEscolas } from "@/features/escolas/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
 import type { Avaliacao, AvaliacaoInput, AvaliacaoTipo } from "@/types/api";
 
@@ -46,6 +48,13 @@ export function AvaliacaoFormDialog({
   onOpenChange,
   avaliacao,
 }: AvaliacaoFormDialogProps) {
+  const { user } = useAuth();
+  // Auto-scope: usuário com escola no JWT não precisa selecionar;
+  // backend deduz via `AutoEscopoEscolaMixin`. Admin global (sem
+  // `escola_id`) precisa escolher explicitamente — mesmo padrão de
+  // DisciplinaFormDialog.
+  const escolaAuto = user?.escola_id ?? null;
+  const escolasQuery = useEscolas();
   const turmasQuery = useTurmas();
   const disciplinasQuery = useDisciplinas();
   const createMutation = useCreateAvaliacao();
@@ -61,6 +70,7 @@ export function AvaliacaoFormDialog({
   const [peso, setPeso] = useState("1");
   const [turmaId, setTurmaId] = useState("");
   const [disciplinaId, setDisciplinaId] = useState("");
+  const [escolaId, setEscolaId] = useState("");
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
@@ -75,6 +85,7 @@ export function AvaliacaoFormDialog({
       setPeso(avaliacao.peso);
       setTurmaId(String(avaliacao.turma));
       setDisciplinaId(String(avaliacao.disciplina));
+      setEscolaId(String(avaliacao.escola));
     } else {
       setTitulo("");
       setDescricao("");
@@ -84,8 +95,12 @@ export function AvaliacaoFormDialog({
       setPeso("1");
       setTurmaId("");
       setDisciplinaId("");
+      // Pra admin global: pré-seleciona quando só existe uma escola.
+      // Pra diretor/professor: campo não aparece (auto via JWT).
+      const escolas = escolasQuery.data;
+      setEscolaId(escolas?.length === 1 ? String(escolas[0].id) : "");
     }
-  }, [open, avaliacao]);
+  }, [open, avaliacao, escolasQuery.data]);
 
   const enviando = createMutation.isPending || updateMutation.isPending;
 
@@ -97,8 +112,17 @@ export function AvaliacaoFormDialog({
       setErro("Selecione turma e disciplina.");
       return;
     }
+    if (!escolaAuto && !escolaId) {
+      setErro("Selecione uma escola.");
+      return;
+    }
 
     const payload: AvaliacaoInput = {
+      // `escola` é enviado só pra admin global (sem `escola_id` no JWT).
+      // Quando tem auto, o backend deduz via AutoEscopoEscolaMixin.
+      ...(escolaAuto == null && escolaId
+        ? { escola: parseInt(escolaId, 10) }
+        : {}),
       turma: parseInt(turmaId, 10),
       disciplina: parseInt(disciplinaId, 10),
       professor: avaliacao?.professor ?? null,
@@ -136,6 +160,11 @@ export function AvaliacaoFormDialog({
   const disciplinasAtivas = (disciplinasQuery.data ?? []).filter(
     (d) => d.ativa,
   );
+
+  // Mostra select de escola só pra admin global com múltiplas escolas
+  // — mesma regra do DisciplinaFormDialog.
+  const mostrarEscolaSelect =
+    escolaAuto == null && (escolasQuery.data?.length ?? 0) > 1;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -205,6 +234,26 @@ export function AvaliacaoFormDialog({
               />
             </div>
           </div>
+
+          {mostrarEscolaSelect && (
+            <div className="space-y-2">
+              <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+                Escola
+              </Label>
+              <Select value={escolaId} onValueChange={setEscolaId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecione a escola" />
+                </SelectTrigger>
+                <SelectContent>
+                  {escolasQuery.data?.map((e) => (
+                    <SelectItem key={e.id} value={String(e.id)}>
+                      {e.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-2">

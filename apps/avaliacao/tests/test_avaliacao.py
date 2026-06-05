@@ -253,6 +253,21 @@ class EscopoEIdorTests(_Base):
         )
         self.assertEqual(resp.status_code, 400)
         self.assertIn("escola", resp.data)
+        # Mensagem diferenciada — admin global ve orientacao de selecao,
+        # nao "faca logout" (que seria pra perfil normal sem escola).
+        msg = str(resp.data["escola"][0]).lower()
+        self.assertIn("administrador", msg)
+
+    def test_admin_passando_escola_explicita_funciona(self):
+        """Admin que escolhe a escola no formulario (frontend ja faz
+        isso quando user.escola_id eh null) consegue criar normalmente."""
+        resp = self._request(
+            "create",
+            payload=self._payload_avaliacao(escola=self.escola_a.id),
+            user=self.admin,
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(resp.data["escola"], self.escola_a.id)
 
 
 # ===================================================================== #

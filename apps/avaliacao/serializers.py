@@ -170,26 +170,36 @@ class AvaliacaoSerializer(
     def validate(self, attrs: dict) -> dict:
         """Garante que `escola` foi resolvida antes de ir pro banco.
 
-        Cenário: usuário admin global (sem `escola_id` no JWT) ou
-        usuário com sessão antiga onde o JWT carrega `escola_id=None`.
-        Nesses casos o `AutoEscopoEscolaMixin` não injeta nada — sem
-        este guard, o INSERT falha com IntegrityError 500 do Postgres
-        em vez de devolver 400 com mensagem útil pra UI.
+        Sem este guard, INSERT cairia em IntegrityError 500 quando o
+        `AutoEscopoEscolaMixin` não consegue inferir escola (admin
+        global por design, ou usuário com JWT antigo cujo `escola_id`
+        ainda é null).
 
-        Pra create (sem `self.instance`), `attrs["escola"]` precisa estar
-        presente. Em update parcial (PATCH com `self.instance`), permite
-        omitir — mantém a escola da instância.
+        A mensagem é diferenciada: admin global precisa selecionar
+        escola; demais perfis devem relogar pra atualizar o JWT.
         """
         if self.instance is None and not attrs.get("escola"):
-            raise serializers.ValidationError(
-                {
-                    "escola": (
-                        "Sua conta não está vinculada a uma escola. "
-                        "Faça logout e login novamente, ou peça pra um "
-                        "administrador definir sua escola."
-                    )
-                }
+            request = self.context.get("request")
+            user = getattr(request, "user", None)
+            eh_admin = (
+                user is not None
+                and (
+                    getattr(user, "is_superuser", False)
+                    or getattr(user, "perfil", None) == "admin"
+                )
             )
+            if eh_admin:
+                msg = (
+                    "Como administrador global, selecione a escola no "
+                    "formulário antes de salvar."
+                )
+            else:
+                msg = (
+                    "Sua conta não está vinculada a uma escola. Faça "
+                    "logout e login novamente — se o problema persistir, "
+                    "peça pra um administrador definir sua escola."
+                )
+            raise serializers.ValidationError({"escola": msg})
         return attrs
 
     def get_total_alunos(self, obj: Avaliacao) -> int:
