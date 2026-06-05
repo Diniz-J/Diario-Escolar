@@ -145,7 +145,7 @@ export function TurmaFormDialog({
   // (admin global) E há mais de uma escola disponível. Pra qualquer
   // outro perfil, o backend resolve automaticamente.
   const mostrarEscolaSelect =
-    ehAdminGlobal && (escolasQuery.data?.length ?? 0) > 1;
+    ehAdminGlobal;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -151,7 +151,7 @@ export function ProfessorFormDialog({
     deleteLec.isPending;
 
   const mostrarEscolaSelect =
-    ehAdminGlobal && (escolasQuery.data?.length ?? 0) > 1;
+    ehAdminGlobal;
 
   // Filtra turmas da escola selecionada — admin com múltiplas escolas
   // não vê turmas de outra ao montar lecionamento.
