@@ -14,6 +14,7 @@ import { NotFoundPage } from "@/pages/NotFoundPage";
 import { RedefinirSenhaPage } from "@/pages/RedefinirSenhaPage";
 import { OcorrenciaDetalhePage } from "@/pages/OcorrenciaDetalhePage";
 import { OcorrenciasPage } from "@/pages/OcorrenciasPage";
+import { PeriodosAvaliativosPage } from "@/pages/PeriodosAvaliativosPage";
 import { PlanoEnsinoDetalhePage } from "@/pages/PlanoEnsinoDetalhePage";
 import { PlanosEnsinoPage } from "@/pages/PlanosEnsinoPage";
 import { PresencaDetalhePage } from "@/pages/PresencaDetalhePage";
@@ -62,6 +63,10 @@ export function AppRoutes() {
           <Route path="/tarefas" element={<TarefasPage />} />
           <Route path="/tarefas/:id" element={<TarefaDetalhePage />} />
           <Route path="/boletim/:alunoId" element={<BoletimPage />} />
+          <Route
+            path="/configuracao/periodos"
+            element={<PeriodosAvaliativosPage />}
+          />
         </Route>
       </Route>
 

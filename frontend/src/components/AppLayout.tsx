@@ -50,7 +50,16 @@ interface SidebarBodyProps {
   onNavigate?: () => void;
   onLogout: () => void;
   podeImportar: boolean;
+  podeConfigurarEscola: boolean;
 }
+
+// Itens da seção "Configuração" — visíveis pra admin/diretor/secretaria
+// (perfis que configuram a régua da escola). Crescem aqui conforme novos
+// itens de config vão sendo criados (futuro: regras de boletim, política
+// de notas, etc.).
+const CONFIG_ITEMS = [
+  { to: "/configuracao/periodos", label: "Períodos avaliativos" },
+];
 
 // Conteúdo da sidebar — extraído pra ser reaproveitado entre o painel
 // fixo do desktop e o Sheet do mobile.
@@ -63,6 +72,7 @@ function SidebarBody({
   onNavigate,
   onLogout,
   podeImportar,
+  podeConfigurarEscola,
 }: SidebarBodyProps) {
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
@@ -122,6 +132,34 @@ function SidebarBody({
             Importar em lote
           </NavLink>
         )}
+
+        {/* Seção "Configuração" — admin/diretor/secretaria. Cabeçalho
+            sutil em uppercase pra separar visualmente da navegação
+            operacional acima sem precisar de divisor harsh. */}
+        {podeConfigurarEscola && CONFIG_ITEMS.length > 0 && (
+          <>
+            <p className="px-4 pt-5 pb-1 text-[10px] uppercase tracking-[0.2em] text-creme/40">
+              Configuração
+            </p>
+            {CONFIG_ITEMS.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onClick={onNavigate}
+                className={({ isActive }) =>
+                  cn(
+                    "relative block pl-4 pr-3 py-2 text-sm rounded-md transition-colors border-l-2 border-transparent",
+                    isActive
+                      ? "border-l-ferrugem font-medium text-creme bg-white/[0.04]"
+                      : "text-creme/75 hover:text-creme hover:bg-white/[0.04]",
+                  )
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </>
+        )}
       </nav>
 
       {/* Filete ferrugem fininho + minha conta + logout + versão. */}
@@ -163,7 +201,7 @@ function SidebarBody({
 
 export function AppLayout() {
   const { user, logout } = useAuth();
-  const { podeImportar } = usePermissoes();
+  const { podeImportar, podeModificarCadastros } = usePermissoes();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -205,6 +243,7 @@ export function AppLayout() {
               onNavigate={() => setDrawerOpen(false)}
               onLogout={logout}
               podeImportar={podeImportar}
+              podeConfigurarEscola={podeModificarCadastros}
             />
           </SheetContent>
         </Sheet>
@@ -221,6 +260,7 @@ export function AppLayout() {
           perfilLabel={perfilLabel}
           onLogout={logout}
           podeImportar={podeImportar}
+          podeConfigurarEscola={podeModificarCadastros}
         />
       </aside>
 
