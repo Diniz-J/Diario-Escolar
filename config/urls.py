@@ -60,7 +60,10 @@ api_v1_patterns = [
     path("", include("apps.escola.urls")),
     path("", include("apps.ocorrencias.urls")),
     path("", include("apps.presenca.urls")),
-    path("", include("apps.tarefas.urls")),
+    # `apps.tarefas.urls` removido em 2026-06-05 — Tarefa/EntregaTarefa
+    # foram migradas pra Avaliacao/NotaAvaliacao. Os modelos ficam vivos
+    # pra preservar dados antigos até o PR de cleanup; nenhum endpoint
+    # publica mais a API. Acessar via /admin/ se precisar inspecionar.
     path("", include("apps.boletins.urls")),
     path("", include("apps.planos_ensino.urls")),
     path("", include("apps.avaliacao.urls")),

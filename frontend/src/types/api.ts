@@ -272,6 +272,98 @@ export type TarefaInput = Omit<
   "id" | "escola" | "criado_em" | "atualizado_em"
 > & { escola?: number };
 
+// ====================================================================
+// Avaliacao + NotaAvaliacao — substitui Tarefa/EntregaTarefa
+// ====================================================================
+
+export type AvaliacaoTipo =
+  | "prova"
+  | "trabalho"
+  | "atividade"
+  | "participacao";
+
+export interface Avaliacao {
+  id: number;
+  escola: number;
+  turma: number;
+  turma_nome: string;
+  disciplina: number;
+  disciplina_nome: string;
+  professor: number | null;
+  periodo: number | null;
+  periodo_nome: string | null;
+  titulo: string;
+  descricao: string;
+  tipo: AvaliacaoTipo;
+  tipo_display: string;
+  data: string; // ISO YYYY-MM-DD
+  nota_maxima: string; // DecimalField → string
+  peso: string;
+  ativo: boolean;
+  total_alunos: number;
+  notas_lancadas: number;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+// `escola` opcional pelo mesmo motivo dos outros. `periodo` é read-only
+// (server aloca pela data). `ativo` opcional (default true).
+export type AvaliacaoInput = Omit<
+  Avaliacao,
+  | "id"
+  | "escola"
+  | "turma_nome"
+  | "disciplina_nome"
+  | "periodo"
+  | "periodo_nome"
+  | "tipo_display"
+  | "ativo"
+  | "total_alunos"
+  | "notas_lancadas"
+  | "criado_em"
+  | "atualizado_em"
+> & { escola?: number; ativo?: boolean };
+
+export interface NotaAvaliacaoUltimaEdicao {
+  por: string | null;
+  em: string | null; // ISO
+}
+
+export interface NotaAvaliacao {
+  id: number;
+  avaliacao: number;
+  aluno: number;
+  aluno_nome: string;
+  aluno_matricula: string;
+  nota: string | null; // null = ainda não lançada
+  observacao: string;
+  ultima_edicao: NotaAvaliacaoUltimaEdicao | null;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export interface LancarNotaItem {
+  aluno_id: number;
+  nota: string | null;
+  observacao?: string;
+}
+
+export interface LancarNotasResponse {
+  atualizadas: number;
+  falhas: Array<{ aluno_id: number; motivo: string }>;
+}
+
+// Tipo "+"/"~"/"-" do simple_history.
+export type HistoricoTipo = "+" | "~" | "-";
+
+export interface NotaAvaliacaoHistoricoEvento {
+  nota: string | null;
+  observacao: string;
+  por: string | null;
+  em: string | null;
+  tipo: HistoricoTipo;
+}
+
 export interface EntregaTarefa {
   id: number;
   tarefa: number;

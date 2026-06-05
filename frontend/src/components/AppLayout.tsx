@@ -34,7 +34,7 @@ const NAV_ITEMS = [
   { to: "/planos-ensino", label: "Planos de ensino" },
   { to: "/ocorrencias", label: "Ocorrências" },
   { to: "/presenca", label: "Presença" },
-  { to: "/tarefas", label: "Tarefas" },
+  { to: "/avaliacoes", label: "Avaliações" },
 ];
 
 const PERFIL_LABEL: Record<string, string> = {

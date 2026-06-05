@@ -3,6 +3,8 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AlunosPage } from "@/pages/AlunosPage";
+import { AvaliacaoDetalhePage } from "@/pages/AvaliacaoDetalhePage";
+import { AvaliacoesPage } from "@/pages/AvaliacoesPage";
 import { BoletimPage } from "@/pages/BoletimPage";
 import { ContaSenhaPage } from "@/pages/ContaSenhaPage";
 import { DashboardPage } from "@/pages/DashboardPage";
@@ -60,8 +62,16 @@ export function AppRoutes() {
             path="/presenca/:id"
             element={<PresencaDetalhePage />}
           />
+          {/* Rotas legadas de Tarefa mantidas só pra evitar 404 em link
+              externo durante a transição — caem direto no detalhe da
+              página antiga. Cleanup vai no PR final da frente. */}
           <Route path="/tarefas" element={<TarefasPage />} />
           <Route path="/tarefas/:id" element={<TarefaDetalhePage />} />
+          <Route path="/avaliacoes" element={<AvaliacoesPage />} />
+          <Route
+            path="/avaliacoes/:id"
+            element={<AvaliacaoDetalhePage />}
+          />
           <Route path="/boletim/:alunoId" element={<BoletimPage />} />
           <Route
             path="/configuracao/periodos"
