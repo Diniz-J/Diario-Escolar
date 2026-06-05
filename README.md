@@ -28,6 +28,7 @@ Arquitetura single-tenant com base abstrata desenhada para escalar a row-level m
 | Audit log | django-simple-history (snapshot + diff + history_user nos 9 modelos do núcleo) |
 | Email transacional | django-anymail (Brevo via HTTP API — porta 443) |
 | Observabilidade | sentry-sdk[django] (error tracking, gated por `SENTRY_DSN`) |
+| Import/export | django-import-export + tablib[xlsx] (planilhas CSV/XLSX via API) |
 
 ### Frontend
 
@@ -395,7 +396,7 @@ feature/* → develop → main
 - **Audit log:** `django-simple-history` nos 9 modelos do núcleo (Aluno, Professor, Lecionamento, Ocorrencia, RegistroPresenca, ItemPresenca, Tarefa, EntregaTarefa, PlanoEnsino, Usuario) com aba History no `/admin/` mostrando diff lado a lado. `populate_history --auto` no boot pra marco-zero dos registros pré-PR.
 - **Comunicação:** notificação por email ao responsável funcional em produção via **Brevo HTTP API** (`django-anymail`) — off-thread, protegido, sem domínio próprio, 300 emails/dia free. Resend e Gmail SMTP foram tentados e falharam pelo bloqueio de SMTP outbound do Render free desde set/2025.
 - **Observabilidade:** Sentry SDK no backend e frontend — captura exceções não tratadas + `logger.error/exception` + erros de render React via `<Sentry.ErrorBoundary>`. Plano free (Developer) 5k events/mês.
-- **Produto:** Dashboard com métricas (4 cards) + filtro por turma; soft delete + UX completa (toggle "Mostrar inativos" + Reativar); auto-escopo de escola em criação (multi-tenant invisível pro usuário).
+- **Produto:** Dashboard com métricas (4 cards) + filtro por turma; soft delete + UX completa (toggle "Mostrar inativos" + Reativar); auto-escopo de escola em criação (multi-tenant invisível pro usuário); **import/export em massa CSV/XLSX** (6 entidades via `django-import-export`: Turma/Disciplina/Aluno/Professor/Lecionamento/PlanoEnsino) com gating comercial por escola (flag `importacao_em_lote_habilitada`).
 - **Identidade visual:** paleta de marca olive/linho/ferrugem com tokens semânticos, tipografia Fraunces + Geist em hierarquia editorial, Login + Sidebar + Dashboard repaginados em light mode permanente.
 
 ## Backlog (não implementado)
@@ -403,7 +404,7 @@ feature/* → develop → main
 A lista priorizada por fases vive em [`CLAUDE.md`](./CLAUDE.md) (seção Roadmap). Resumo do que ainda falta:
 
 - **Robustez:** paginação no backend (DRF `PageNumberPagination`) antes do volume real, logging estruturado JSON.
-- **Produto:** exportação de relatórios (PDF/CSV/Excel), métricas avançadas no dashboard (reincidência, presença média), redesign das telas de listagem/detalhe/formulário (ondas seguintes).
+- **Produto:** PDF do Boletim (WeasyPrint), export de Ocorrências/Presença/Tarefas (escopo operacional), métricas avançadas no dashboard (reincidência, presença média).
 - **Comunicação:** múltiplos responsáveis por aluno + telefone + flag `recebe_notificacao`, fila assíncrona dedicada (Celery/Dramatiq/RQ) quando o volume crescer, timeline do aluno (consumindo HistoricalRecords + ocorrências + presença).
 - **Senhas:** trocar a própria senha, reset por e-mail (agora viável via Brevo), admin resetar senha de terceiro pela UI.
 - **Dev experience:** drf-spectacular (gera client TypeScript), `repositories.py` por app, linting unificado (`ruff` + ESLint no fluxo).

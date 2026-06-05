@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 
+import { ExportarMenu } from "@/components/ExportarMenu";
 import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
 import {
@@ -65,9 +66,12 @@ export function DisciplinasPage() {
           </h1>
           <div className="h-px w-10 bg-ferrugem" />
         </div>
-        {podeModificarCadastros && (
-          <Button onClick={() => setFormOpen(true)}>Nova disciplina</Button>
-        )}
+        <div className="flex items-center gap-2">
+          <ExportarMenu entidade="disciplinas" />
+          {podeModificarCadastros && (
+            <Button onClick={() => setFormOpen(true)}>Nova disciplina</Button>
+          )}
+        </div>
       </header>
 
       <DisciplinaFormDialog

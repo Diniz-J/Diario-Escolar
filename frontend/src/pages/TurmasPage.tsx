@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { ExportarMenu } from "@/components/ExportarMenu";
 import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
 import {
@@ -83,9 +84,12 @@ export function TurmasPage() {
           </h1>
           <div className="h-px w-10 bg-ferrugem" />
         </div>
-        {podeModificarCadastros && (
-          <Button onClick={() => setFormOpen(true)}>Nova turma</Button>
-        )}
+        <div className="flex items-center gap-2">
+          <ExportarMenu entidade="turmas" />
+          {podeModificarCadastros && (
+            <Button onClick={() => setFormOpen(true)}>Nova turma</Button>
+          )}
+        </div>
       </header>
 
       <TurmaFormDialog

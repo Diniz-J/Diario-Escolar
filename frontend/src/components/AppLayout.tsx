@@ -49,6 +49,7 @@ interface SidebarBodyProps {
   perfilLabel: string;
   onNavigate?: () => void;
   onLogout: () => void;
+  podeImportar: boolean;
 }
 
 // Conteúdo da sidebar — extraído pra ser reaproveitado entre o painel
@@ -57,8 +58,12 @@ interface SidebarBodyProps {
 // A sidebar inverte a paleta: fundo escuro (olive-dark) + texto creme.
 // Cria contraste forte com o conteúdo principal em linho, hierarquia
 // visual clara e dá identidade à navegação.
-function SidebarBody({ perfilLabel, onNavigate, onLogout }: SidebarBodyProps) {
-  const { podeImportar } = usePermissoes();
+function SidebarBody({
+  perfilLabel,
+  onNavigate,
+  onLogout,
+  podeImportar,
+}: SidebarBodyProps) {
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
       {/* Marca — placeholder até definirmos o logo real. Por ora, só
@@ -101,6 +106,22 @@ function SidebarBody({ perfilLabel, onNavigate, onLogout }: SidebarBodyProps) {
             {item.label}
           </NavLink>
         ))}
+        {podeImportar && (
+          <NavLink
+            to="/import"
+            onClick={onNavigate}
+            className={({ isActive }) =>
+              cn(
+                "relative block pl-4 pr-3 py-2 text-sm rounded-md transition-colors border-l-2 border-transparent mt-3",
+                isActive
+                  ? "border-l-ferrugem font-medium text-creme bg-white/[0.04]"
+                  : "text-creme/75 hover:text-creme hover:bg-white/[0.04]",
+              )
+            }
+          >
+            Importar em lote
+          </NavLink>
+        )}
       </nav>
 
       {/* Filete ferrugem fininho + minha conta + logout + versão. */}
@@ -142,6 +163,7 @@ function SidebarBody({ perfilLabel, onNavigate, onLogout }: SidebarBodyProps) {
 
 export function AppLayout() {
   const { user, logout } = useAuth();
+  const { podeImportar } = usePermissoes();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -182,6 +204,7 @@ export function AppLayout() {
               perfilLabel={perfilLabel}
               onNavigate={() => setDrawerOpen(false)}
               onLogout={logout}
+              podeImportar={podeImportar}
             />
           </SheetContent>
         </Sheet>
@@ -194,7 +217,11 @@ export function AppLayout() {
           (60 vs 56) pra acomodar o padding mais respirado da nova
           identidade. */}
       <aside className="hidden md:flex w-60 flex-col shrink-0">
-        <SidebarBody perfilLabel={perfilLabel} onLogout={logout} />
+        <SidebarBody
+          perfilLabel={perfilLabel}
+          onLogout={logout}
+          podeImportar={podeImportar}
+        />
       </aside>
 
       <main className="flex-1 overflow-auto min-w-0">
