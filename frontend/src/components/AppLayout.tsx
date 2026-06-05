@@ -162,21 +162,15 @@ function SidebarBody({
         )}
       </nav>
 
-      {/* Filete ferrugem fininho + minha conta + logout + versão. */}
+      {/* Filete ferrugem fininho + minha conta + logout + versão.
+          O link "Importar e exportar" foi removido daqui pra não
+          duplicar com o "Importar em lote" do nav acima (mesma rota,
+          mesma permissão). Esta seção do rodapé é só conta/sessão. */}
       <div className="px-5 pb-5 pt-3">
         <div
           className="h-px w-8 mb-4"
           style={{ background: "var(--ferrugem)" }}
         />
-        {podeImportar && (
-          <NavLink
-            to="/import"
-            onClick={onNavigate}
-            className="block text-sm text-creme/75 hover:text-creme transition-colors mb-2"
-          >
-            Importar e exportar
-          </NavLink>
-        )}
         <NavLink
           to="/conta/senha"
           onClick={onNavigate}
