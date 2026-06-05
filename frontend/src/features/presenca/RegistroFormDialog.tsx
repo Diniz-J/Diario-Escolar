@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAuth } from "@/features/auth/useAuth";
+import { usePermissoes } from "@/features/auth/usePermissoes";
 import { useTurmas } from "@/features/turmas/hooks";
 import type { RegistroPresencaInput } from "@/types/api";
 
@@ -42,8 +42,9 @@ export function RegistroFormDialog({
   onOpenChange,
   onCreated,
 }: RegistroFormDialogProps) {
-  const { user } = useAuth();
-  const escolaAuto = user?.escola_id ?? null;
+  // `escola` no payload SÓ pra admin global — derivada da turma.
+  // Outros perfis: backend deduz via JWT.
+  const { ehAdminGlobal } = usePermissoes();
   const turmasQuery = useTurmas();
   const createMutation = useCreateRegistro();
 
@@ -75,7 +76,7 @@ export function RegistroFormDialog({
 
     const payload: RegistroPresencaInput = {
       // `escola` deduzida pelo backend quando o user tem escola no perfil.
-      ...(escolaAuto == null ? { escola: turma.escola } : {}),
+      ...(ehAdminGlobal ? { escola: turma.escola } : {}),
       turma: turma.id,
       data,
       professor: null,

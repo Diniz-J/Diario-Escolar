@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAuth } from "@/features/auth/useAuth";
+import { usePermissoes } from "@/features/auth/usePermissoes";
 import { useEscolas } from "@/features/escolas/hooks";
 import type {
   PeriodoAvaliativo,
@@ -50,8 +50,9 @@ export function PeriodoAvaliativoFormDialog({
   periodo,
   anoLetivoDefault,
 }: PeriodoAvaliativoFormDialogProps) {
-  const { user } = useAuth();
-  const escolaAuto = user?.escola_id ?? null;
+  // Select de escola **só** pra `perfil === "admin"`. Outros perfis
+  // nunca veem nem mandam — ver usePermissoes pra o porquê.
+  const { ehAdminGlobal } = usePermissoes();
   const escolasQuery = useEscolas();
   const createMutation = useCreatePeriodoAvaliativo();
   const updateMutation = useUpdatePeriodoAvaliativo();
@@ -93,7 +94,7 @@ export function PeriodoAvaliativoFormDialog({
     event.preventDefault();
     setErro(null);
 
-    if (!escolaAuto && !escolaId) {
+    if (ehAdminGlobal && !escolaId) {
       setErro("Selecione uma escola.");
       return;
     }
@@ -114,7 +115,7 @@ export function PeriodoAvaliativoFormDialog({
     }
 
     const payload: PeriodoAvaliativoInput = {
-      ...(escolaAuto == null && escolaId
+      ...(ehAdminGlobal && escolaId
         ? { escola: parseInt(escolaId, 10) }
         : {}),
       nome,
@@ -146,7 +147,7 @@ export function PeriodoAvaliativoFormDialog({
   }
 
   const mostrarEscolaSelect =
-    escolaAuto == null && (escolasQuery.data?.length ?? 0) > 1;
+    ehAdminGlobal && (escolasQuery.data?.length ?? 0) > 1;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

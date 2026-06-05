@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/features/auth/useAuth";
+import { usePermissoes } from "@/features/auth/usePermissoes";
 import { useDisciplinas } from "@/features/disciplinas/hooks";
 import { useEscolas } from "@/features/escolas/hooks";
 import {
@@ -59,9 +60,15 @@ export function ProfessorFormDialog({
   professor,
 }: ProfessorFormDialogProps) {
   const { user } = useAuth();
-  // Auto-scope: usuário não-admin não precisa selecionar escola — backend
-  // deduz. Admin global (escola_id=null) escolhe manualmente.
-  const escolaAuto = user?.escola_id ?? null;
+  const { ehAdminGlobal } = usePermissoes();
+  // Select de escola **só** pra `perfil === "admin"`. Outros perfis
+  // nunca veem nem mandam — backend deduz a escola via JWT. Gate
+  // estrito por perfil pra cobrir edge case "usuário não-admin sem
+  // escola_id".
+  //
+  // `user?.escola_id` continua sendo o VALOR (número) usado na hora de
+  // montar o payload pra admin que esquece de selecionar — diferente
+  // de `ehAdminGlobal` que é uma flag booleana.
   const escolasQuery = useEscolas();
   const disciplinasQuery = useDisciplinas();
   const turmasQuery = useTurmas();
@@ -144,7 +151,7 @@ export function ProfessorFormDialog({
     deleteLec.isPending;
 
   const mostrarEscolaSelect =
-    escolaAuto == null && (escolasQuery.data?.length ?? 0) > 1;
+    ehAdminGlobal && (escolasQuery.data?.length ?? 0) > 1;
 
   // Filtra turmas da escola selecionada — admin com múltiplas escolas
   // não vê turmas de outra ao montar lecionamento.
@@ -198,9 +205,12 @@ export function ProfessorFormDialog({
     event.preventDefault();
     setErro(null);
 
-    // Quando o usuário tem escola no perfil, usa ela diretamente — o
-    // select nem foi renderizado. Caso contrário, exige seleção.
-    const escolaIdNum = escolaAuto ?? (escolaId ? parseInt(escolaId, 10) : NaN);
+    // Resolve a escola alvo:
+    // - admin global: o que ele selecionou no select de escola
+    // - demais perfis: a do JWT (`user.escola_id`); select nem é renderizado
+    const escolaIdNum = ehAdminGlobal
+      ? (escolaId ? parseInt(escolaId, 10) : NaN)
+      : (user?.escola_id ?? NaN);
     if (Number.isNaN(escolaIdNum)) {
       setErro("Selecione uma escola.");
       return;
@@ -240,7 +250,7 @@ export function ProfessorFormDialog({
         for (const linha of linhasValidas) {
           if (linha.id == null) {
             await createLec.mutateAsync({
-              ...(escolaAuto == null ? { escola: escolaIdNum } : {}),
+              ...(ehAdminGlobal ? { escola: escolaIdNum } : {}),
               professor: professorIdAlvo,
               turma: parseInt(linha.turmaId, 10),
               disciplina: parseInt(linha.disciplinaId, 10),
@@ -263,7 +273,7 @@ export function ProfessorFormDialog({
         });
         const novoProfessor = await createProfessor.mutateAsync({
           // `escola` omitida quando o user tem escola no perfil — backend deduz.
-          ...(escolaAuto == null ? { escola: escolaIdNum } : {}),
+          ...(ehAdminGlobal ? { escola: escolaIdNum } : {}),
           usuario: usuario.id,
         });
         professorIdAlvo = novoProfessor.id;
@@ -271,7 +281,7 @@ export function ProfessorFormDialog({
         // Cria lecionamentos depois do Professor existir.
         for (const linha of linhasValidas) {
           await createLec.mutateAsync({
-            ...(escolaAuto == null ? { escola: escolaIdNum } : {}),
+            ...(ehAdminGlobal ? { escola: escolaIdNum } : {}),
             professor: professorIdAlvo,
             turma: parseInt(linha.turmaId, 10),
             disciplina: parseInt(linha.disciplinaId, 10),
