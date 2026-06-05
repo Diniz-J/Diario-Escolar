@@ -31,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { NomeArquivoDialog } from "@/features/boletins/NomeArquivoDialog";
 import {
   useBaixarBoletimPDF,
   useBoletim,
@@ -40,6 +41,10 @@ import { usePeriodosAvaliativos } from "@/features/periodos-avaliativos/hooks";
 
 // Valor especial pro <Select> que representa "anual" (sem filtro).
 const PERIODO_ANUAL = "anual";
+
+// Qual export está aguardando confirmação do nome no dialog. Null
+// quando nenhum dialog está aberto.
+type ExportAlvo = "pdf" | "csv" | "xlsx" | null;
 
 // Página /boletim/:alunoId — visão consolidada do aluno (frequência,
 // notas por disciplina e ocorrências). Sistema NÃO calcula média;
@@ -64,6 +69,7 @@ export function BoletimPage() {
   const periodosQuery = usePeriodosAvaliativos({ ativo: true });
   const baixarPDF = useBaixarBoletimPDF();
   const exportarAvaliacoes = useExportarAvaliacoesAluno();
+  const [exportAlvo, setExportAlvo] = useState<ExportAlvo>(null);
 
   const boletim = boletimQuery.data;
 
@@ -76,14 +82,31 @@ export function BoletimPage() {
     return todos.filter((p) => p.ano_letivo === ano);
   }, [periodosQuery.data, boletim]);
 
-  function handleBaixarPDF() {
-    if (alunoId == null) return;
-    baixarPDF.mutate({ alunoId, periodo: periodoId });
+  // Sugere nome default baseado no contexto: tipo (boletim ou
+  // avaliacoes), matrícula e período. Servidor enviaria o mesmo no
+  // Content-Disposition; aqui só pré-preenchemos o input do dialog.
+  function nomeDefault(tipo: "boletim" | "avaliacoes"): string {
+    if (!boletim) return tipo;
+    const matricula = boletim.aluno.matricula;
+    const sufixoPeriodo = boletim.periodo.nome
+      ? boletim.periodo.nome.replace(/\s+/g, "_").toLowerCase()
+      : "anual";
+    return `${tipo}_${matricula}_${sufixoPeriodo}`;
   }
 
-  function handleExportar(formato: "csv" | "xlsx") {
-    if (alunoId == null) return;
-    exportarAvaliacoes.mutate({ alunoId, formato, periodo: periodoId });
+  function handleConfirmarDownload(nome: string) {
+    if (alunoId == null || !exportAlvo) return;
+    if (exportAlvo === "pdf") {
+      baixarPDF.mutate(
+        { alunoId, periodo: periodoId, nome },
+        { onSettled: () => setExportAlvo(null) },
+      );
+    } else {
+      exportarAvaliacoes.mutate(
+        { alunoId, formato: exportAlvo, periodo: periodoId, nome },
+        { onSettled: () => setExportAlvo(null) },
+      );
+    }
   }
 
   return (
@@ -122,7 +145,7 @@ export function BoletimPage() {
 
             <Button
               variant="outline"
-              onClick={handleBaixarPDF}
+              onClick={() => setExportAlvo("pdf")}
               disabled={baixarPDF.isPending}
             >
               {baixarPDF.isPending ? "Gerando..." : "Baixar boletim (PDF)"}
@@ -140,10 +163,10 @@ export function BoletimPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleExportar("csv")}>
+                <DropdownMenuItem onClick={() => setExportAlvo("csv")}>
                   CSV
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleExportar("xlsx")}>
+                <DropdownMenuItem onClick={() => setExportAlvo("xlsx")}>
                   XLSX
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -406,6 +429,39 @@ export function BoletimPage() {
           </Card>
         </>
       )}
+
+      {/* Dialog único reaproveitado pros 3 tipos de export (PDF/CSV/XLSX).
+          Aberto via `setExportAlvo` nos botões da header. */}
+      <NomeArquivoDialog
+        open={exportAlvo === "pdf"}
+        onOpenChange={(open) => !open && setExportAlvo(null)}
+        nomeDefault={nomeDefault("boletim")}
+        extensao=".pdf"
+        titulo="Baixar boletim em PDF"
+        descricao="Escolha o nome do arquivo. O período selecionado é aplicado automaticamente."
+        enviando={baixarPDF.isPending}
+        onConfirmar={handleConfirmarDownload}
+      />
+      <NomeArquivoDialog
+        open={exportAlvo === "csv"}
+        onOpenChange={(open) => !open && setExportAlvo(null)}
+        nomeDefault={nomeDefault("avaliacoes")}
+        extensao=".csv"
+        titulo="Exportar avaliações em CSV"
+        descricao="Formato plano (uma linha por avaliação) — abre em Excel/Sheets pra calcular média no Excel."
+        enviando={exportarAvaliacoes.isPending}
+        onConfirmar={handleConfirmarDownload}
+      />
+      <NomeArquivoDialog
+        open={exportAlvo === "xlsx"}
+        onOpenChange={(open) => !open && setExportAlvo(null)}
+        nomeDefault={nomeDefault("avaliacoes")}
+        extensao=".xlsx"
+        titulo="Exportar avaliações em XLSX"
+        descricao="Mesmo conteúdo do CSV, formato Excel nativo (com colunas tipadas)."
+        enviando={exportarAvaliacoes.isPending}
+        onConfirmar={handleConfirmarDownload}
+      />
     </div>
   );
 }

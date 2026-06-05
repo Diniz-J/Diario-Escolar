@@ -34,16 +34,28 @@ export function useBoletim(
 // (não dá pra usar `window.location` direto porque perderia auth).
 // Cria URL temporária com createObjectURL, dispara click invisível,
 // limpa.
-async function downloadArquivo(url: string, params: Record<string, unknown>) {
+//
+// `nomeCustomizado` (sem extensão) sobrescreve o nome sugerido pelo
+// backend via Content-Disposition. Quando ausente, usa o nome do
+// backend (default `boletim_<matricula>_<periodo>.pdf` etc.).
+async function downloadArquivo(
+  url: string,
+  params: Record<string, unknown>,
+  extensao?: string,
+  nomeCustomizado?: string,
+) {
   const resp = await api.get(url, { params, responseType: "blob" });
   // Content-Disposition vem do backend: `attachment; filename="..."`.
   const disp = resp.headers["content-disposition"] as string | undefined;
   const matchNome = disp?.match(/filename="?([^"]+)"?/);
-  const nome = matchNome ? matchNome[1] : "download";
+  const nomeDoBackend = matchNome ? matchNome[1] : "download";
+  const nomeFinal = nomeCustomizado
+    ? `${nomeCustomizado}${extensao ?? ""}`
+    : nomeDoBackend;
   const blobUrl = URL.createObjectURL(resp.data as Blob);
   const a = document.createElement("a");
   a.href = blobUrl;
-  a.download = nome;
+  a.download = nomeFinal;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -51,16 +63,21 @@ async function downloadArquivo(url: string, params: Record<string, unknown>) {
   setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
 }
 
-// PDF do boletim individual. `periodo` opcional: sem ele, gera anual.
+// PDF do boletim individual. `periodo` opcional (sem ele, gera anual);
+// `nome` opcional (sem ele, usa o nome sugerido pelo backend).
 export function useBaixarBoletimPDF() {
   return useMutation({
     mutationFn: async (params: {
       alunoId: number;
       periodo?: number;
+      nome?: string;
     }): Promise<void> => {
-      await downloadArquivo(`/boletins/aluno/${params.alunoId}/pdf/`, {
-        ...(params.periodo ? { periodo: params.periodo } : {}),
-      });
+      await downloadArquivo(
+        `/boletins/aluno/${params.alunoId}/pdf/`,
+        params.periodo ? { periodo: params.periodo } : {},
+        ".pdf",
+        params.nome,
+      );
     },
     onError: () => toast.error("Não foi possível gerar o boletim em PDF."),
   });
@@ -73,6 +90,7 @@ export function useExportarAvaliacoesAluno() {
       alunoId: number;
       formato: "csv" | "xlsx";
       periodo?: number;
+      nome?: string;
     }): Promise<void> => {
       await downloadArquivo(
         `/boletins/aluno/${params.alunoId}/avaliacoes/`,
@@ -80,6 +98,8 @@ export function useExportarAvaliacoesAluno() {
           formato: params.formato,
           ...(params.periodo ? { periodo: params.periodo } : {}),
         },
+        `.${params.formato}`,
+        params.nome,
       );
     },
     onError: () => toast.error("Não foi possível exportar as avaliações."),
