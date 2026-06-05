@@ -26,8 +26,16 @@ export function usePermissoes() {
   // — esconder o item da sidebar pra perfis não-admin evita 403 visível.
   const podeImportar = perfil === "admin";
 
+  // Admin global = perfil `admin`. **Estritamente** este perfil, não
+  // qualquer usuário sem `escola_id`. Decisão crítica de produto:
+  // nenhum outro perfil pode ver UI que dependa de escolher escola
+  // (ex.: select de Escola nos forms). Se algum dia surgir um usuário
+  // não-admin com `escola_id=null` por bug, ele NÃO deve ver essa UI.
+  const ehAdminGlobal = perfil === "admin";
+
   return {
     podeModificarCadastros,
     podeImportar,
+    ehAdminGlobal,
   };
 }

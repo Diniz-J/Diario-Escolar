@@ -1,9 +1,13 @@
 """Modelos da app avaliacao.
 
-Esta app vai concentrar a frente de avaliação/notas do produto. No PR
-inicial entra só `PeriodoAvaliativo` — o esqueleto temporal sobre o
-qual `Avaliacao`, `NotaAvaliacao` e `NotaPeriodo` vão ser construídos
-nos próximos PRs.
+Três modelos compõem a frente de avaliação:
+
+- `PeriodoAvaliativo` — esqueleto temporal (bimestre/trimestre/semestre).
+- `Avaliacao` — uma prova, trabalho ou atividade avaliativa lançada por
+  um professor pra uma turma+disciplina, alocada num período pela data.
+- `NotaAvaliacao` — nota individual por aluno numa avaliação.
+
+`NotaPeriodo` (média final por período) entra em PR seguinte.
 
 Decisão de design: **o sistema NÃO calcula média.** Armazena nota
 individual de cada avaliação + média final POR período POR disciplina
@@ -11,8 +15,10 @@ individual de cada avaliação + média final POR período POR disciplina
 ÚNICA agregação automática — é objetiva, sem regra de negócio.
 """
 from datetime import date
+from decimal import Decimal
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 from simple_history.models import HistoricalRecords
 
@@ -159,3 +165,265 @@ class PeriodoAvaliativo(BaseModelEscopado):
     def contem(self, data: date) -> bool:
         """Indica se `data` cai dentro deste período (inclusivo)."""
         return self.data_inicio <= data <= self.data_fim
+
+
+# ===================================================================== #
+# Avaliacao + NotaAvaliacao                                              #
+# ===================================================================== #
+
+
+class Avaliacao(BaseModelEscopado):
+    """Prova, trabalho ou atividade avaliativa de uma turma+disciplina.
+
+    Substitui conceitualmente o antigo `apps.tarefas.Tarefa`. Toda
+    Avaliacao **vale nota** (não tem mais `vale_nota=False`); pra
+    "registrar o que foi dado em aula" sem componente de nota, esperar
+    a entidade `Aula` em frente futura.
+
+    `periodo` é alocado automaticamente no `save()` a partir da `data`:
+    procura o `PeriodoAvaliativo` da mesma escola+ano cuja faixa
+    contém a data. Se nenhum encontrar, `periodo=NULL` (decisão
+    consciente — permite registrar avaliações fora de período sem
+    bloquear o fluxo; a UI sinaliza pra escola cadastrar o período).
+
+    Auto-cria uma `NotaAvaliacao(nota=NULL)` por aluno ativo da turma
+    quando criada (no viewset `perform_create`, espelhando o padrão de
+    Presença → ItemPresenca). Aluno que entra DEPOIS na turma não
+    ganha NotaAvaliacao retroativamente — vai precisar ser incluído
+    manualmente (`POST /avaliacoes/{id}/incluir-aluno/` em PR futuro).
+    """
+
+    class Tipo(models.TextChoices):
+        PROVA = "prova", "Prova"
+        TRABALHO = "trabalho", "Trabalho"
+        ATIVIDADE = "atividade", "Atividade"
+        PARTICIPACAO = "participacao", "Participação"
+
+    turma = models.ForeignKey(
+        "escola.Turma", on_delete=models.PROTECT, related_name="avaliacoes"
+    )
+    disciplina = models.ForeignKey(
+        "escola.Disciplina",
+        on_delete=models.PROTECT,
+        related_name="avaliacoes",
+    )
+    professor = models.ForeignKey(
+        "escola.Professor",
+        on_delete=models.PROTECT,
+        related_name="avaliacoes",
+        null=True,
+        blank=True,
+    )
+    # `periodo` é alocado automaticamente; pode ficar NULL se a data não
+    # cai em nenhum período cadastrado. Não é chave única — a unicidade
+    # vem do conjunto (turma, disciplina, titulo, data).
+    periodo = models.ForeignKey(
+        PeriodoAvaliativo,
+        on_delete=models.PROTECT,
+        related_name="avaliacoes",
+        null=True,
+        blank=True,
+    )
+
+    titulo = models.CharField(max_length=200)
+    descricao = models.TextField(blank=True)
+    tipo = models.CharField(
+        max_length=20,
+        choices=Tipo.choices,
+        default=Tipo.PROVA,
+    )
+    data = models.DateField(default=date.today)
+    nota_maxima = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+        help_text="Valor de referência da avaliação (ex.: 10,00).",
+    )
+    peso = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=Decimal("1"),
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="Peso pra média ponderada — usado pela escola fora do sistema.",
+    )
+    ativo = models.BooleanField(default=True)
+
+    escola = models.ForeignKey(
+        "escola.Escola",
+        on_delete=models.PROTECT,
+        related_name="avaliacoes",
+    )
+
+    history = HistoricalRecords()
+
+    class Meta:
+        verbose_name = "avaliação"
+        verbose_name_plural = "avaliações"
+        ordering = ["-data", "-criado_em"]
+
+    def __str__(self) -> str:
+        return f"{self.titulo} ({self.turma} · {self.disciplina})"
+
+    # ------------------------------------------------------------------ #
+    # Persistência — auto-aloca período pela data                        #
+    # ------------------------------------------------------------------ #
+
+    def save(self, *args, **kwargs) -> None:
+        """Resolve o `periodo` em função da `data` e do `ano_letivo` da turma.
+
+        Roda em todo save — manter o vínculo consistente quando a data
+        for editada (ex.: prova remarcada cruza pra outro bimestre).
+        Se nada bate, fica `None` (mais informativo que falhar; a UI
+        avisa).
+        """
+        if self.data and self.turma_id and self.escola_id:
+            # `select_related` evita um SELECT extra quando o caller já
+            # carregou `turma`, mas como o save normalmente vem de
+            # `Avaliacao(**dados).save()` não dá pra contar com isso.
+            ano = self.turma.ano_letivo
+            self.periodo = (
+                PeriodoAvaliativo.objects.filter(
+                    escola_id=self.escola_id,
+                    ano_letivo=ano,
+                    data_inicio__lte=self.data,
+                    data_fim__gte=self.data,
+                    ativo=True,
+                )
+                .order_by("ordem")
+                .first()
+            )
+        super().save(*args, **kwargs)
+
+    # ------------------------------------------------------------------ #
+    # Validação                                                          #
+    # ------------------------------------------------------------------ #
+
+    def clean(self) -> None:
+        super().clean()
+        errors: dict[str, str] = {}
+
+        if (
+            self.turma_id
+            and self.escola_id
+            and self.turma.escola_id != self.escola_id
+        ):
+            errors["turma"] = "A turma deve pertencer à mesma escola da avaliação."
+
+        if (
+            self.disciplina_id
+            and self.escola_id
+            and self.disciplina.escola_id != self.escola_id
+        ):
+            errors["disciplina"] = (
+                "A disciplina deve pertencer à mesma escola da avaliação."
+            )
+
+        if (
+            self.professor_id
+            and self.escola_id
+            and self.professor.escola_id != self.escola_id
+        ):
+            errors["professor"] = (
+                "O professor deve pertencer à mesma escola da avaliação."
+            )
+
+        if errors:
+            raise ValidationError(errors)
+
+
+class NotaAvaliacao(BaseModelEscopado):
+    """Nota individual de um aluno numa avaliação.
+
+    Auto-gerada (uma por aluno ativo da turma) quando a `Avaliacao` é
+    criada — o professor abre a tela e já vê todos os alunos listados,
+    sem precisar adicionar um por um. `nota=NULL` significa "ainda não
+    lançada"; preencher pela tela de lançamento em lote.
+
+    `observacao` é OPCIONAL e fica **fora do boletim entregue ao
+    responsável** — espaço de nota interna do professor ("aluno
+    desorganizou a sala", "fez recuperação simples", etc.). Visível pra
+    professor + diretor + admin + audit log.
+
+    Audit é parte do contrato: cada mudança da nota vira snapshot via
+    `HistoricalRecords` (lido pelo middleware `simple_history`). Diniz
+    pediu rastreabilidade explícita porque qualquer um da escola pode
+    lançar — então saber QUEM mudou X pra Y é essencial.
+
+    Único `(avaliacao, aluno)` — não dá pra ter duas notas pro mesmo
+    aluno na mesma avaliação.
+    """
+
+    avaliacao = models.ForeignKey(
+        Avaliacao, on_delete=models.CASCADE, related_name="notas"
+    )
+    aluno = models.ForeignKey(
+        "escola.Aluno",
+        on_delete=models.PROTECT,
+        related_name="notas_avaliacao",
+    )
+    # `nota=NULL` é o estado "não lançada". Preenchida via tela de
+    # lançamento em lote ou edição individual. Backend não força que
+    # nota <= nota_maxima — escola pode lançar nota extra (ex.: bônus).
+    # Se quiser travar, ativar `clean()` mais restrito em frente futura.
+    nota = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    observacao = models.CharField(
+        max_length=300,
+        blank=True,
+        help_text="Nota interna do professor — não aparece no boletim do responsável.",
+    )
+
+    escola = models.ForeignKey(
+        "escola.Escola",
+        on_delete=models.PROTECT,
+        related_name="notas_avaliacao",
+    )
+
+    history = HistoricalRecords()
+
+    class Meta:
+        verbose_name = "nota de avaliação"
+        verbose_name_plural = "notas de avaliação"
+        ordering = ["aluno__nome_completo"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["avaliacao", "aluno"],
+                name="nota_avaliacao_unique_avaliacao_aluno",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        valor = self.nota if self.nota is not None else "—"
+        return f"{self.aluno} · {valor}"
+
+    def save(self, *args, **kwargs) -> None:
+        """Sincroniza `escola` com `avaliacao.escola` antes de gravar.
+
+        Mantém coerência com `EscopoEscolaMixin` (filtra por escola_id)
+        sem confiar no payload do cliente.
+        """
+        if self.avaliacao_id:
+            self.escola_id = self.avaliacao.escola_id
+        super().save(*args, **kwargs)
+
+    def clean(self) -> None:
+        super().clean()
+        errors: dict[str, str] = {}
+
+        if self.avaliacao_id and self.aluno_id:
+            if self.aluno.turma_id != self.avaliacao.turma_id:
+                errors["aluno"] = (
+                    "O aluno deve pertencer à turma da avaliação."
+                )
+            if self.aluno.escola_id != self.avaliacao.escola_id:
+                errors["aluno"] = (
+                    "O aluno deve pertencer à mesma escola da avaliação."
+                )
+
+        if errors:
+            raise ValidationError(errors)
