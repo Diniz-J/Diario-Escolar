@@ -71,6 +71,34 @@ export type DisciplinaInput = Omit<
   "id" | "escola" | "ativa" | "criado_em" | "atualizado_em"
 > & { escola?: number; ativa?: boolean };
 
+// Estado computado server-side. Hoje sempre "vazio" (nenhuma Avaliacao
+// existe ainda — frente em construção). Nos próximos PRs vai virar
+// "em_uso" quando houver avaliações apontando pro período, e "fechado"
+// quando a média final for lançada.
+export type PeriodoEstado = "vazio" | "em_uso" | "fechado";
+
+export interface PeriodoAvaliativo {
+  id: number;
+  escola: number;
+  nome: string;
+  ordem: number;
+  ano_letivo: number;
+  // ISO "YYYY-MM-DD".
+  data_inicio: string;
+  data_fim: string;
+  ativo: boolean;
+  estado: PeriodoEstado;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+// `escola` opcional pelo mesmo motivo de Disciplina (AutoEscopoEscolaMixin
+// auto-preenche). `ativo` opcional — default true no model.
+export type PeriodoAvaliativoInput = Omit<
+  PeriodoAvaliativo,
+  "id" | "escola" | "ativo" | "estado" | "criado_em" | "atualizado_em"
+> & { escola?: number; ativo?: boolean };
+
 export type Turno = "matutino" | "vespertino" | "noturno" | "integral";
 
 export interface Turma {
