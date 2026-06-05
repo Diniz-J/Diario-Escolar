@@ -116,35 +116,37 @@ function SidebarBody({
             {item.label}
           </NavLink>
         ))}
-        {podeImportar && (
-          <NavLink
-            to="/import"
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              cn(
-                "relative block pl-4 pr-3 py-2 text-sm rounded-md transition-colors border-l-2 border-transparent mt-3",
-                isActive
-                  ? "border-l-ferrugem font-medium text-creme bg-white/[0.04]"
-                  : "text-creme/75 hover:text-creme hover:bg-white/[0.04]",
-              )
-            }
-          >
-            Importar em lote
-          </NavLink>
-        )}
-
-        {/* Seção "Configuração" — admin/diretor/secretaria. Cabeçalho
-            sutil em uppercase pra separar visualmente da navegação
-            operacional acima sem precisar de divisor harsh. */}
-        {podeConfigurarEscola && CONFIG_ITEMS.length > 0 && (
+        {/* Seção "Configuração" — itens administrativos agrupados.
+            Mostra se o usuário tem permissão pra QUALQUER item da
+            seção: `podeConfigurarEscola` (Períodos avaliativos) OU
+            `podeImportar` (Importar em lote, admin-only). Cada item
+            tem o próprio gate por permissão. */}
+        {(podeConfigurarEscola || podeImportar) && (
           <>
             <p className="px-4 pt-5 pb-1 text-[10px] uppercase tracking-[0.2em] text-creme/40">
               Configuração
             </p>
-            {CONFIG_ITEMS.map((item) => (
+            {podeConfigurarEscola &&
+              CONFIG_ITEMS.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onClick={onNavigate}
+                  className={({ isActive }) =>
+                    cn(
+                      "relative block pl-4 pr-3 py-2 text-sm rounded-md transition-colors border-l-2 border-transparent",
+                      isActive
+                        ? "border-l-ferrugem font-medium text-creme bg-white/[0.04]"
+                        : "text-creme/75 hover:text-creme hover:bg-white/[0.04]",
+                    )
+                  }
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            {podeImportar && (
               <NavLink
-                key={item.to}
-                to={item.to}
+                to="/import"
                 onClick={onNavigate}
                 className={({ isActive }) =>
                   cn(
@@ -155,9 +157,9 @@ function SidebarBody({
                   )
                 }
               >
-                {item.label}
+                Importar em lote
               </NavLink>
-            ))}
+            )}
           </>
         )}
       </nav>
