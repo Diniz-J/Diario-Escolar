@@ -110,8 +110,8 @@ export function BoletimPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-4xl mx-auto print:p-0 print:max-w-none">
-      <header className="space-y-3 print:hidden">
+    <div className="p-4 md:p-8 space-y-6 max-w-4xl mx-auto">
+      <header className="space-y-3">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/alunos">← Voltar</Link>
         </Button>
@@ -172,20 +172,8 @@ export function BoletimPage() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button variant="ghost" onClick={() => window.print()}>
-              Imprimir
-            </Button>
           </div>
         </div>
-      </header>
-
-      {/* Cabeçalho que aparece SÓ na impressão — tipografia plana, sem
-          paleta da marca, pra economizar tinta e ficar serio em papel. */}
-      <header className="hidden print:block space-y-1 mb-6">
-        <h1 className="text-2xl font-semibold">Boletim escolar</h1>
-        <p className="text-sm">
-          Emitido em {new Date().toLocaleDateString("pt-BR")}
-        </p>
       </header>
 
       {boletimQuery.isLoading ? (
@@ -305,7 +293,7 @@ export function BoletimPage() {
 
                       {/* Bloco 1: Notas finais por período (decisão do professor) */}
                       {d.notas_finais_por_periodo.length > 0 && (
-                        <div className="rounded-lg border border-border bg-paper overflow-hidden print:bg-white">
+                        <div className="rounded-lg border border-border bg-paper overflow-hidden">
                           <Table>
                             <TableHeader>
                               <TableRow>
@@ -333,7 +321,7 @@ export function BoletimPage() {
 
                       {/* Bloco 2: Avaliações individuais */}
                       {d.avaliacoes.length > 0 ? (
-                        <div className="rounded-lg border border-border bg-paper overflow-hidden print:bg-white">
+                        <div className="rounded-lg border border-border bg-paper overflow-hidden">
                           <Table>
                             <TableHeader>
                               <TableRow>
