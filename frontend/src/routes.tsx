@@ -23,8 +23,6 @@ import { PlanosEnsinoPage } from "@/pages/PlanosEnsinoPage";
 import { PresencaDetalhePage } from "@/pages/PresencaDetalhePage";
 import { ProfessoresPage } from "@/pages/ProfessoresPage";
 import { PresencaPage } from "@/pages/PresencaPage";
-import { TarefaDetalhePage } from "@/pages/TarefaDetalhePage";
-import { TarefasPage } from "@/pages/TarefasPage";
 import { TurmaDetalhePage } from "@/pages/TurmaDetalhePage";
 import { TurmasPage } from "@/pages/TurmasPage";
 
@@ -63,11 +61,6 @@ export function AppRoutes() {
             path="/presenca/:id"
             element={<PresencaDetalhePage />}
           />
-          {/* Rotas legadas de Tarefa mantidas só pra evitar 404 em link
-              externo durante a transição — caem direto no detalhe da
-              página antiga. Cleanup vai no PR final da frente. */}
-          <Route path="/tarefas" element={<TarefasPage />} />
-          <Route path="/tarefas/:id" element={<TarefaDetalhePage />} />
           <Route path="/avaliacoes" element={<AvaliacoesPage />} />
           <Route
             path="/avaliacoes/:id"

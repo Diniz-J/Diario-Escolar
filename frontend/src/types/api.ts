@@ -242,38 +242,9 @@ export interface ItemPresenca {
   atualizado_em: string;
 }
 
-// Status calculado no backend (serializer) — read-only no frontend.
-export type EntregaStatus =
-  | "pendente"
-  | "atrasada"
-  | "entregue_no_prazo"
-  | "entregue_com_atraso";
-
-export interface Tarefa {
-  id: number;
-  escola: number;
-  turma: number;
-  disciplina: number;
-  professor: number | null;
-  titulo: string;
-  descricao: string;
-  data_lancamento: string;
-  prazo: string | null;
-  vale_nota: boolean;
-  nota_maxima: string | null; // DecimalField → string
-  peso: string;
-  criado_em: string;
-  atualizado_em: string;
-}
-
-// `escola` opcional — backend auto-preenche (`AutoEscopoEscolaMixin`).
-export type TarefaInput = Omit<
-  Tarefa,
-  "id" | "escola" | "criado_em" | "atualizado_em"
-> & { escola?: number };
-
 // ====================================================================
-// Avaliacao + NotaAvaliacao — substitui Tarefa/EntregaTarefa
+// Avaliacao + NotaAvaliacao
+// (substituiu Tarefa/EntregaTarefa no PR #72; cleanup final no PR #77)
 // ====================================================================
 
 export type AvaliacaoTipo =
@@ -362,19 +333,6 @@ export interface NotaAvaliacaoHistoricoEvento {
   por: string | null;
   em: string | null;
   tipo: HistoricoTipo;
-}
-
-export interface EntregaTarefa {
-  id: number;
-  tarefa: number;
-  aluno: number;
-  entregue: boolean;
-  data_entrega: string | null;
-  nota: string | null;
-  observacao: string;
-  status: EntregaStatus;
-  criado_em: string;
-  atualizado_em: string;
 }
 
 // Plano de ensino anual — documento programático por turma+disciplina+ano.

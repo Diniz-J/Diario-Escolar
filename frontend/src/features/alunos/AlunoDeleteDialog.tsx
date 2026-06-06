@@ -19,7 +19,7 @@ interface AlunoDeleteDialogProps {
 
 // Confirmação de "exclusão" — na prática soft delete. O endpoint
 // DELETE do AlunoViewSet marca `ativo=False` em vez de remover a
-// linha, preservando o histórico (ocorrências, presença, tarefas).
+// linha, preservando o histórico (ocorrências, presença, avaliações).
 // AlertDialog do shadcn cuida de foco e acessibilidade (ESC fecha,
 // click fora fecha, Enter confirma).
 export function AlunoDeleteDialog({
@@ -46,7 +46,7 @@ export function AlunoDeleteDialog({
           <AlertDialogDescription>
             <strong>{aluno?.nome_completo}</strong> será marcado como
             inativo e deixará de aparecer nas listagens e seleções do
-            dia a dia. O histórico (ocorrências, presença, tarefas)
+            dia a dia. O histórico (ocorrências, presença, avaliações)
             permanece preservado. Você pode reativá-lo a qualquer
             momento ligando o filtro "Mostrar inativos" na página de
             Alunos.
