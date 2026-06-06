@@ -15,8 +15,19 @@ import "./index.css";
 // bundle, então não há custo de runtime.
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 if (sentryDsn) {
+  // Tunnel: o frontend manda envelopes pro nosso próprio backend em
+  // vez do `ingest.sentry.io` direto. Adblockers populares (Opera,
+  // uBlock, Brave) bloqueiam o host do Sentry — perderíamos erros de
+  // todo usuário com adblock. O backend faz proxy validado (whitelist
+  // em settings). Ver `apps/common/sentry_tunnel.py`.
+  //
+  // Sem `VITE_API_URL` (não devia acontecer em prod), cai pra path
+  // relativo "/_sentry/" que ainda pode dar 404 mas pelo menos não
+  // crasha o init.
+  const apiUrl = import.meta.env.VITE_API_URL || "";
   Sentry.init({
     dsn: sentryDsn,
+    tunnel: `${apiUrl}/_sentry/`,
     environment: import.meta.env.VITE_SENTRY_ENVIRONMENT ?? "production",
     // Só erro, sem APM/tracing — preserva quota do plano free pro que
     // importa (exceções). Pode subir depois se quiser medir latência.

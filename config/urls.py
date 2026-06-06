@@ -24,6 +24,7 @@ from apps.accounts.views import (
     PasswordResetRequestView,
     UsuarioTokenObtainPairView,
 )
+from apps.common.sentry_tunnel import SentrySmokeTestView, sentry_tunnel
 
 api_v1_patterns = [
     path(
@@ -55,6 +56,18 @@ api_v1_patterns = [
         "auth/password/change/",
         PasswordChangeRequestView.as_view(),
         name="password_change_request",
+    ),
+    # Proxy do Sentry pro frontend (contorna adblock do cliente). View
+    # valida envelope contra whitelist em settings (SENTRY_TUNNEL_HOST +
+    # SENTRY_TUNNEL_PROJECT_IDS). Ver apps/common/sentry_tunnel.py.
+    path("_sentry/", sentry_tunnel, name="sentry_tunnel"),
+    # Endpoint de smoke test do Sentry backend: admin chama e ve issue
+    # aparecer no painel. Permite verificar SENTRY_DSN sem mexer em
+    # outras envs (Brevo etc.).
+    path(
+        "_sentry_test/",
+        SentrySmokeTestView.as_view(),
+        name="sentry_smoke_test",
     ),
     path("", include("apps.accounts.urls")),
     path("", include("apps.escola.urls")),

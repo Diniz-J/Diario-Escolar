@@ -307,3 +307,19 @@ if SENTRY_DSN and not TESTING:
         traces_sample_rate=0.0,
         send_default_pii=False,
     )
+
+# Sentry Tunnel — endpoint proxy `/api/v1/_sentry/` que reencaminha
+# envelopes do frontend pro Sentry. Necessário porque adblockers
+# populares (Opera built-in, uBlock, Brave Shield) bloqueiam requisições
+# pra `*.ingest.sentry.io` direto. Ver `apps/common/sentry_tunnel.py`.
+#
+# Whitelist obrigatória pra evitar virar relay aberto:
+# - `SENTRY_TUNNEL_HOST`: host único permitido (ex.: `o<ORG>.ingest.us.sentry.io`)
+# - `SENTRY_TUNNEL_PROJECT_IDS`: lista CSV de project_ids permitidos
+# Sem ambos setados, o endpoint responde 503 (proxy desligado).
+SENTRY_TUNNEL_HOST = config("SENTRY_TUNNEL_HOST", default="")
+SENTRY_TUNNEL_PROJECT_IDS = [
+    p.strip()
+    for p in config("SENTRY_TUNNEL_PROJECT_IDS", default="").split(",")
+    if p.strip()
+]
