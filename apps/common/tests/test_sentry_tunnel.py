@@ -149,3 +149,48 @@ class SentryTunnelTests(TestCase):
         # `require_POST` rejeita GET com 405.
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 405)
+
+
+class SentrySmokeTestViewTests(TestCase):
+    """Testes do endpoint `/api/v1/_sentry_test/` (admin-only)."""
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        from apps.accounts.models import Usuario
+
+        cls.url = reverse("api_v1:sentry_smoke_test")
+        cls.admin = Usuario.objects.create_user(
+            username="adm", password="x", perfil=Usuario.Perfil.ADMIN
+        )
+        cls.diretor = Usuario.objects.create_user(
+            username="dir", password="x", perfil=Usuario.Perfil.DIRETOR
+        )
+
+    def _auth(self, user) -> None:
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        token = RefreshToken.for_user(user).access_token
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    def test_401_sem_token(self):
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 401)
+
+    def test_403_diretor_nao_admin(self):
+        self._auth(self.diretor)
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 403)
+
+    def test_admin_dispara_500_com_runtimeerror(self):
+        """A view DEVE levantar RuntimeError não tratada — vira 500 e
+        o SDK Sentry captura via DjangoIntegration.
+
+        `raise_request_exception=False` impede o test client de
+        propagar a exception pro teste (default `True` faria
+        `assertRaises` necessário). Em prod o middleware do Django
+        converte pra 500 normalmente.
+        """
+        self._auth(self.admin)
+        self.client.raise_request_exception = False
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 500)

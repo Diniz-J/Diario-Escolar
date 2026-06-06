@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 import requests
@@ -30,6 +31,10 @@ from django.conf import settings
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+
+from apps.common.permissions import IsAdmin
 
 logger = logging.getLogger(__name__)
 
@@ -109,3 +114,25 @@ def sentry_tunnel(request):
         status=resp.status_code,
         content_type=resp.headers.get("Content-Type", "application/json"),
     )
+
+
+class SentrySmokeTestView(APIView):
+    """`GET /api/v1/_sentry_test/` — dispara uma `RuntimeError` controlada.
+
+    Útil pra confirmar que `SENTRY_DSN` está setada e o init carregou
+    em prod, sem precisar mexer em outras envs (Brevo etc.).
+    Admin-only — evita usuário curioso poluir o painel.
+
+    Não tem efeito colateral além de aparecer 1 issue novo no painel
+    Sentry com timestamp do request. Pode ser chamado várias vezes
+    (cada chamada vira evento separado lá).
+    """
+
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request):
+        agora = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        # `RuntimeError` não é tratada pelo handler do DRF → vira 500 →
+        # Sentry captura via DjangoIntegration. Mensagem com timestamp
+        # diferencia chamadas múltiplas no painel.
+        raise RuntimeError(f"Sentry backend smoke test {agora}")
