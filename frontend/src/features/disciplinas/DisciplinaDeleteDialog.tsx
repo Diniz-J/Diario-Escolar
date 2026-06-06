@@ -40,8 +40,8 @@ export function DisciplinaDeleteDialog({
           <AlertDialogTitle>Excluir disciplina?</AlertDialogTitle>
           <AlertDialogDescription>
             Esta ação removerá <strong>{disciplina?.nome}</strong>{" "}
-            permanentemente. Disciplinas vinculadas a tarefas ou professores
-            não podem ser excluídas.
+            permanentemente. Disciplinas vinculadas a avaliações ou
+            professores não podem ser excluídas.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
