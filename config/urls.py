@@ -24,6 +24,7 @@ from apps.accounts.views import (
     PasswordResetRequestView,
     UsuarioTokenObtainPairView,
 )
+from apps.common.health import health, ping
 from apps.common.sentry_tunnel import SentrySmokeTestView, sentry_tunnel
 
 api_v1_patterns = [
@@ -57,6 +58,10 @@ api_v1_patterns = [
         PasswordChangeRequestView.as_view(),
         name="password_change_request",
     ),
+    # Health checks estilo Kubernetes. Públicos (sem auth) pra serem
+    # acessíveis por load balancer/uptime monitor. Ver apps/common/health.py.
+    path("ping/", ping, name="ping"),
+    path("health/", health, name="health"),
     # Proxy do Sentry pro frontend (contorna adblock do cliente). View
     # valida envelope contra whitelist em settings (SENTRY_TUNNEL_HOST +
     # SENTRY_TUNNEL_PROJECT_IDS). Ver apps/common/sentry_tunnel.py.
