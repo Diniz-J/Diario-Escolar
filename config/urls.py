@@ -24,6 +24,7 @@ from apps.accounts.views import (
     PasswordResetRequestView,
     UsuarioTokenObtainPairView,
 )
+from apps.common.sentry_tunnel import sentry_tunnel
 
 api_v1_patterns = [
     path(
@@ -56,6 +57,10 @@ api_v1_patterns = [
         PasswordChangeRequestView.as_view(),
         name="password_change_request",
     ),
+    # Proxy do Sentry pro frontend (contorna adblock do cliente). View
+    # valida envelope contra whitelist em settings (SENTRY_TUNNEL_HOST +
+    # SENTRY_TUNNEL_PROJECT_IDS). Ver apps/common/sentry_tunnel.py.
+    path("_sentry/", sentry_tunnel, name="sentry_tunnel"),
     path("", include("apps.accounts.urls")),
     path("", include("apps.escola.urls")),
     path("", include("apps.ocorrencias.urls")),
