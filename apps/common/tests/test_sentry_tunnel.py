@@ -166,19 +166,17 @@ class SentrySmokeTestViewTests(TestCase):
             username="dir", password="x", perfil=Usuario.Perfil.DIRETOR
         )
 
-    def _auth(self, user) -> None:
+    def _bearer(self, user) -> str:
         from rest_framework_simplejwt.tokens import RefreshToken
 
-        token = RefreshToken.for_user(user).access_token
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        return f"Bearer {RefreshToken.for_user(user).access_token}"
 
     def test_401_sem_token(self):
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 401)
 
     def test_403_diretor_nao_admin(self):
-        self._auth(self.diretor)
-        resp = self.client.get(self.url)
+        resp = self.client.get(self.url, HTTP_AUTHORIZATION=self._bearer(self.diretor))
         self.assertEqual(resp.status_code, 403)
 
     def test_admin_dispara_500_com_runtimeerror(self):
@@ -190,7 +188,6 @@ class SentrySmokeTestViewTests(TestCase):
         `assertRaises` necessário). Em prod o middleware do Django
         converte pra 500 normalmente.
         """
-        self._auth(self.admin)
         self.client.raise_request_exception = False
-        resp = self.client.get(self.url)
+        resp = self.client.get(self.url, HTTP_AUTHORIZATION=self._bearer(self.admin))
         self.assertEqual(resp.status_code, 500)
