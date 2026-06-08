@@ -1,0 +1,94 @@
+{% load static %}<!DOCTYPE html>
+{# Template HTML do email de notificacao de ocorrencia.
+   Estilos inline (clientes de email ignoram <style> em muitos casos).
+   Logo via PNG hospedado no backend (SVG nao renderiza em Outlook).
+   Cores em hex hardcoded - nao da pra usar CSS variables em email. #}
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<title>Nova ocorrência registrada</title>
+</head>
+<body style="margin:0;padding:0;background-color:#fafafa;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#fafafa;padding:24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width:600px;background-color:#ffffff;border-radius:8px;overflow:hidden;">
+
+          <tr>
+            <td style="background-color:#3a4524;padding:24px 32px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:14px;">
+                    <img src="{{ backend_url }}{% static 'branding/diario-diniz-badge-128.png' %}"
+                         alt="Diário Diniz"
+                         width="48" height="48"
+                         style="display:block;border:0;border-radius:8px;">
+                  </td>
+                  <td style="vertical-align:middle;color:#ebe2d1;font-family:Georgia,serif;font-size:22px;letter-spacing:-0.01em;">
+                    Diário Diniz
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:32px;color:#2d2a24;font-size:15px;line-height:1.6;">
+              <h2 style="margin:0 0 16px;font-family:Georgia,serif;font-size:22px;color:#2d2a24;letter-spacing:-0.01em;font-weight:normal;">
+                Nova ocorrência registrada
+              </h2>
+
+              <p style="margin:0 0 12px;">
+                Prezado(a) <strong>{{ nome_responsavel }}</strong>,
+              </p>
+              <p style="margin:0 0 12px;">
+                Uma ocorrência foi registrada envolvendo o(a) aluno(a)
+                <strong>{{ aluno.nome_completo }}</strong>.
+              </p>
+
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
+                     style="background-color:#f5efe0;border-left:3px solid #b07d62;border-radius:4px;margin:20px 0;">
+                <tr>
+                  <td style="padding:16px 20px;font-size:14px;color:#2d2a24;">
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#6b6859;margin-bottom:4px;">Aluno</div>
+                    <div style="margin-bottom:12px;">{{ aluno.nome_completo }} — {{ turma.nome }}</div>
+
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#6b6859;margin-bottom:4px;">Data</div>
+                    <div style="margin-bottom:12px;">{{ data_br }}</div>
+
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#6b6859;margin-bottom:4px;">Registrada por</div>
+                    <div style="margin-bottom:12px;">{{ professor_nome }}</div>
+
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#6b6859;margin-bottom:4px;">Status</div>
+                    <div style="margin-bottom:12px;">{{ status_display }}</div>
+
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#6b6859;margin-bottom:4px;">Descrição</div>
+                    <div style="white-space:pre-wrap;">{{ ocorrencia.descricao }}</div>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:16px 0 0;">
+                Em caso de dúvidas, entre em contato com a coordenação da escola.
+              </p>
+
+              <p style="margin:24px 0 0;color:#6b6859;font-size:13px;">
+                Atenciosamente,<br>
+                <strong>Equipe pedagógica</strong>
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="background-color:#f5efe0;padding:20px 32px;font-size:12px;color:#6b6859;text-align:center;border-top:1px solid #e5e5e5;">
+              Este é um email automático do sistema <strong>Diário Diniz</strong>.<br>
+              Não responda diretamente — fale com a escola pelo canal habitual.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

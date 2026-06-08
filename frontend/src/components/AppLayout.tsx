@@ -2,6 +2,7 @@ import { Menu as MenuIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
+import logoBadge from "@/assets/logo/diario-diniz-badge.svg";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -77,14 +78,17 @@ function SidebarBody({
 }: SidebarBodyProps) {
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
-      {/* Marca — placeholder até definirmos o logo real. Por ora, só
-          o nome em Fraunces com um pingo ferrugem discreto à esquerda
-          servindo de marcador visual. Trocar quando o logo chegar. */}
+      {/* Marca — badge escuro (quadrado olive-dark com D creme + livro
+          paper + check ferrugem) ao lado do nome em Fraunces. O badge
+          mantém presença visual mesmo em densidade alta de sidebar.
+          Importado como asset Vite — vira hash no build, cacheado pelo CDN. */}
       <div className="px-5 pt-6 pb-5">
-        <div className="flex items-baseline gap-2">
-          <span
-            className="inline-block w-1.5 h-1.5 rounded-full translate-y-[-2px]"
-            style={{ background: "var(--ferrugem)" }}
+        <div className="flex items-center gap-3">
+          <img
+            src={logoBadge}
+            alt=""
+            aria-hidden="true"
+            className="w-9 h-9 rounded-md shrink-0"
           />
           <span className="font-heading text-[18px] tracking-tight">
             Diário Diniz
@@ -244,6 +248,12 @@ export function AppLayout() {
             />
           </SheetContent>
         </Sheet>
+        <img
+          src={logoBadge}
+          alt=""
+          aria-hidden="true"
+          className="w-7 h-7 rounded-md"
+        />
         <span className="font-heading text-[15px] tracking-tight">
           Diário Diniz
         </span>

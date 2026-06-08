@@ -255,6 +255,10 @@ EMAIL_BACKEND = config(
 # os emails vêm do Render e geralmente apontam pra prod; em dev você
 # sobrescreve no `.env` (`FRONTEND_URL=http://localhost:5173`).
 FRONTEND_URL = config("FRONTEND_URL", default="https://diario-diniz.vercel.app")
+# Base do backend — usada pra montar URLs absolutas de assets estáticos
+# (ex.: logo PNG nos emails HTML). Default aponta pra prod; em dev você
+# sobrescreve no `.env` (`BACKEND_URL=http://localhost:8000`).
+BACKEND_URL = config("BACKEND_URL", default="https://diario-escolar-la4x.onrender.com")
 EMAIL_HOST = config("EMAIL_HOST", default="")
 EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")

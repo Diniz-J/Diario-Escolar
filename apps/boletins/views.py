@@ -138,6 +138,15 @@ class BoletimAlunoPDFView(APIView):
         contexto = montar_boletim(
             aluno, data_inicio, data_fim, periodo=periodo
         )
+        # WeasyPrint precisa de caminho absoluto pra carregar a imagem
+        # da marca — passamos via `logo_path` no contexto e o template
+        # usa file://. Sem isto, `{% static %}` retorna URL relativa
+        # que o WeasyPrint nao resolve (nao tem servidor HTTP).
+        from django.contrib.staticfiles import finders
+
+        contexto["logo_path"] = (
+            finders.find("branding/diario-diniz-badge-128.png") or ""
+        )
         html_str = render_to_string("boletim_pdf.html", contexto)
         pdf_bytes = _render_pdf(html_str)
 
