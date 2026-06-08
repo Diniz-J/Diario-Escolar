@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-<!-- Favicon outlined: borda olive ao inves de fundo solido. Logo maior
+<!-- Favicon outlined: anel olive ao inves de fundo solido. Logo maior
      dentro pra ganhar enfase em tamanhos pequenos (16, 32px). Sem
-     <rect> preenchido - so contorno olive-dark + cantos arredondados. -->
-<rect x="32" y="32" width="960" height="960" rx="200" ry="200"
-      fill="none" stroke="#3a4524" stroke-width="48"/>
+     preenchimento - so contorno olive-dark circular. -->
+<circle cx="512" cy="512" r="488"
+        fill="none" stroke="#3a4524" stroke-width="48"/>
 
 <g transform="translate(512 512) scale(1.25) translate(-512 -512)">
   <!-- D em olive-dark (precisa cor escura no fundo claro do favicon) -->
