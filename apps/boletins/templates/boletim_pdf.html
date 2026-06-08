@@ -22,19 +22,29 @@
       line-height: 1.4;
     }
     .marca {
-      font-size: 8pt;
-      letter-spacing: 0.25em;
-      text-transform: uppercase;
-      color: #4d5a2e;
+      display: table;
+      width: 100%;
+      margin-bottom: 4pt;
     }
-    .marca .dot {
-      display: inline-block;
-      width: 5px;
-      height: 5px;
-      background: #b07d62;
-      border-radius: 50%;
+    .marca .logo-cell {
+      display: table-cell;
       vertical-align: middle;
-      margin-right: 6px;
+      width: 36pt;
+    }
+    .marca .logo-cell img {
+      width: 32pt;
+      height: 32pt;
+      border-radius: 6pt;
+      display: block;
+    }
+    .marca .nome-cell {
+      display: table-cell;
+      vertical-align: middle;
+      padding-left: 8pt;
+      font-family: Georgia, "DejaVu Serif", serif;
+      font-size: 13pt;
+      color: #3a4524;
+      letter-spacing: -0.01em;
     }
     h1 {
       font-family: Georgia, "DejaVu Serif", serif;
@@ -158,7 +168,17 @@
 </head>
 <body>
 
-  <p class="marca"><span class="dot"></span>diário diniz</p>
+  {# Header da marca: logo PNG (WeasyPrint suporta SVG mas PNG eh mais
+     confiavel pra glifos complexos) + nome em Fraunces/Georgia. Path
+     absoluto via `logo_path` no contexto (resolvido pela view via
+     staticfiles.finders) - WeasyPrint nao tem servidor HTTP pra
+     resolver a tag static. #}
+  <div class="marca">
+    <span class="logo-cell">
+      {% if logo_path %}<img src="file://{{ logo_path }}" alt="">{% endif %}
+    </span>
+    <span class="nome-cell">Diário Diniz</span>
+  </div>
   <h1>Boletim escolar</h1>
   <div class="filete"></div>
 
