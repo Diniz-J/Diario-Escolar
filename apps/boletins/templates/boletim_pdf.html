@@ -172,7 +172,7 @@
      confiavel pra glifos complexos) + nome em Fraunces/Georgia. Path
      absoluto via `logo_path` no contexto (resolvido pela view via
      staticfiles.finders) - WeasyPrint nao tem servidor HTTP pra
-     resolver `{% static %}`. #}
+     resolver a tag static. #}
   <div class="marca">
     <span class="logo-cell">
       {% if logo_path %}<img src="file://{{ logo_path }}" alt="">{% endif %}
