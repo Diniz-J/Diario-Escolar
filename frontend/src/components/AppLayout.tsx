@@ -2,7 +2,7 @@ import { Menu as MenuIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
-import logoBadge from "@/assets/logo/diario-diniz-badge.svg";
+import logoBadge from "@/assets/logo/diario-diniz-badge-claro.svg";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
