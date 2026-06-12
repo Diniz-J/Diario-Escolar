@@ -37,7 +37,9 @@ class RegistroPresenca(BaseModelEscopado):
     turma = models.ForeignKey(
         Turma, on_delete=models.PROTECT, related_name="registros_presenca"
     )
-    data = models.DateField(default=date.today)
+    # Indexado: filtro de período (`?data_inicio=&data_fim=`) e ordering
+    # default (-data).
+    data = models.DateField(default=date.today, db_index=True)
     professor = models.ForeignKey(
         Professor,
         on_delete=models.PROTECT,

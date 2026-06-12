@@ -44,11 +44,16 @@ class Ocorrencia(BaseModelEscopado):
         blank=True,
     )
     descricao = models.TextField()
-    data_ocorrencia = models.DateField(default=date.today)
+    # Indexado: aparece em filtros de range (`?data_inicio=&data_fim=`) e
+    # no ordering default (-data_ocorrencia).
+    data_ocorrencia = models.DateField(default=date.today, db_index=True)
+    # Indexado: filtro recorrente no dashboard e listagens
+    # (`?status=aberta`, `?status=em_andamento`).
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.ABERTA,
+        db_index=True,
     )
 
     # Sobrescreve o campo herdado para expor `escola.ocorrencias` no reverse.
