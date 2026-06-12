@@ -472,8 +472,45 @@ class NotaPeriodoViewSet(
             # `bulk_*_with_history` preservam o audit log do
             # `simple_history` e substituem o `get_or_create` em loop
             # que disparava até 2 queries por aluno (60 pra 30 alunos).
+            #
+            # `ignore_conflicts=True` no bulk_create cobre a race
+            # condition de duas requests tentando criar
+            # (escola, aluno, disciplina, periodo) ao mesmo tempo —
+            # a perdedora não levanta IntegrityError, e fechamos a
+            # corrida fazendo um UPDATE no segundo passe pros conflitos
+            # reais detectados via releitura.
             if a_criar:
-                bulk_create_with_history(a_criar, NotaPeriodo)
+                bulk_create_with_history(
+                    a_criar, NotaPeriodo, ignore_conflicts=True
+                )
+                # Releitura sob a transação: identifica quem ficou no
+                # banco. Pode ser nosso INSERT bem-sucedido OU registro
+                # de outra request que ganhou a corrida.
+                intencao_por_aluno = {obj.aluno_id: obj for obj in a_criar}
+                gravados = NotaPeriodo.objects.filter(
+                    disciplina_id=disciplina_id,
+                    periodo_id=periodo_id,
+                    aluno_id__in=list(intencao_por_aluno),
+                )
+                for atual in gravados:
+                    intencao = intencao_por_aluno.get(atual.aluno_id)
+                    if intencao is None:
+                        continue
+                    if (
+                        atual.nota_final == intencao.nota_final
+                        and atual.observacao == intencao.observacao
+                    ):
+                        # Nosso INSERT vingou (ou a outra request gravou
+                        # exatamente o mesmo valor) — nada pra atualizar.
+                        continue
+                    # Conflito real: outra request criou com valor
+                    # diferente. Sobrescrevemos com nossa intenção pra
+                    # preservar a semântica de UPSERT.
+                    atual.nota_final = intencao.nota_final
+                    atual.observacao = intencao.observacao
+                    atual.atualizado_em = agora
+                    a_atualizar.append(atual)
+
             if a_atualizar:
                 bulk_update_with_history(
                     a_atualizar,
