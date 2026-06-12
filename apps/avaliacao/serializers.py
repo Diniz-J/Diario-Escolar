@@ -118,8 +118,11 @@ class AvaliacaoSerializer(
     disciplina_nome = serializers.CharField(
         source="disciplina.nome", read_only=True
     )
-    total_alunos = serializers.SerializerMethodField()
-    notas_lancadas = serializers.SerializerMethodField()
+    # Alimentados via annotate no `AvaliacaoViewSet.get_queryset()` —
+    # evita 2 COUNT(*) por linha do `SerializerMethodField`. Em listas
+    # de 50 avaliações isso era 100 queries extras por request.
+    total_alunos = serializers.IntegerField(read_only=True)
+    notas_lancadas = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Avaliacao
@@ -201,14 +204,6 @@ class AvaliacaoSerializer(
                 )
             raise serializers.ValidationError({"escola": msg})
         return attrs
-
-    def get_total_alunos(self, obj: Avaliacao) -> int:
-        # Conta as NotaAvaliacao da avaliação — equivale ao total de
-        # alunos da turma no momento da criação (auto-geradas).
-        return obj.notas.count()
-
-    def get_notas_lancadas(self, obj: Avaliacao) -> int:
-        return obj.notas.exclude(nota__isnull=True).count()
 
 
 class NotaAvaliacaoSerializer(serializers.ModelSerializer):
