@@ -121,8 +121,11 @@ class AvaliacaoSerializer(
     # Alimentados via annotate no `AvaliacaoViewSet.get_queryset()` —
     # evita 2 COUNT(*) por linha do `SerializerMethodField`. Em listas
     # de 50 avaliações isso era 100 queries extras por request.
-    total_alunos = serializers.IntegerField(read_only=True)
-    notas_lancadas = serializers.IntegerField(read_only=True)
+    # `default=0` cobre o caso defensivo de serializar uma `Avaliacao`
+    # fora do viewset (testes, contextos isolados) — sem o annotate, o
+    # campo apareceria como `null` em vez de quebrar a resposta.
+    total_alunos = serializers.IntegerField(read_only=True, default=0)
+    notas_lancadas = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = Avaliacao
