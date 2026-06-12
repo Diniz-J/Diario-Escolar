@@ -1,9 +1,11 @@
 """Views da app avaliacao."""
 from django.db import transaction
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from simple_history.utils import bulk_create_with_history, bulk_update_with_history
 
 from apps.common.permissions import (
     IsAdminOrDiretor,
@@ -158,44 +160,55 @@ class AvaliacaoViewSet(
             for n in NotaAvaliacao.objects.filter(avaliacao=avaliacao)
         }
 
+        # Coleta falhas e mutações antes de tocar no banco. Qualquer
+        # aluno fora da avaliação invalida o lote inteiro — abortamos
+        # sem abrir transação em vez de `set_rollback` (mais simples).
         falhas: list[dict] = []
-        atualizadas = 0
-        with transaction.atomic():
-            for item in itens:
-                aluno_id = item["aluno_id"]
-                nota_obj = notas_por_aluno.get(aluno_id)
-                if nota_obj is None:
-                    falhas.append(
-                        {
-                            "aluno_id": aluno_id,
-                            "motivo": (
-                                "Aluno não pertence a esta avaliação."
-                            ),
-                        }
-                    )
-                    continue
-                # `nota` pode ser None (deslançar). `observacao` cai
-                # pro vazio se ausente — não deixamos `None` no banco
-                # pra manter `blank=True` consistente.
-                nota_obj.nota = item.get("nota", None)
-                if "observacao" in item:
-                    nota_obj.observacao = item["observacao"] or ""
-                nota_obj.save(
-                    update_fields=["nota", "observacao", "atualizado_em"]
-                )
-                atualizadas += 1
+        a_atualizar: list[NotaAvaliacao] = []
+        agora = timezone.now()
 
-            if falhas:
-                # Rollback explícito: qualquer falha invalida o lote
-                # inteiro pra evitar estado parcial.
-                transaction.set_rollback(True)
-                return Response(
-                    {"atualizadas": 0, "falhas": falhas},
-                    status=status.HTTP_400_BAD_REQUEST,
+        for item in itens:
+            aluno_id = item["aluno_id"]
+            nota_obj = notas_por_aluno.get(aluno_id)
+            if nota_obj is None:
+                falhas.append(
+                    {
+                        "aluno_id": aluno_id,
+                        "motivo": "Aluno não pertence a esta avaliação.",
+                    }
+                )
+                continue
+            # `nota` pode ser None (deslançar). `observacao` cai pro
+            # vazio se ausente — não deixamos None no banco pra manter
+            # `blank=True` consistente.
+            nota_obj.nota = item.get("nota", None)
+            if "observacao" in item:
+                nota_obj.observacao = item["observacao"] or ""
+            # `bulk_update_with_history` não dispara `auto_now`, então
+            # alimentamos `atualizado_em` manualmente.
+            nota_obj.atualizado_em = agora
+            a_atualizar.append(nota_obj)
+
+        if falhas:
+            return Response(
+                {"atualizadas": 0, "falhas": falhas},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if a_atualizar:
+            with transaction.atomic():
+                # `bulk_update_with_history` preserva o audit log do
+                # `simple_history` (snapshot por linha) e substitui um
+                # `.save()` em loop que disparava N UPDATEs + N INSERTs
+                # na tabela `historicalnotaavaliacao`.
+                bulk_update_with_history(
+                    a_atualizar,
+                    NotaAvaliacao,
+                    ["nota", "observacao", "atualizado_em"],
                 )
 
         return Response(
-            {"atualizadas": atualizadas, "falhas": []},
+            {"atualizadas": len(a_atualizar), "falhas": []},
             status=status.HTTP_200_OK,
         )
 
@@ -398,47 +411,78 @@ class NotaPeriodoViewSet(
             )
         )
 
+        # Indexa as NotaPeriodo existentes por aluno_id em uma query só.
+        # `in_bulk(field_name="aluno_id")` não serve aqui — exige
+        # `unique=True` a nível de modelo, e a unicidade só vem do
+        # composto (escola, aluno, disciplina, periodo).
+        existentes_por_aluno = {
+            n.aluno_id: n
+            for n in NotaPeriodo.objects.filter(
+                disciplina_id=disciplina_id,
+                periodo_id=periodo_id,
+                aluno_id__in=alunos_da_turma,
+            )
+        }
+
+        # Coleta falhas e mutações antes de abrir transação — qualquer
+        # aluno fora da turma invalida o lote inteiro.
         falhas: list[dict] = []
-        atualizadas = 0
-        with transaction.atomic():
-            for item in itens:
-                aluno_id = item["aluno_id"]
-                if aluno_id not in alunos_da_turma:
-                    falhas.append(
-                        {
-                            "aluno_id": aluno_id,
-                            "motivo": "Aluno não pertence à turma alvo.",
-                        }
-                    )
-                    continue
+        a_criar: list[NotaPeriodo] = []
+        a_atualizar: list[NotaPeriodo] = []
+        agora = timezone.now()
 
-                # UPSERT: get_or_create resolve a chave natural
-                # (aluno, disciplina, periodo) — escola já vem do contexto.
-                instance, _ = NotaPeriodo.objects.get_or_create(
-                    aluno_id=aluno_id,
-                    disciplina_id=disciplina_id,
-                    periodo_id=periodo_id,
-                    defaults={"escola_id": escola_id},
+        for item in itens:
+            aluno_id = item["aluno_id"]
+            if aluno_id not in alunos_da_turma:
+                falhas.append(
+                    {
+                        "aluno_id": aluno_id,
+                        "motivo": "Aluno não pertence à turma alvo.",
+                    }
                 )
-                # `nota_final` pode chegar como Decimal ou None (deslançar).
+                continue
+
+            existente = existentes_por_aluno.get(aluno_id)
+            if existente is not None:
                 if "nota_final" in item:
-                    instance.nota_final = item.get("nota_final")
+                    existente.nota_final = item.get("nota_final")
                 if "observacao" in item:
-                    instance.observacao = item.get("observacao") or ""
-                instance.save(
-                    update_fields=["nota_final", "observacao", "atualizado_em"]
+                    existente.observacao = item.get("observacao") or ""
+                existente.atualizado_em = agora
+                a_atualizar.append(existente)
+            else:
+                a_criar.append(
+                    NotaPeriodo(
+                        escola_id=escola_id,
+                        aluno_id=aluno_id,
+                        disciplina_id=disciplina_id,
+                        periodo_id=periodo_id,
+                        nota_final=item.get("nota_final"),
+                        observacao=item.get("observacao") or "",
+                    )
                 )
-                atualizadas += 1
 
-            if falhas:
-                transaction.set_rollback(True)
-                return Response(
-                    {"atualizadas": 0, "falhas": falhas},
-                    status=status.HTTP_400_BAD_REQUEST,
+        if falhas:
+            return Response(
+                {"atualizadas": 0, "falhas": falhas},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            # `bulk_*_with_history` preservam o audit log do
+            # `simple_history` e substituem o `get_or_create` em loop
+            # que disparava até 2 queries por aluno (60 pra 30 alunos).
+            if a_criar:
+                bulk_create_with_history(a_criar, NotaPeriodo)
+            if a_atualizar:
+                bulk_update_with_history(
+                    a_atualizar,
+                    NotaPeriodo,
+                    ["nota_final", "observacao", "atualizado_em"],
                 )
 
         return Response(
-            {"atualizadas": atualizadas, "falhas": []},
+            {"atualizadas": len(a_criar) + len(a_atualizar), "falhas": []},
             status=status.HTTP_200_OK,
         )
 
