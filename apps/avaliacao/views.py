@@ -480,36 +480,52 @@ class NotaPeriodoViewSet(
             # corrida fazendo um UPDATE no segundo passe pros conflitos
             # reais detectados via releitura.
             if a_criar:
-                bulk_create_with_history(
+                # Em Postgres, `bulk_create(ignore_conflicts=True)` (e
+                # portanto `bulk_create_with_history`) retorna só os
+                # objetos que efetivamente foram inseridos. Linhas que
+                # bateram em UniqueConstraint não aparecem no retorno.
+                # Usamos isso pra detectar conflitos sem precisar de
+                # releitura no caminho feliz.
+                inseridos = bulk_create_with_history(
                     a_criar, NotaPeriodo, ignore_conflicts=True
                 )
-                # Releitura sob a transação: identifica quem ficou no
-                # banco. Pode ser nosso INSERT bem-sucedido OU registro
-                # de outra request que ganhou a corrida.
-                intencao_por_aluno = {obj.aluno_id: obj for obj in a_criar}
-                gravados = NotaPeriodo.objects.filter(
-                    disciplina_id=disciplina_id,
-                    periodo_id=periodo_id,
-                    aluno_id__in=list(intencao_por_aluno),
-                )
-                for atual in gravados:
-                    intencao = intencao_por_aluno.get(atual.aluno_id)
-                    if intencao is None:
-                        continue
-                    if (
-                        atual.nota_final == intencao.nota_final
-                        and atual.observacao == intencao.observacao
-                    ):
-                        # Nosso INSERT vingou (ou a outra request gravou
-                        # exatamente o mesmo valor) — nada pra atualizar.
-                        continue
-                    # Conflito real: outra request criou com valor
-                    # diferente. Sobrescrevemos com nossa intenção pra
-                    # preservar a semântica de UPSERT.
-                    atual.nota_final = intencao.nota_final
-                    atual.observacao = intencao.observacao
-                    atual.atualizado_em = agora
-                    a_atualizar.append(atual)
+                if len(inseridos) < len(a_criar):
+                    # Houve race: identifica os conflitantes pelo
+                    # aluno_id que ficou de fora do retorno.
+                    ids_inseridos = {obj.aluno_id for obj in inseridos}
+                    conflitantes = [
+                        obj for obj in a_criar
+                        if obj.aluno_id not in ids_inseridos
+                    ]
+                    # Releitura SÓ dos aluno_ids em conflito real.
+                    gravados_em_conflito = {
+                        n.aluno_id: n
+                        for n in NotaPeriodo.objects.filter(
+                            disciplina_id=disciplina_id,
+                            periodo_id=periodo_id,
+                            aluno_id__in=[c.aluno_id for c in conflitantes],
+                        )
+                    }
+                    for conflitante in conflitantes:
+                        atual = gravados_em_conflito.get(conflitante.aluno_id)
+                        if atual is None:
+                            # Raro: outra request criou e deletou
+                            # entre nossa transação. Pula.
+                            continue
+                        if (
+                            atual.nota_final == conflitante.nota_final
+                            and atual.observacao == conflitante.observacao
+                        ):
+                            # Outra request gravou o mesmo valor —
+                            # nada pra atualizar.
+                            continue
+                        # Conflito real com valor divergente:
+                        # sobrescreve com nossa intenção pra preservar
+                        # a semântica de UPSERT.
+                        atual.nota_final = conflitante.nota_final
+                        atual.observacao = conflitante.observacao
+                        atual.atualizado_em = agora
+                        a_atualizar.append(atual)
 
             if a_atualizar:
                 bulk_update_with_history(
