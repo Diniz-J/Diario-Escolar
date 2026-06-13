@@ -113,7 +113,9 @@ class Aluno(BaseModelEscopado):
     turma = models.ForeignKey(
         Turma, on_delete=models.PROTECT, related_name="alunos"
     )
-    ativo = models.BooleanField(default=True)
+    # Indexado: filtro padrão das listagens (`ativo=True`) e parte do
+    # composto (turma, ativo) usado em auto-geração de presença/avaliação.
+    ativo = models.BooleanField(default=True, db_index=True)
 
     # Responsável que recebe notificações (ex.: email de ocorrência).
     # `blank=True` no banco para não quebrar alunos já cadastrados sem
@@ -135,6 +137,14 @@ class Aluno(BaseModelEscopado):
             models.UniqueConstraint(
                 fields=["escola", "matricula"],
                 name="aluno_unique_escola_matricula",
+            ),
+        ]
+        indexes = [
+            # Cobre auto-geração de ItemPresenca/NotaAvaliacao
+            # ("alunos ativos de uma turma") sem full-scan na tabela.
+            models.Index(
+                fields=["turma", "ativo"],
+                name="aluno_idx_turma_ativo",
             ),
         ]
 
@@ -240,6 +250,14 @@ class Lecionamento(BaseModelEscopado):
             models.UniqueConstraint(
                 fields=["professor", "turma", "disciplina"],
                 name="lecionamento_unique_prof_turma_disc",
+            ),
+        ]
+        indexes = [
+            # Dashboards do professor ("minhas turmas ativas") filtram
+            # por (professor, ativo) — sem composto vira full scan.
+            models.Index(
+                fields=["professor", "ativo"],
+                name="lecionamento_idx_prof_ativo",
             ),
         ]
 

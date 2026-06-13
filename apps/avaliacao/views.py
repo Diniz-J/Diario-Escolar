@@ -1,6 +1,6 @@
 """Views da app avaliacao."""
 from django.db import transaction
-from django.db.models import OuterRef, Subquery
+from django.db.models import Count, OuterRef, Q, Subquery
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
@@ -90,9 +90,17 @@ class AvaliacaoViewSet(
     Soft delete via `ativo=False`.
     """
 
+    # Annotate de `total_alunos`/`notas_lancadas` evita 2 COUNT(*) por
+    # linha no serializer (eram `SerializerMethodField` chamando
+    # `obj.notas.count()`). Em lista de 50 avaliações reduzia 100 queries
+    # extras a um único JOIN/agregação.
     queryset = (
         Avaliacao.objects.select_related(
             "turma", "disciplina", "professor", "periodo", "escola"
+        )
+        .annotate(
+            total_alunos=Count("notas"),
+            notas_lancadas=Count("notas", filter=Q(notas__nota__isnull=False)),
         )
         .order_by("-data", "-criado_em")
     )

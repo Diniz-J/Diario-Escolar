@@ -236,7 +236,9 @@ class Avaliacao(BaseModelEscopado):
         choices=Tipo.choices,
         default=Tipo.PROVA,
     )
-    data = models.DateField(default=date.today)
+    # Indexado: filtro de período (`?data_inicio=&data_fim=`), ordering
+    # default (-data) e lookup do save() pra alocar `periodo`.
+    data = models.DateField(default=date.today, db_index=True)
     nota_maxima = models.DecimalField(
         max_digits=5,
         decimal_places=2,
@@ -250,7 +252,8 @@ class Avaliacao(BaseModelEscopado):
         validators=[MinValueValidator(Decimal("0"))],
         help_text="Peso pra média ponderada — usado pela escola fora do sistema.",
     )
-    ativo = models.BooleanField(default=True)
+    # Indexado: filtro padrão de listagens esconde inativas (`ativo=True`).
+    ativo = models.BooleanField(default=True, db_index=True)
 
     escola = models.ForeignKey(
         "escola.Escola",
@@ -512,6 +515,15 @@ class NotaPeriodo(BaseModelEscopado):
             models.UniqueConstraint(
                 fields=["escola", "aluno", "disciplina", "periodo"],
                 name="nota_periodo_unique_aluno_disc_periodo",
+            ),
+        ]
+        indexes = [
+            # Boletim e tela de notas finais filtram por
+            # (disciplina, periodo) e cruzam com aluno na linha do
+            # boletim — o composto cobre os 3 padrões de acesso comuns.
+            models.Index(
+                fields=["disciplina", "periodo", "aluno"],
+                name="nota_periodo_idx_disc_per_alu",
             ),
         ]
 
