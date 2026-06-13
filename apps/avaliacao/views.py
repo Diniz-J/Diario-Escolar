@@ -1,6 +1,6 @@
 """Views da app avaliacao."""
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, OuterRef, Q, Subquery
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
@@ -236,9 +236,27 @@ class NotaAvaliacaoViewSet(
     inspeção, filtros por aluno e leitura do histórico.
     """
 
+    # Annotate do último snapshot via Subquery — substitui o
+    # `obj.history.first()` por linha do serializer (era 1 SELECT na
+    # `historicalnotaavaliacao` por NotaAvaliacao). `simple_history`
+    # não expõe `history` como reverse relation pro `prefetch_related`
+    # (é um manager descriptor, não relation), então usamos Subquery
+    # com OuterRef no `id` do snapshot histórico (que aponta pro pk
+    # da tabela base).
+    _historical_nota_avaliacao = NotaAvaliacao.history.model
+    _ultimo_history = _historical_nota_avaliacao.objects.filter(
+        id=OuterRef("pk")
+    ).order_by("-history_date")
+
     queryset = (
         NotaAvaliacao.objects.select_related(
             "aluno", "avaliacao__turma", "avaliacao__disciplina", "escola"
+        )
+        .annotate(
+            _ultima_edicao_em=Subquery(_ultimo_history.values("history_date")[:1]),
+            _ultima_edicao_por=Subquery(
+                _ultimo_history.values("history_user__username")[:1]
+            ),
         )
         .order_by("aluno__nome_completo")
     )
@@ -255,8 +273,15 @@ class NotaAvaliacaoViewSet(
         suportar tela de "quem mudou X pra Y, quando".
         """
         nota: NotaAvaliacao = self.get_object()
+        # Slice defensivo: nota muito editada pode acumular centenas
+        # de snapshots e a resposta vira lista enorme. 50 cobre o caso
+        # real (revisões, conselho de classe). `truncado=True` avisa
+        # o front que existe mais histórico que não foi devolvido.
+        LIMITE = 50
+        snapshots = list(nota.history.all()[: LIMITE + 1])
+        truncado = len(snapshots) > LIMITE
         eventos = []
-        for snapshot in nota.history.all():
+        for snapshot in snapshots[:LIMITE]:
             user = getattr(snapshot, "history_user", None)
             eventos.append(
                 {
@@ -273,7 +298,7 @@ class NotaAvaliacaoViewSet(
                     "tipo": snapshot.history_type,  # '+'/'~'/'-'
                 }
             )
-        return Response({"eventos": eventos})
+        return Response({"eventos": eventos, "truncado": truncado})
 
 
 # ===================================================================== #
@@ -301,9 +326,23 @@ class NotaPeriodoViewSet(
     matriz daquela combinação.
     """
 
+    # Mesmo padrão do `NotaAvaliacaoViewSet`: annotate via Subquery
+    # do último snapshot pra expor `ultima_edicao` sem hits adicionais
+    # na `historicalnotaperiodo`.
+    _historical_nota_periodo = NotaPeriodo.history.model
+    _ultimo_history = _historical_nota_periodo.objects.filter(
+        id=OuterRef("pk")
+    ).order_by("-history_date")
+
     queryset = (
         NotaPeriodo.objects.select_related(
             "aluno__turma", "disciplina", "periodo", "escola"
+        )
+        .annotate(
+            _ultima_edicao_em=Subquery(_ultimo_history.values("history_date")[:1]),
+            _ultima_edicao_por=Subquery(
+                _ultimo_history.values("history_user__username")[:1]
+            ),
         )
         .order_by("aluno__nome_completo")
     )
@@ -552,8 +591,12 @@ class NotaPeriodoViewSet(
     def historico(self, request, pk=None):
         """`GET /notas-periodo/{id}/historico/` — audit log."""
         nota: NotaPeriodo = self.get_object()
+        # Mesmo slice defensivo do `NotaAvaliacao.historico`.
+        LIMITE = 50
+        snapshots = list(nota.history.all()[: LIMITE + 1])
+        truncado = len(snapshots) > LIMITE
         eventos = []
-        for snapshot in nota.history.all():
+        for snapshot in snapshots[:LIMITE]:
             user = getattr(snapshot, "history_user", None)
             eventos.append(
                 {
@@ -570,7 +613,7 @@ class NotaPeriodoViewSet(
                     "tipo": snapshot.history_type,
                 }
             )
-        return Response({"eventos": eventos})
+        return Response({"eventos": eventos, "truncado": truncado})
 
     # ------------------------------------------------------------------ #
     # Helpers                                                             #

@@ -260,10 +260,18 @@ class NotaAvaliacaoSerializer(serializers.ModelSerializer):
     def get_ultima_edicao(self, obj: NotaAvaliacao) -> dict | None:
         """Devolve `{por, em}` do último snapshot do simple_history.
 
-        Quando o histórico ainda não tem entrada (não devia acontecer,
-        mas defensivo), retorna None. `por` é o `username` do usuário
-        que disparou o save — capturado pelo `HistoryRequestMiddleware`.
+        Em listagens o `NotaAvaliacaoViewSet` anota
+        `_ultima_edicao_em`/`_ultima_edicao_por` via Subquery — usamos
+        esses valores e evitamos N SELECTs na `historicalnotaavaliacao`.
+        Em chamadas sem a annotation (testes diretos, retrieve fora
+        do viewset), caímos pra `obj.history.first()` como antes.
         """
+        em = getattr(obj, "_ultima_edicao_em", None)
+        if em is not None:
+            return {
+                "por": getattr(obj, "_ultima_edicao_por", None),
+                "em": em.isoformat(),
+            }
         ultimo = obj.history.first()
         if ultimo is None:
             return None
@@ -355,6 +363,15 @@ class NotaPeriodoSerializer(serializers.ModelSerializer):
         read_only_fields = fields  # serializer só-leitura na list/retrieve
 
     def get_ultima_edicao(self, obj: NotaPeriodo) -> dict | None:
+        # Mesmo padrão de `NotaAvaliacaoSerializer.get_ultima_edicao`:
+        # usa as annotations `_ultima_edicao_em`/`_ultima_edicao_por`
+        # quando disponíveis; caso contrário, fallback no manager.
+        em = getattr(obj, "_ultima_edicao_em", None)
+        if em is not None:
+            return {
+                "por": getattr(obj, "_ultima_edicao_por", None),
+                "em": em.isoformat(),
+            }
         ultimo = obj.history.first()
         if ultimo is None:
             return None
