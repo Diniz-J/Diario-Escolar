@@ -111,7 +111,22 @@ class PeriodoAvaliativo(BaseModelEscopado):
         pra alertar o usuário, mas datas/ordem continuam editáveis até
         a próxima decisão de produto (Diniz disse: 'por enquanto não
         precisa fechar').
+
+        Quando lido a partir do `PeriodoAvaliativoViewSet`, as annotations
+        `_tem_avaliacao` e `_tem_nota_fechada` chegam pré-computadas via
+        `Exists()` — evita 2 EXISTS por instância na listagem. Em acesso
+        direto ao model (admin, testes, retrieve fora do viewset), cai
+        no fallback com `.exists()`.
         """
+        tem_nota_fechada = getattr(self, "_tem_nota_fechada", None)
+        tem_avaliacao = getattr(self, "_tem_avaliacao", None)
+        if tem_nota_fechada is not None and tem_avaliacao is not None:
+            if tem_nota_fechada:
+                return self.ESTADO_FECHADO
+            if tem_avaliacao:
+                return self.ESTADO_EM_USO
+            return self.ESTADO_VAZIO
+
         # `NotaPeriodo` exige `nota_final` não-null pra contar como
         # lançada (registros auto-criados ficam com null e não
         # caracterizam estado fechado).
@@ -278,12 +293,23 @@ class Avaliacao(BaseModelEscopado):
     def save(self, *args, **kwargs) -> None:
         """Resolve o `periodo` em função da `data` e do `ano_letivo` da turma.
 
-        Roda em todo save — manter o vínculo consistente quando a data
-        for editada (ex.: prova remarcada cruza pra outro bimestre).
-        Se nada bate, fica `None` (mais informativo que falhar; a UI
-        avisa).
+        Só recalcula quando a `data` muda — em soft delete e outros saves
+        parciais (`update_fields=["ativo", ...]`) preserva o periodo já
+        alocado e poupa um SELECT na `PeriodoAvaliativo` a cada toque.
+        Se nada bate, fica `None` (mais informativo que falhar; a UI avisa).
         """
-        if self.data and self.turma_id and self.escola_id:
+        update_fields = kwargs.get("update_fields")
+        deve_recalcular = (
+            self._state.adding
+            or update_fields is None
+            or "data" in update_fields
+        )
+        if (
+            deve_recalcular
+            and self.data
+            and self.turma_id
+            and self.escola_id
+        ):
             # `select_related` evita um SELECT extra quando o caller já
             # carregou `turma`, mas como o save normalmente vem de
             # `Avaliacao(**dados).save()` não dá pra contar com isso.

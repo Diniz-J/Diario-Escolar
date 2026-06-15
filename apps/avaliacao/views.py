@@ -1,6 +1,6 @@
 """Views da app avaliacao."""
 from django.db import transaction
-from django.db.models import Count, OuterRef, Q, Subquery
+from django.db.models import Count, Exists, OuterRef, Q, Subquery
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
@@ -49,8 +49,22 @@ class PeriodoAvaliativoViewSet(
     avaliações apontando pro período.
     """
 
-    queryset = PeriodoAvaliativo.objects.select_related("escola").order_by(
-        "-ano_letivo", "ordem"
+    # Annotations alimentam `PeriodoAvaliativo.estado` sem disparar 2
+    # EXISTS por instância na listagem. Em retrieve/admin a property cai
+    # no fallback com `.exists()` (ver `models.PeriodoAvaliativo.estado`).
+    queryset = (
+        PeriodoAvaliativo.objects.select_related("escola")
+        .annotate(
+            _tem_avaliacao=Exists(
+                Avaliacao.objects.filter(periodo=OuterRef("pk"))
+            ),
+            _tem_nota_fechada=Exists(
+                NotaPeriodo.objects.filter(
+                    periodo=OuterRef("pk"), nota_final__isnull=False
+                )
+            ),
+        )
+        .order_by("-ano_letivo", "ordem")
     )
     serializer_class = PeriodoAvaliativoSerializer
     filter_backends = [DjangoFilterBackend]
