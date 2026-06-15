@@ -18,6 +18,7 @@ from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import mixins, viewsets
 
+from apps.common.pagination import PaginacaoCompulsoria
 from apps.common.permissions import (
     IsAdminOrDiretorOrProfessor,
     IsAdminOrDiretorOrProfessorOrInspetor,
@@ -52,6 +53,10 @@ class RegistroPresencaViewSet(
         .order_by("-data")
     )
     serializer_class = RegistroPresencaSerializer
+    # Histórico cresce sem teto (ano letivo × dias × turmas). Pagina por
+    # default; dashboard/widgets pedem `?page_size=all`. `ItemPresenca`
+    # NÃO recebe esse tratamento — escopo natural por chamada (~30 itens).
+    pagination_class = PaginacaoCompulsoria
     filter_backends = [DjangoFilterBackend]
     filterset_class = RegistroPresencaFilter
 
