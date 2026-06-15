@@ -26,11 +26,16 @@ export function useRegistros(filter: RegistrosFilter = {}) {
   return useQuery({
     queryKey: [...REGISTROS_KEY, filter],
     queryFn: async (): Promise<RegistroPresenca[]> => {
-      const { data } = await api.get<RegistroPresenca[]>(
-        "/registros-presenca/",
-        { params: filter },
-      );
-      return data;
+      // Endpoint pagina por default (PaginacaoCompulsoria); este hook
+      // serve dashboard/UltimasChamadasCard que precisam de tudo de uma
+      // vez — `page_size=all` é o opt-out reservado pra esse caso.
+      // `normalizarPaginado` defende contra mudança futura no contrato.
+      const { data } = await api.get<
+        RegistroPresenca[] | Paginated<RegistroPresenca>
+      >("/registros-presenca/", {
+        params: { ...filter, page_size: "all" },
+      });
+      return normalizarPaginado(data).results;
     },
   });
 }
