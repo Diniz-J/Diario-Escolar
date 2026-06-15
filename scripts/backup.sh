@@ -13,8 +13,11 @@
 # Variáveis de ambiente (com defaults):
 #   COMPOSE_FILE     arquivo compose (default: docker-compose.prod.yml)
 #   DB_SERVICE       nome do serviço do banco no compose (default: db)
+#   BACKEND_SERVICE  nome do serviço do backend no compose (default: backend)
 #   BACKUP_DIR       pasta destino (default: ./backups)
 #   RETENTION_DAYS   dias a manter (default: 7)
+#   PURGE_TOKENS     "1" pra rodar purge_expired_tokens após o dump
+#                    (default: 1 — desligue com PURGE_TOKENS=0)
 #   ENV_FILE         arquivo de env com DB_* (default: .env.prod)
 #
 # As credenciais (DB_NAME, DB_USER, DB_PASSWORD) são lidas do ENV_FILE.
@@ -23,8 +26,10 @@ set -euo pipefail
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 DB_SERVICE="${DB_SERVICE:-db}"
+BACKEND_SERVICE="${BACKEND_SERVICE:-backend}"
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-7}"
+PURGE_TOKENS="${PURGE_TOKENS:-1}"
 ENV_FILE="${ENV_FILE:-.env.prod}"
 
 # Carrega as credenciais do banco a partir do arquivo de env, se existir.
@@ -65,5 +70,16 @@ echo "[backup] OK ($TAMANHO)"
 echo "[backup] Limpando dumps com mais de ${RETENTION_DAYS} dias"
 find "$BACKUP_DIR" -name "diario_escolar_*.dump" -type f \
   -mtime "+${RETENTION_DAYS}" -print -delete
+
+# Limpeza de tokens de redefinição de senha expirados — evita que a
+# tabela cresça indefinidamente em prod. Idempotente; falha não invalida
+# o backup (já feito acima). Desligue com PURGE_TOKENS=0.
+if [ "$PURGE_TOKENS" = "1" ]; then
+  echo "[backup] Limpando PasswordResetToken expirados (>30d)"
+  if ! docker compose -f "$COMPOSE_FILE" exec -T "$BACKEND_SERVICE" \
+      python manage.py purge_expired_tokens; then
+    echo "[backup] AVISO: purge_expired_tokens falhou (backup já está OK)" >&2
+  fi
+fi
 
 echo "[backup] Concluído."

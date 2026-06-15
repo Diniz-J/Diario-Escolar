@@ -145,11 +145,16 @@ def calcular_notas_por_disciplina(
     `NotaPeriodo`).
     """
     # 1) Notas individuais (NotaAvaliacao).
+    # `defer` poupa transferência das colunas longas que NÃO entram no
+    # boletim: `NotaAvaliacao.observacao` (300 chars, nota interna do
+    # professor) e `Avaliacao.descricao` (TextField). Em boletim anual
+    # de 200 avaliações ano isso reduz I/O sem mexer em código a jusante.
     notas_qs = (
         NotaAvaliacao.objects.filter(aluno=aluno, nota__isnull=False)
         .select_related(
             "avaliacao", "avaliacao__disciplina", "avaliacao__periodo"
         )
+        .defer("observacao", "avaliacao__descricao")
     )
     notas_qs = _filtro_periodo(
         notas_qs, "avaliacao__data", data_inicio, data_fim
@@ -184,9 +189,12 @@ def calcular_notas_por_disciplina(
         )
 
     # 2) Médias finais por período (NotaPeriodo).
+    # `observacao` (nota interna do professor) também fica fora do boletim
+    # — defer pra não trafegar à toa.
     finais_qs = (
         NotaPeriodo.objects.filter(aluno=aluno, nota_final__isnull=False)
         .select_related("disciplina", "periodo")
+        .defer("observacao")
     )
     # Filtra por janela de datas cruzando com período (overlapping).
     if data_inicio:
@@ -259,6 +267,8 @@ def listar_avaliacoes_do_aluno(
     lançada (`nota_obtida` fica vazia). Já inclui dados denormalizados
     pra resposta abrir direto no Excel.
     """
+    # Mesmo defer da `calcular_notas_por_disciplina`: o export individual
+    # também não usa `observacao` nem `Avaliacao.descricao`.
     qs = (
         NotaAvaliacao.objects.filter(aluno=aluno)
         .select_related(
@@ -267,6 +277,7 @@ def listar_avaliacoes_do_aluno(
             "avaliacao__periodo",
             "avaliacao__turma",
         )
+        .defer("observacao", "avaliacao__descricao")
         .order_by(
             "avaliacao__data",
             "avaliacao__disciplina__nome",
