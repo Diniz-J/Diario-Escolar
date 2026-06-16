@@ -93,6 +93,10 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    # Pina o `escola_id` do JWT no contexto de logging pra todo log da
+    # request sair carimbado com a escola. Cedo na pilha pra cobrir a
+    # request inteira; ver apps/common/middleware.py.
+    "apps.common.middleware.EscolaLogContextMiddleware",
     # WhiteNoise serve os estáticos do Django em produção. Em DEBUG o
     # runserver continua servindo via finders — este middleware fica
     # inerte no dev, então não atrapalha o fluxo local.
@@ -282,6 +286,65 @@ ANYMAIL = {
 # enviar nada de verdade.
 if TESTING:
     EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+
+# Logging.
+#
+# Console pra stdout — é o que o gunicorn/Render captura (sem file
+# handler: filesystem efêmero no free tier). Em produção o formato é JSON
+# estruturado (indexável por campo: level, logger, escola_id...); em dev,
+# texto legível. Nível controlado por env (`DJANGO_LOG_LEVEL`, default
+# INFO) sem mexer em código.
+#
+# Em testes, tudo vai pro NullHandler: senão os `logger.exception` dos
+# fluxos de falha (email de ocorrência, reset de senha) poluiriam a saída
+# da suíte com stack traces esperados.
+#
+# `disable_existing_loggers=False` preserva os loggers do Django e a
+# `LoggingIntegration` do Sentry, que continua capturando error/exception.
+LOG_LEVEL = config("DJANGO_LOG_LEVEL", default="INFO")
+LOG_FORMAT = config("LOG_FORMAT", default="plain" if DEBUG else "json")
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {
+        # Carimba escola_id (do ContextVar da request) em todo record.
+        "escola": {
+            "()": "apps.common.logging.EscolaLogFilter",
+        },
+    },
+    "formatters": {
+        "plain": {
+            "format": "{asctime} {levelname} {name} {message}",
+            "style": "{",
+        },
+        "json": {
+            "()": "apps.common.logging.JsonFormatter",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",
+            "formatter": LOG_FORMAT,
+            "filters": ["escola"],
+        },
+        "null": {
+            "class": "logging.NullHandler",
+        },
+    },
+    "root": {
+        "handlers": ["null"] if TESTING else ["console"],
+        "level": LOG_LEVEL,
+    },
+    "loggers": {
+        # Erros de request o Sentry já reporta; aqui só ERROR pra não
+        # duplicar 4xx/warnings de roteamento no console.
+        "django.request": {"level": "ERROR", "propagate": True},
+        # Loggers da aplicação (apps.*) no nível configurado.
+        "apps": {"level": LOG_LEVEL, "propagate": True},
+    },
+}
 
 # Observabilidade — Sentry.
 #
