@@ -14,6 +14,7 @@ resolver/arquivar registros).
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, viewsets
 
+from apps.common.pagination import PaginacaoCompulsoria
 from apps.common.permissions import IsAdminOrDiretorOrProfessor
 from apps.common.views import EscopoEscolaMixin
 
@@ -42,6 +43,9 @@ class OcorrenciaViewSet(EscopoEscolaMixin, viewsets.ModelViewSet):
     )
     serializer_class = OcorrenciaSerializer
     permission_classes = [IsAdminOrDiretorOrProfessor]
+    # Listagem volumosa (cresce sem teto em escola operando ano a ano):
+    # pagina por default, dashboard/boletim pedem `?page_size=all`.
+    pagination_class = PaginacaoCompulsoria
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_class = OcorrenciaFilter
     search_fields = ["descricao"]

@@ -16,6 +16,8 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 
+from apps.common.logging import escola_context
+
 logger = logging.getLogger(__name__)
 
 
@@ -74,7 +76,7 @@ def montar_email_ocorrencia(ocorrencia) -> tuple[str, str, str]:
 
 
 def _enviar_email(
-    assunto: str, texto: str, html: str, email_destino: str, ocorrencia_id
+    assunto: str, texto: str, html: str, email_destino: str, ocorrencia_id, escola_id
 ) -> None:
     """Faz o envio SMTP/API de fato. Roda na thread daemon (ou síncrono em testes).
 
@@ -82,7 +84,12 @@ def _enviar_email(
     erro é logado com stack trace. Em produção isto roda fora da request,
     então não há ninguém pra propagar o erro de qualquer forma; a
     ocorrência já está persistida.
+
+    Recebe `escola_id` explícito e o reinjeta no `escola_context`: a thread
+    daemon não herda o ContextVar da request, então sem isto os logs de
+    envio sairiam sem a escola carimbada.
     """
+    ctx = escola_context.set(escola_id)
     try:
         msg = EmailMultiAlternatives(
             subject=assunto,
@@ -101,6 +108,10 @@ def _enviar_email(
             ocorrencia_id,
             email_destino,
         )
+    finally:
+        # Limpa o contexto: no caminho síncrono (testes) a thread é
+        # reaproveitada, então o escola_id não pode vazar pro próximo log.
+        escola_context.reset(ctx)
 
 
 def notificar_responsavel_ocorrencia(ocorrencia) -> bool:
@@ -126,7 +137,7 @@ def notificar_responsavel_ocorrencia(ocorrencia) -> bool:
         return False
 
     assunto, texto, html = montar_email_ocorrencia(ocorrencia)
-    args = (assunto, texto, html, email_destino, ocorrencia.id)
+    args = (assunto, texto, html, email_destino, ocorrencia.id, ocorrencia.escola_id)
 
     if getattr(settings, "TESTING", False):
         # Síncrono em testes: o locmem backend é instantâneo e a asserção

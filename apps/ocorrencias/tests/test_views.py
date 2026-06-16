@@ -220,20 +220,67 @@ class OcorrenciaFilterAndSearchTests(_OcorrenciaSetup):
     def test_filtro_por_status(self):
         resp = self._request("list", "professor", query="?status=aberta")
         self.assertEqual(resp.status_code, 200)
-        ids = {item["id"] for item in resp.data}
+        ids = {item["id"] for item in resp.data["results"]}
         self.assertEqual(ids, {self.oc_aberta.id})
 
     def test_filtro_por_aluno(self):
         resp = self._request("list", "professor", query=f"?aluno={self.outro_aluno.id}")
         self.assertEqual(resp.status_code, 200)
-        ids = {item["id"] for item in resp.data}
+        ids = {item["id"] for item in resp.data["results"]}
         self.assertEqual(ids, {self.oc_resolvida.id})
 
     def test_search_por_descricao(self):
         resp = self._request("list", "professor", query="?search=atraso")
         self.assertEqual(resp.status_code, 200)
-        ids = {item["id"] for item in resp.data}
+        ids = {item["id"] for item in resp.data["results"]}
         self.assertEqual(ids, {self.oc_resolvida.id})
+
+
+class OcorrenciaPaginacaoTests(_OcorrenciaSetup):
+    """Cobre `PaginacaoCompulsoria` aplicada no `OcorrenciaViewSet`.
+
+    Cenários: envelope DRF por default, navegação via `?page=N` e opt-out
+    via `?page_size=all`. Cria 25 ocorrências (>1 página) pra exercitar.
+    """
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        super().setUpTestData()
+        cls.ocorrencias = [
+            Ocorrencia.objects.create(
+                escola=cls.escola,
+                turma=cls.turma,
+                aluno=cls.aluno,
+                professor=cls.professor,
+                descricao=f"ocorrência {i}",
+            )
+            for i in range(25)
+        ]
+
+    def test_default_devolve_envelope_paginado(self):
+        resp = self._request("list", "professor")
+        self.assertEqual(resp.status_code, 200)
+        # Envelope DRF: {count, next, previous, results}.
+        self.assertEqual(resp.data["count"], 25)
+        self.assertEqual(len(resp.data["results"]), 20)
+        self.assertIsNotNone(resp.data["next"])
+        self.assertIsNone(resp.data["previous"])
+
+    def test_page_2_navega(self):
+        resp = self._request("list", "professor", query="?page=2")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["count"], 25)
+        # Página 2 tem os 5 restantes (25 - 20).
+        self.assertEqual(len(resp.data["results"]), 5)
+        self.assertIsNone(resp.data["next"])
+        self.assertIsNotNone(resp.data["previous"])
+
+    def test_page_size_all_devolve_array_cru(self):
+        resp = self._request("list", "professor", query="?page_size=all")
+        self.assertEqual(resp.status_code, 200)
+        # Opt-out: sem envelope, lista completa.
+        self.assertIsInstance(resp.data, list)
+        self.assertEqual(len(resp.data), 25)
 
 
 class OcorrenciaEscopoTests(TestCase):
@@ -288,17 +335,19 @@ class OcorrenciaEscopoTests(TestCase):
 
     def test_professor_a_so_ve_ocorrencias_da_sua_escola(self):
         resp = self._list(self.professor_a)
-        ids = {item["id"] for item in resp.data}
+        ids = {item["id"] for item in resp.data["results"]}
         self.assertEqual(ids, {self.oc_a.id})
 
     def test_admin_ve_todas_as_ocorrencias(self):
         resp = self._list(self.admin)
-        ids = {item["id"] for item in resp.data}
+        ids = {item["id"] for item in resp.data["results"]}
         self.assertEqual(ids, {self.oc_a.id, self.oc_b.id})
 
     def test_usuario_sem_escola_nao_ve_nada(self):
         resp = self._list(self.usuario_sem_escola)
-        self.assertEqual(len(resp.data), 0)
+        # `OcorrenciaViewSet` usa `PaginacaoCompulsoria` — envelope DRF.
+        self.assertEqual(resp.data["count"], 0)
+        self.assertEqual(resp.data["results"], [])
 
 
 class OcorrenciaWritePermissionTests(_OcorrenciaSetup):

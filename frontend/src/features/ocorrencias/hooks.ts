@@ -25,10 +25,16 @@ export function useOcorrencias(filter: OcorrenciasFilter = {}) {
   return useQuery({
     queryKey: [...OCORRENCIAS_BASE_KEY, filter],
     queryFn: async (): Promise<Ocorrencia[]> => {
-      const { data } = await api.get<Ocorrencia[]>("/ocorrencias/", {
-        params: filter,
-      });
-      return data;
+      // Endpoint pagina por default (PaginacaoCompulsoria); este hook serve
+      // dashboard/UltimasOcorrenciasCard que precisam de tudo de uma vez —
+      // `page_size=all` é o opt-out reservado pra esse caso.
+      // `normalizarPaginado` defende contra qualquer mudança futura no
+      // contrato (caso o backend volte a devolver envelope aqui).
+      const { data } = await api.get<Ocorrencia[] | Paginated<Ocorrencia>>(
+        "/ocorrencias/",
+        { params: { ...filter, page_size: "all" } },
+      );
+      return normalizarPaginado(data).results;
     },
   });
 }
