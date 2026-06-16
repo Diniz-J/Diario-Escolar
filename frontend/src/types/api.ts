@@ -172,6 +172,8 @@ export interface Lecionamento {
   disciplina: number;
   ano_letivo: number;
   ativo: boolean;
+  // Dias da semana com aula (0=segunda ... 6=domingo); base da agenda do diário.
+  dias_semana: number[];
   criado_em: string;
   atualizado_em: string;
 }
@@ -210,6 +212,47 @@ export type OcorrenciaInput = Omit<
   Ocorrencia,
   "id" | "escola" | "status_display" | "criado_em" | "atualizado_em"
 > & { escola?: number };
+
+// Diário de aula (app `aulas`).
+export type RegistroAulaStatus = "rascunho" | "lancado" | "conferido";
+
+export interface RegistroAula {
+  id: number;
+  escola: number;
+  turma: number;
+  disciplina: number;
+  professor: number;
+  data: string;
+  conteudo: string;
+  status: RegistroAulaStatus;
+  status_display: string;
+  conferido_por: number | null;
+  conferido_por_nome: string | null;
+  conferido_em: string | null;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+// `escola` opcional — backend auto-preenche (`AutoEscopoEscolaMixin`).
+// `status` aceita só rascunho/lancado no payload; conferido é via action.
+export type RegistroAulaInput = {
+  escola?: number;
+  turma: number;
+  disciplina: number;
+  professor: number;
+  data: string;
+  conteudo: string;
+  status: Exclude<RegistroAulaStatus, "conferido">;
+};
+
+// Slot projetado pela action `agenda` (não é linha no banco).
+export interface AgendaSlot {
+  data: string;
+  dia_semana: number;
+  status: RegistroAulaStatus | "vazio";
+  registro_id: number | null;
+  futuro: boolean;
+}
 
 // P=Presente, A=Ausente, J=Justificado, R=Retardatário
 export type PresencaStatus = "P" | "A" | "J" | "R";

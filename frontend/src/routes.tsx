@@ -8,6 +8,7 @@ import { AvaliacoesPage } from "@/pages/AvaliacoesPage";
 import { BoletimPage } from "@/pages/BoletimPage";
 import { ContaSenhaPage } from "@/pages/ContaSenhaPage";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { DiarioAulaPage } from "@/pages/DiarioAulaPage";
 import { DisciplinasPage } from "@/pages/DisciplinasPage";
 import { EsqueciSenhaPage } from "@/pages/EsqueciSenhaPage";
 import { ImportPage } from "@/pages/ImportPage";
@@ -61,6 +62,7 @@ export function AppRoutes() {
             path="/presenca/:id"
             element={<PresencaDetalhePage />}
           />
+          <Route path="/diario" element={<DiarioAulaPage />} />
           <Route path="/avaliacoes" element={<AvaliacoesPage />} />
           <Route
             path="/avaliacoes/:id"

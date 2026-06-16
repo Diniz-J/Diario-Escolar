@@ -41,6 +41,16 @@ fi
 echo "[entrypoint] Backfill do audit log (populate_history)..."
 python manage.py populate_history --auto || true
 
+# Seed de demonstração do diário de aula. Cria um professor com grade
+# (`dias_semana` preenchido) pra exercitar a tela "Diário de Aula" sem
+# montar o vínculo na mão. Gated por env (off por default) — NÃO deixar
+# credencial de teste conhecida numa instalação real; ligar só no ambiente
+# de demo. Idempotente: rodar a cada boot não duplica nada.
+if [ -n "${SEED_DEMO_DIARIO:-}" ]; then
+  echo "[entrypoint] Seed demo do diário (popular_professor_diario)..."
+  python manage.py popular_professor_diario || true
+fi
+
 echo "[entrypoint] Subindo gunicorn..."
 exec gunicorn config.wsgi:application \
   --bind "0.0.0.0:${PORT:-8000}" \
