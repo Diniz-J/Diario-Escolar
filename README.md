@@ -60,7 +60,8 @@ Diario-Escolar/
 │   ├── presenca/            — RegistroPresenca + ItemPresenca
 │   ├── tarefas/             — Tarefa + EntregaTarefa
 │   ├── planos_ensino/       — PlanoEnsino
-│   └── boletins/            — agregação on-the-fly (sem modelo; services.py)
+│   ├── boletins/            — agregação on-the-fly (sem modelo; services.py)
+│   └── aulas/               — RegistroAula (diário de classe) + projeção de agenda
 ├── frontend/                — app React (Vite + TypeScript)
 │   ├── src/
 │   │   ├── components/      — AppLayout (sidebar + drawer mobile), ProtectedRoute, ui/* (shadcn)
@@ -164,7 +165,7 @@ Cada app de domínio segue o mesmo layout (`models.py`, `serializers.py`, `views
 - `Disciplina` — única por `(escola, nome)`; campo `ativa`. Migration semeia 14 disciplinas BNCC comuns por escola (idempotente via `get_or_create`).
 - `Aluno` — não loga; identificado por matrícula única por escola; invariante turma/escola validada. Tem `nome_responsavel` + `email_responsavel` (obrigatórios no cadastro via serializer; `blank` no banco pra não quebrar alunos antigos) — usados pra notificar o responsável de ocorrências. **`DELETE` faz soft delete** (marca `ativo=False`) para preservar histórico de ocorrências/presença.
 - `Professor` — OneToOne com `Usuario` (`perfil=professor`); campo `ativo`; invariante `usuario.escola == professor.escola`. **`DELETE` faz soft delete** (`ativo=False`).
-- `Lecionamento` — vínculo granular **professor × turma × disciplina** (substituiu a antiga M2M `Professor.disciplinas`). Permite responder "quais turmas o prof X dá?" e "quem leciona Mat no 1º A?". `ano_letivo` derivado da turma; unique `(professor, turma, disciplina)`; `clean()` valida escola alinhada nos três.
+- `Lecionamento` — vínculo granular **professor × turma × disciplina** (substituiu a antiga M2M `Professor.disciplinas`). Permite responder "quais turmas o prof X dá?" e "quem leciona Mat no 1º A?". `ano_letivo` derivado da turma; unique `(professor, turma, disciplina)`; `clean()` valida escola alinhada nos três. Campo `dias_semana` (`ArrayField` de inteiros, 0=segunda…6=domingo) registra a grade horária — base pra projetar os slots do diário de aula.
 - CRUD completo para todos via API, filtros declarativos + busca por nome/matrícula.
 
 **`apps/tarefas`**
@@ -192,6 +193,14 @@ Cada app de domínio segue o mesmo layout (`models.py`, `serializers.py`, `views
 - `ItemPresenca.save()` força `escola_id = registro.escola_id` (coerência defensiva).
 - `ItemPresencaViewSet` não expõe POST/DELETE — ciclo de vida pertence ao registro pai.
 - Leitura inclui inspetor; escrita admin/diretor/professor.
+
+**`apps/aulas`**
+- `RegistroAula` — diário de classe: o conteúdo programático efetivamente ministrado numa aula. Turma + disciplina + professor + data + `conteudo` (texto livre) + `status` (`rascunho` → `lancado` → `conferido`) + `conferido_por`/`conferido_em` (visto da direção). Único por `(escola, turma, disciplina, data)`. Auditado.
+- Invariantes em `clean()`/serializer: escola alinhada (turma/disciplina/professor), **`Lecionamento` ativo obrigatório** pro trio, data não-futura, conteúdo exigido ao lançar.
+- Viewset escopado: direção (admin/diretor/secretaria) vê a escola inteira; professor/inspetor só os próprios registros. `perform_create` bloqueia (403) o professor que tenta lançar em nome de outro.
+- Action `conferir` (só direção): `lancado → conferido`, grava quem/quando. O serializer recusa `status=conferido` (sem auto-conferência); aula conferida trava edição.
+- Action `agenda` (`?turma=&disciplina=&mes=YYYY-MM`): projeta os slots do mês a partir de `dias_semana` do `Lecionamento`, on-the-fly via `services.py` (sem tabela). Navega mês a mês; ignora feriados na v1.
+- Front (diário do professor + ficha do professor com PDF + card no dashboard) em PRs subsequentes.
 
 ### Endpoints
 
@@ -240,6 +249,11 @@ GET|POST        /api/v1/entregas-tarefa/
 GET|PUT|PATCH|DELETE /api/v1/entregas-tarefa/{id}/
 
 GET             /api/v1/boletins/aluno/{aluno_id}/        (agregação read-only)
+
+GET|POST        /api/v1/registros-aula/                   (diário de classe)
+GET|PUT|PATCH|DELETE /api/v1/registros-aula/{id}/
+POST            /api/v1/registros-aula/{id}/conferir/     (visto da direção)
+GET             /api/v1/registros-aula/agenda/            (?turma=&disciplina=&mes=YYYY-MM)
 ```
 
 > Todos os endpoints (exceto `/auth/token/` e `/auth/token/refresh/`) exigem `Authorization: Bearer <access_token>`. O queryset retornado é sempre escopado à escola do usuário autenticado.
@@ -404,7 +418,7 @@ feature/* → develop → main
 A lista priorizada por fases vive em [`CLAUDE.md`](./CLAUDE.md) (seção Roadmap). Resumo do que ainda falta:
 
 - **Robustez:** paginação no backend (DRF `PageNumberPagination`) antes do volume real, logging estruturado JSON.
-- **Produto:** PDF do Boletim (WeasyPrint), export de Ocorrências/Presença/Tarefas (escopo operacional), métricas avançadas no dashboard (reincidência, presença média).
+- **Produto:** PDF do Boletim (WeasyPrint), export de Ocorrências/Presença/Tarefas (escopo operacional), métricas avançadas no dashboard (reincidência, presença média). **Diário de classe (`RegistroAula`)** com backend pronto (app `aulas`) — pendente o front (diário do professor, ficha do professor com tabs + export PDF, card de conferência no dashboard).
 - **Comunicação:** múltiplos responsáveis por aluno + telefone + flag `recebe_notificacao`, fila assíncrona dedicada (Celery/Dramatiq/RQ) quando o volume crescer, timeline do aluno (consumindo HistoricalRecords + ocorrências + presença).
 - **Senhas:** trocar a própria senha, reset por e-mail (agora viável via Brevo), admin resetar senha de terceiro pela UI.
 - **Dev experience:** drf-spectacular (gera client TypeScript), `repositories.py` por app, linting unificado (`ruff` + ESLint no fluxo).
