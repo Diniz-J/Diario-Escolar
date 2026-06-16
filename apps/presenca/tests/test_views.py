@@ -293,7 +293,9 @@ class RegistroEscopoTests(TestCase):
         req = self.factory.get("/")
         force_authenticate(req, user=self.professor_a)
         resp = RegistroPresencaViewSet.as_view({"get": "list"})(req)
-        ids = {item["id"] for item in resp.data}
+        # `RegistroPresencaViewSet` usa `PaginacaoCompulsoria` — a resposta
+        # é envelope `{count, next, previous, results}`.
+        ids = {item["id"] for item in resp.data["results"]}
         self.assertEqual(ids, {self.reg_a.id})
 
 
