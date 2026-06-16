@@ -53,6 +53,9 @@ interface SidebarBodyProps {
   onLogout: () => void;
   podeImportar: boolean;
   podeConfigurarEscola: boolean;
+  // Diário de aula é a área do docente — só professor/inspetor veem o item
+  // (a direção acessa o diário pela ficha do professor).
+  podeUsarDiario: boolean;
 }
 
 // Itens da seção "Configuração" — visíveis pra admin/diretor/secretaria
@@ -75,6 +78,7 @@ function SidebarBody({
   onLogout,
   podeImportar,
   podeConfigurarEscola,
+  podeUsarDiario,
 }: SidebarBodyProps) {
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
@@ -121,6 +125,22 @@ function SidebarBody({
             {item.label}
           </NavLink>
         ))}
+        {podeUsarDiario && (
+          <NavLink
+            to="/diario"
+            onClick={onNavigate}
+            className={({ isActive }) =>
+              cn(
+                "relative block pl-4 pr-3 py-2 text-sm rounded-md transition-colors border-l-2 border-transparent",
+                isActive
+                  ? "border-l-ferrugem font-medium text-creme bg-white/[0.04]"
+                  : "text-creme/75 hover:text-creme hover:bg-white/[0.04]",
+              )
+            }
+          >
+            Diário de aula
+          </NavLink>
+        )}
         {/* Seção "Configuração" — itens administrativos agrupados.
             Mostra se o usuário tem permissão pra QUALQUER item da
             seção: `podeConfigurarEscola` (Períodos avaliativos) OU
@@ -210,6 +230,10 @@ export function AppLayout() {
     ? PERFIL_LABEL[user.perfil] ?? user.perfil
     : "—";
 
+  // Diário de aula: área do docente. Inspetor opera como professor.
+  const podeUsarDiario =
+    user?.perfil === "professor" || user?.perfil === "inspetor";
+
   // Fecha o drawer toda vez que a rota muda — assim clicar num item na
   // navegação mobile leva pra página e some sozinho.
   useEffect(() => {
@@ -245,6 +269,7 @@ export function AppLayout() {
               onLogout={logout}
               podeImportar={podeImportar}
               podeConfigurarEscola={podeModificarCadastros}
+              podeUsarDiario={podeUsarDiario}
             />
           </SheetContent>
         </Sheet>
@@ -268,6 +293,7 @@ export function AppLayout() {
           onLogout={logout}
           podeImportar={podeImportar}
           podeConfigurarEscola={podeModificarCadastros}
+          podeUsarDiario={podeUsarDiario}
         />
       </aside>
 
