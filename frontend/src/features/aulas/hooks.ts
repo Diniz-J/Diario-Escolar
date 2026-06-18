@@ -19,7 +19,9 @@ interface AulasFilter {
   data_fim?: string;
 }
 
-export function useRegistrosAula(filter: AulasFilter = {}) {
+// `enabled` permite desligar a query (ex.: id de professor inválido na URL),
+// evitando buscar todas as aulas da escola sem escopo. Default true.
+export function useRegistrosAula(filter: AulasFilter = {}, enabled = true) {
   return useQuery({
     queryKey: [...AULAS_KEY, filter],
     queryFn: async (): Promise<RegistroAula[]> => {
@@ -28,6 +30,7 @@ export function useRegistrosAula(filter: AulasFilter = {}) {
       });
       return data;
     },
+    enabled,
   });
 }
 

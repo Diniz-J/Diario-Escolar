@@ -12,7 +12,13 @@ interface LecionamentosFilter {
 
 const LECIONAMENTOS_KEY = ["lecionamentos"] as const;
 
-export function useLecionamentos(filter: LecionamentosFilter = {}) {
+// `enabled` permite desligar a query (ex.: id de professor inválido na URL),
+// evitando buscar a lista inteira sem escopo. Default true, compatível com
+// os chamadores existentes.
+export function useLecionamentos(
+  filter: LecionamentosFilter = {},
+  enabled = true,
+) {
   return useQuery({
     queryKey: [...LECIONAMENTOS_KEY, filter],
     queryFn: async (): Promise<Lecionamento[]> => {
@@ -21,6 +27,7 @@ export function useLecionamentos(filter: LecionamentosFilter = {}) {
       });
       return data;
     },
+    enabled,
   });
 }
 

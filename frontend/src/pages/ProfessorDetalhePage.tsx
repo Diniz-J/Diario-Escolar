@@ -116,6 +116,9 @@ function agruparPorMes(aulas: RegistroAula[]) {
 export function ProfessorDetalhePage() {
   const params = useParams<{ id: string }>();
   const professorId = params.id ? parseInt(params.id, 10) : undefined;
+  // Guarda contra URL malformada (/professores/abc -> NaN): sem isso as
+  // queries cairiam no filtro vazio e buscariam a escola inteira.
+  const idValido = professorId != null && Number.isFinite(professorId);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
@@ -137,10 +140,12 @@ export function ProfessorDetalhePage() {
   // Visão geral SEM filtro — alimenta o badge de pendência no topo e os
   // contadores da aba Dados. Independe dos filtros aplicados no Diário.
   const resumoAulasQuery = useRegistrosAula(
-    professorId ? { professor: professorId } : {},
+    idValido ? { professor: professorId } : {},
+    idValido,
   );
   const lecionamentosResumoQuery = useLecionamentos(
-    professorId ? { professor: professorId } : {},
+    idValido ? { professor: professorId } : {},
+    idValido,
   );
 
   const turmasPorId = useMemo(() => {
@@ -169,7 +174,9 @@ export function ProfessorDetalhePage() {
           <Link to="/professores">← Voltar</Link>
         </Button>
         <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
-          {professorQuery.isLoading ? (
+          {!idValido ? (
+            "Professor não encontrado"
+          ) : professorQuery.isLoading ? (
             <Skeleton className="h-8 w-64" />
           ) : professorQuery.data ? (
             professorQuery.data.nome_completo || "Professor"
@@ -180,7 +187,7 @@ export function ProfessorDetalhePage() {
         <div className="h-px w-10 bg-ferrugem" />
 
         {/* Pendência de visto — só pra direção, e só quando há o que conferir. */}
-        {podeModificarCadastros && pendentes > 0 && (
+        {idValido && podeModificarCadastros && pendentes > 0 && (
           <button
             type="button"
             onClick={() => selecionarTab("diario")}
@@ -194,61 +201,73 @@ export function ProfessorDetalhePage() {
         )}
       </header>
 
-      {/* Switcher de tabs — leve, sem dependência de radix. Filete ferrugem
-          marca a tab ativa, no mesmo espírito da sidebar. */}
-      <nav className="flex gap-1 border-b border-border" role="tablist">
-        {TABS.map((t) => {
-          const ativo = t.id === tab;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={ativo}
-              onClick={() => selecionarTab(t.id)}
-              className={`relative px-3 py-2 text-sm transition-colors ${
-                ativo
-                  ? "text-tinta font-medium"
-                  : "text-sepia hover:text-tinta"
-              }`}
-            >
-              {t.label}
-              {ativo && (
-                <span className="absolute inset-x-0 -bottom-px h-0.5 bg-ferrugem" />
-              )}
-            </button>
-          );
-        })}
-      </nav>
+      {!idValido ? (
+        <p className="text-sm text-sepia">
+          Verifique o endereço — o identificador do professor é inválido.
+        </p>
+      ) : (
+        <>
+          {/* Switcher de tabs — leve, sem dependência de radix. Filete
+              ferrugem marca a tab ativa, no mesmo espírito da sidebar. */}
+          <nav className="flex gap-1 border-b border-border" role="tablist">
+            {TABS.map((t) => {
+              const ativo = t.id === tab;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  id={`tab-${t.id}`}
+                  aria-selected={ativo}
+                  aria-controls={`panel-${t.id}`}
+                  onClick={() => selecionarTab(t.id)}
+                  className={`relative px-3 py-2 text-sm transition-colors ${
+                    ativo
+                      ? "text-tinta font-medium"
+                      : "text-sepia hover:text-tinta"
+                  }`}
+                >
+                  {t.label}
+                  {ativo && (
+                    <span className="absolute inset-x-0 -bottom-px h-0.5 bg-ferrugem" />
+                  )}
+                </button>
+              );
+            })}
+          </nav>
 
-      {tab === "diario" && (
-        <DiarioTab
-          professorId={professorId}
-          turmasPorId={turmasPorId}
-          disciplinasPorId={disciplinasPorId}
-          podeConferir={podeModificarCadastros}
-        />
-      )}
-      {tab === "lecionamentos" && (
-        <LecionamentosTab
-          professorId={professorId}
-          turmasPorId={turmasPorId}
-          disciplinasPorId={disciplinasPorId}
-        />
-      )}
-      {tab === "ocorrencias" && (
-        <OcorrenciasTab
-          professorId={professorId}
-          turmasPorId={turmasPorId}
-        />
-      )}
-      {tab === "dados" && (
-        <DadosTab
-          carregando={professorQuery.isLoading}
-          professor={professorQuery.data}
-          aulas={resumoAulasQuery.data ?? []}
-          lecionamentos={lecionamentosResumoQuery.data ?? []}
-        />
+          <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+            {tab === "diario" && (
+              <DiarioTab
+                professorId={professorId}
+                turmasPorId={turmasPorId}
+                disciplinasPorId={disciplinasPorId}
+                podeConferir={podeModificarCadastros}
+              />
+            )}
+            {tab === "lecionamentos" && (
+              <LecionamentosTab
+                professorId={professorId}
+                turmasPorId={turmasPorId}
+                disciplinasPorId={disciplinasPorId}
+              />
+            )}
+            {tab === "ocorrencias" && (
+              <OcorrenciasTab
+                professorId={professorId}
+                turmasPorId={turmasPorId}
+              />
+            )}
+            {tab === "dados" && (
+              <DadosTab
+                carregando={professorQuery.isLoading}
+                professor={professorQuery.data}
+                aulas={resumoAulasQuery.data ?? []}
+                lecionamentos={lecionamentosResumoQuery.data ?? []}
+              />
+            )}
+          </div>
+        </>
       )}
     </div>
   );
@@ -386,7 +405,9 @@ function DiarioTab({
                     turmasPorId={turmasPorId}
                     disciplinasPorId={disciplinasPorId}
                     podeConferir={podeConferir}
-                    conferindo={conferir.isPending}
+                    conferindo={
+                      conferir.isPending && conferir.variables === aula.id
+                    }
                     onConferir={() => conferir.mutate(aula.id)}
                   />
                 ))}
