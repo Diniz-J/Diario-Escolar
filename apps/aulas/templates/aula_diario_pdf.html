@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+{# Diário de aula em PDF via WeasyPrint. CSS inline + tabelas pra A4. #}
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Diário de Aula{% if professor_nome %} — {{ professor_nome }}{% endif %}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 1.5cm 1.8cm;
+      @bottom-right {
+        content: "Página " counter(page) " de " counter(pages);
+        font-family: "DejaVu Sans", sans-serif;
+        font-size: 8pt;
+        color: #6b6859;
+      }
+    }
+    body {
+      font-family: "DejaVu Sans", sans-serif;
+      color: #2d2a24;
+      font-size: 10pt;
+      line-height: 1.4;
+    }
+    .marca { display: table; width: 100%; margin-bottom: 4pt; }
+    .marca .logo-cell {
+      display: table-cell; vertical-align: middle; width: 36pt;
+    }
+    .marca .logo-cell img {
+      width: 32pt; height: 32pt; border-radius: 6pt; display: block;
+    }
+    .marca .nome-cell {
+      display: table-cell; vertical-align: middle; padding-left: 8pt;
+      font-family: Georgia, "DejaVu Serif", serif; font-size: 13pt;
+      color: #3a4524; letter-spacing: -0.01em;
+    }
+    h1 {
+      font-family: Georgia, "DejaVu Serif", serif; font-size: 22pt;
+      font-weight: 500; letter-spacing: -0.01em; margin: 4pt 0 0 0;
+      color: #2d2a24;
+    }
+    .filete { height: 1px; width: 40px; background: #b07d62; margin: 8pt 0 14pt 0; }
+    .meta {
+      width: 100%; border-collapse: separate; border-spacing: 16pt 0;
+      font-size: 9pt; color: #6b6859; margin-bottom: 16pt;
+    }
+    .meta td { padding: 0; vertical-align: top; border: none; }
+    .meta .label {
+      font-size: 7pt; text-transform: uppercase; letter-spacing: 0.18em;
+      color: #6b6859; display: block; margin-bottom: 2pt;
+    }
+    .meta .valor { color: #2d2a24; font-weight: 500; }
+    h2 {
+      font-family: Georgia, "DejaVu Serif", serif; font-size: 12pt;
+      font-weight: 500; color: #3a4524; margin: 16pt 0 6pt 0;
+    }
+    table.aulas {
+      width: 100%; border-collapse: collapse; font-size: 9pt;
+      margin-bottom: 4pt;
+    }
+    table.aulas th {
+      text-align: left; font-size: 7pt; text-transform: uppercase;
+      letter-spacing: 0.12em; color: #6b6859; font-weight: normal;
+      border-bottom: 1px solid #d8d4c8; padding: 4pt 6pt;
+    }
+    table.aulas td {
+      vertical-align: top; padding: 5pt 6pt;
+      border-bottom: 1px solid #ece9e0;
+    }
+    .col-data { width: 56pt; white-space: nowrap; font-weight: 500; }
+    .col-ctx { width: 110pt; color: #6b6859; }
+    .col-status { width: 64pt; white-space: nowrap; }
+    .conferido-nota { font-size: 7.5pt; color: #6b6859; }
+    .vazio { color: #6b6859; font-style: italic; }
+    /* Assinaturas: tabela invisível pra duas colunas lado a lado. */
+    .assinaturas {
+      width: 100%; margin-top: 36pt; border-collapse: separate;
+      border-spacing: 24pt 0;
+    }
+    .assinaturas td { width: 50%; vertical-align: bottom; text-align: center; }
+    .linha-assinatura {
+      border-top: 1px solid #2d2a24; padding-top: 4pt; font-size: 8pt;
+      color: #6b6859;
+    }
+  </style>
+</head>
+<body>
+  <div class="marca">
+    {% if logo_path %}
+    <div class="logo-cell"><img src="file://{{ logo_path }}" alt=""></div>
+    {% endif %}
+    <div class="nome-cell">Diário Diniz</div>
+  </div>
+
+  <h1>Diário de Aula</h1>
+  <div class="filete"></div>
+
+  <table class="meta">
+    <tr>
+      {% if professor_nome %}
+      <td>
+        <span class="label">Professor</span>
+        <span class="valor">{{ professor_nome }}</span>
+      </td>
+      {% endif %}
+      <td>
+        <span class="label">Escola</span>
+        <span class="valor">{{ escola_nome|default:"—" }}</span>
+      </td>
+      <td>
+        <span class="label">Recorte</span>
+        <span class="valor">{{ filtros }}</span>
+      </td>
+      <td>
+        <span class="label">Aulas</span>
+        <span class="valor">{{ total }}</span>
+      </td>
+      <td>
+        <span class="label">Emitido em</span>
+        <span class="valor">{{ gerado_em|date:"d/m/Y H:i" }}</span>
+      </td>
+    </tr>
+  </table>
+
+  {% for grupo in grupos %}
+  <h2>{{ grupo.label }}</h2>
+  <table class="aulas">
+    <thead>
+      <tr>
+        <th class="col-data">Data</th>
+        <th class="col-ctx">Turma / Disciplina</th>
+        <th>Conteúdo</th>
+        <th class="col-status">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for aula in grupo.aulas %}
+      <tr>
+        <td class="col-data">{{ aula.data|date:"d/m/Y" }}</td>
+        <td class="col-ctx">{{ aula.turma.nome }} · {{ aula.disciplina.nome }}</td>
+        <td>
+          {% if aula.conteudo %}{{ aula.conteudo }}{% else %}<span class="vazio">—</span>{% endif %}
+          {% if aula.status == "conferido" and aula.conferido_em %}
+          <div class="conferido-nota">
+            Conferido por {{ aula.conferido_por.get_full_name|default:"—" }}
+            em {{ aula.conferido_em|date:"d/m/Y H:i" }}
+          </div>
+          {% endif %}
+        </td>
+        <td class="col-status">{{ aula.get_status_display }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% empty %}
+  <p class="vazio">Nenhuma aula no recorte selecionado.</p>
+  {% endfor %}
+
+  <table class="assinaturas">
+    <tr>
+      <td><div class="linha-assinatura">Professor(a)</div></td>
+      <td><div class="linha-assinatura">Direção / Coordenação</div></td>
+    </tr>
+  </table>
+</body>
+</html>

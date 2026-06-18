@@ -146,3 +146,51 @@ export function useDeleteRegistroAula() {
     onError: () => toast.error("Não foi possível excluir o registro."),
   });
 }
+
+// Download via axios+Blob preservando o Bearer (window.location perderia
+// auth). Mesmo padrão de features/boletins/hooks.ts; `nomeCustomizado`
+// (sem extensão) sobrescreve o nome sugerido pelo backend.
+async function baixarBlob(
+  url: string,
+  params: Record<string, unknown>,
+  extensao: string,
+  nomeCustomizado?: string,
+) {
+  const resp = await api.get(url, { params, responseType: "blob" });
+  const disp = resp.headers["content-disposition"] as string | undefined;
+  const matchNome = disp?.match(/filename="?([^"]+)"?/);
+  const nomeDoBackend = matchNome ? matchNome[1] : "download";
+  const nomeFinal = nomeCustomizado
+    ? `${nomeCustomizado}${extensao}`
+    : nomeDoBackend;
+  const blobUrl = URL.createObjectURL(resp.data as Blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = nomeFinal;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
+}
+
+interface DiarioPdfParams {
+  professor: number;
+  status?: string;
+  data_inicio?: string;
+  data_fim?: string;
+  turma?: number;
+  disciplina?: number;
+  // Nome do arquivo sem extensão (do dialog). Sem ele, usa o do backend.
+  nome?: string;
+}
+
+// PDF do diário do professor (recortado pelos filtros da ficha). O backend
+// gera o conteúdo + espaço de assinatura; aqui só disparamos o download.
+export function useBaixarDiarioPDF() {
+  return useMutation({
+    mutationFn: async ({ nome, ...filtros }: DiarioPdfParams): Promise<void> => {
+      await baixarBlob("/registros-aula/pdf/", filtros, ".pdf", nome);
+    },
+    onError: () => toast.error("Não foi possível gerar o PDF do diário."),
+  });
+}
