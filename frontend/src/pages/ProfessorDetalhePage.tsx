@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Link,
   useNavigate,
@@ -13,6 +13,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -31,12 +39,14 @@ import { STATUS_BADGE, STATUS_LABEL } from "@/features/ocorrencias/constants";
 import { useOcorrencias } from "@/features/ocorrencias/hooks";
 import { useProfessor } from "@/features/professores/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
+import type { Lecionamento, RegistroAula, RegistroAulaStatus } from "@/types/api";
 
 // Ficha 360º do professor (visão da direção). Tabs:
-//   Diário — lista cronológica das aulas + visto da direção (conferir).
+//   Diário — lista cronológica das aulas (filtros + agrupada por mês) +
+//     visto da direção (conferir).
 //   Lecionamentos — vínculos turma × disciplina × grade horária.
 //   Ocorrências — ocorrências registradas pelo professor.
-//   Dados — cadastro do professor.
+//   Dados — cadastro + contadores do diário.
 // A tab fica na querystring (?tab=) pra sobreviver a refresh e ao voltar
 // do navegador. Diário é o default — é o motivo de a página existir.
 
@@ -48,6 +58,21 @@ const TABS = [
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
+
+const MESES = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
 
 // "2026-06-16" -> "16/06/2026"
 function formatarData(iso: string): string {
@@ -63,6 +88,29 @@ function formatarDataHora(iso: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+// Agrupa as aulas por mês (YYYY-MM) preservando a ordem cronológica que o
+// backend já entrega (-data). Cada grupo vira uma seção com cabeçalho.
+function agruparPorMes(aulas: RegistroAula[]) {
+  const grupos: { chave: string; label: string; aulas: RegistroAula[] }[] = [];
+  const indice = new Map<string, number>();
+  for (const aula of aulas) {
+    const chave = aula.data.slice(0, 7);
+    let idx = indice.get(chave);
+    if (idx === undefined) {
+      const [ano, mes] = chave.split("-");
+      idx =
+        grupos.push({
+          chave,
+          label: `${MESES[Number(mes) - 1]} ${ano}`,
+          aulas: [],
+        }) - 1;
+      indice.set(chave, idx);
+    }
+    grupos[idx].aulas.push(aula);
+  }
+  return grupos;
 }
 
 export function ProfessorDetalhePage() {
@@ -86,6 +134,15 @@ export function ProfessorDetalhePage() {
   const turmasQuery = useTurmas();
   const disciplinasQuery = useDisciplinas();
 
+  // Visão geral SEM filtro — alimenta o badge de pendência no topo e os
+  // contadores da aba Dados. Independe dos filtros aplicados no Diário.
+  const resumoAulasQuery = useRegistrosAula(
+    professorId ? { professor: professorId } : {},
+  );
+  const lecionamentosResumoQuery = useLecionamentos(
+    professorId ? { professor: professorId } : {},
+  );
+
   const turmasPorId = useMemo(() => {
     const m = new Map<number, string>();
     turmasQuery.data?.forEach((t) => m.set(t.id, t.nome));
@@ -97,6 +154,13 @@ export function ProfessorDetalhePage() {
     disciplinasQuery.data?.forEach((d) => m.set(d.id, d.nome));
     return m;
   }, [disciplinasQuery.data]);
+
+  const pendentes = useMemo(
+    () =>
+      (resumoAulasQuery.data ?? []).filter((a) => a.status === "lancado")
+        .length,
+    [resumoAulasQuery.data],
+  );
 
   return (
     <div className="p-4 md:p-8 space-y-6">
@@ -114,6 +178,20 @@ export function ProfessorDetalhePage() {
           )}
         </h1>
         <div className="h-px w-10 bg-ferrugem" />
+
+        {/* Pendência de visto — só pra direção, e só quando há o que conferir. */}
+        {podeModificarCadastros && pendentes > 0 && (
+          <button
+            type="button"
+            onClick={() => selecionarTab("diario")}
+            className="inline-flex items-center gap-2 rounded-full bg-ferrugem/10 px-3 py-1 text-xs font-medium text-ferrugem"
+          >
+            {pendentes}{" "}
+            {pendentes === 1
+              ? "aula aguardando seu visto"
+              : "aulas aguardando seu visto"}
+          </button>
+        )}
       </header>
 
       {/* Switcher de tabs — leve, sem dependência de radix. Filete ferrugem
@@ -168,6 +246,8 @@ export function ProfessorDetalhePage() {
         <DadosTab
           carregando={professorQuery.isLoading}
           professor={professorQuery.data}
+          aulas={resumoAulasQuery.data ?? []}
+          lecionamentos={lecionamentosResumoQuery.data ?? []}
         />
       )}
     </div>
@@ -180,89 +260,206 @@ interface MapsProps {
   disciplinasPorId: Map<number, string>;
 }
 
+// Sentinela do select de status — shadcn Select não aceita value vazio.
+const STATUS_TODOS = "todos";
+const STATUS_OPCOES: RegistroAulaStatus[] = ["rascunho", "lancado", "conferido"];
+
 function DiarioTab({
   professorId,
   turmasPorId,
   disciplinasPorId,
   podeConferir,
 }: MapsProps & { podeConferir: boolean }) {
+  const [status, setStatus] = useState<string>(STATUS_TODOS);
+  const [dataInicio, setDataInicio] = useState("");
+  const [dataFim, setDataFim] = useState("");
+
+  const temFiltro = status !== STATUS_TODOS || !!dataInicio || !!dataFim;
+
   const aulasQuery = useRegistrosAula(
-    professorId ? { professor: professorId } : {},
+    professorId
+      ? {
+          professor: professorId,
+          ...(status !== STATUS_TODOS ? { status } : {}),
+          ...(dataInicio ? { data_inicio: dataInicio } : {}),
+          ...(dataFim ? { data_fim: dataFim } : {}),
+        }
+      : {},
   );
   const conferir = useConferirAula();
 
-  if (aulasQuery.isLoading) {
-    return <Skeleton className="h-40 w-full" />;
+  function limparFiltros() {
+    setStatus(STATUS_TODOS);
+    setDataInicio("");
+    setDataFim("");
   }
-  if (aulasQuery.isError) {
-    return (
-      <p className="text-sm text-destructive">Erro ao carregar o diário.</p>
-    );
-  }
-  const aulas = aulasQuery.data ?? [];
-  if (aulas.length === 0) {
-    return (
-      <p className="text-sm text-sepia">
-        Nenhuma aula registrada por este professor.
-      </p>
-    );
-  }
+
+  const grupos = useMemo(
+    () => agruparPorMes(aulasQuery.data ?? []),
+    [aulasQuery.data],
+  );
 
   return (
-    <ul className="space-y-3">
-      {aulas.map((aula) => {
-        const estilo = STATUS_AULA[aula.status];
-        return (
-          <li
-            key={aula.id}
-            className="rounded-md border border-border bg-paper px-4 py-3"
+    <div className="space-y-5">
+      {/* Barra de filtros — período + status. O backend já recorta via
+          RegistroAulaFilter (data_inicio/data_fim/status). */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="space-y-1">
+          <label className="text-[11px] uppercase tracking-[0.15em] text-sepia">
+            Status
+          </label>
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger className="w-full sm:w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={STATUS_TODOS}>Todos</SelectItem>
+              {STATUS_OPCOES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {STATUS_AULA[s].label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[11px] uppercase tracking-[0.15em] text-sepia">
+            De
+          </label>
+          <Input
+            type="date"
+            value={dataInicio}
+            max={dataFim || undefined}
+            onChange={(e) => setDataInicio(e.target.value)}
+            className="w-full sm:w-40"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[11px] uppercase tracking-[0.15em] text-sepia">
+            Até
+          </label>
+          <Input
+            type="date"
+            value={dataFim}
+            min={dataInicio || undefined}
+            onChange={(e) => setDataFim(e.target.value)}
+            className="w-full sm:w-40"
+          />
+        </div>
+
+        {temFiltro && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={limparFiltros}
           >
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="text-sm font-medium text-tinta tabular-nums">
-                {formatarData(aula.data)}
-              </span>
-              <span className="text-sm text-sepia">
-                {turmasPorId.get(aula.turma) ?? `Turma #${aula.turma}`}
-                {" · "}
-                {disciplinasPorId.get(aula.disciplina) ??
-                  `Disciplina #${aula.disciplina}`}
-              </span>
-              <span
-                className={`ml-auto shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${estilo.classe}`}
-              >
-                {estilo.label}
-              </span>
-            </div>
+            Limpar
+          </Button>
+        )}
+      </div>
 
-            {aula.conteudo && (
-              <p className="mt-2 text-sm text-tinta whitespace-pre-wrap">
-                {aula.conteudo}
-              </p>
-            )}
+      {aulasQuery.isLoading ? (
+        <Skeleton className="h-40 w-full" />
+      ) : aulasQuery.isError ? (
+        <p className="text-sm text-destructive">Erro ao carregar o diário.</p>
+      ) : grupos.length === 0 ? (
+        <p className="text-sm text-sepia">
+          {temFiltro
+            ? "Nenhuma aula no filtro selecionado."
+            : "Nenhuma aula registrada por este professor."}
+        </p>
+      ) : (
+        <div className="space-y-6">
+          {grupos.map((grupo) => (
+            <section key={grupo.chave} className="space-y-2">
+              <h2 className="text-[11px] uppercase tracking-[0.18em] text-sepia">
+                {grupo.label}
+              </h2>
+              <ul className="space-y-3">
+                {grupo.aulas.map((aula) => (
+                  <AulaItem
+                    key={aula.id}
+                    aula={aula}
+                    turmasPorId={turmasPorId}
+                    disciplinasPorId={disciplinasPorId}
+                    podeConferir={podeConferir}
+                    conferindo={conferir.isPending}
+                    onConferir={() => conferir.mutate(aula.id)}
+                  />
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
-            <div className="mt-2 flex flex-wrap items-center gap-3">
-              {aula.status === "conferido" && aula.conferido_em && (
-                <span className="text-[11px] text-sepia">
-                  Conferido por {aula.conferido_por_nome ?? "—"} em{" "}
-                  {formatarDataHora(aula.conferido_em)}
-                </span>
-              )}
-              {podeConferir && aula.status === "lancado" && (
-                <Button
-                  type="button"
-                  size="sm"
-                  className="ml-auto"
-                  disabled={conferir.isPending}
-                  onClick={() => conferir.mutate(aula.id)}
-                >
-                  Conferir
-                </Button>
-              )}
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+function AulaItem({
+  aula,
+  turmasPorId,
+  disciplinasPorId,
+  podeConferir,
+  conferindo,
+  onConferir,
+}: {
+  aula: RegistroAula;
+  turmasPorId: Map<number, string>;
+  disciplinasPorId: Map<number, string>;
+  podeConferir: boolean;
+  conferindo: boolean;
+  onConferir: () => void;
+}) {
+  const estilo = STATUS_AULA[aula.status];
+  return (
+    <li className="rounded-md border border-border bg-paper px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="text-sm font-medium text-tinta tabular-nums">
+          {formatarData(aula.data)}
+        </span>
+        <span className="text-sm text-sepia">
+          {turmasPorId.get(aula.turma) ?? `Turma #${aula.turma}`}
+          {" · "}
+          {disciplinasPorId.get(aula.disciplina) ??
+            `Disciplina #${aula.disciplina}`}
+        </span>
+        <span
+          className={`ml-auto shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${estilo.classe}`}
+        >
+          {estilo.label}
+        </span>
+      </div>
+
+      {aula.conteudo && (
+        <p className="mt-2 text-sm text-tinta whitespace-pre-wrap">
+          {aula.conteudo}
+        </p>
+      )}
+
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        {aula.status === "conferido" && aula.conferido_em && (
+          <span className="text-[11px] text-sepia">
+            Conferido por {aula.conferido_por_nome ?? "—"} em{" "}
+            {formatarDataHora(aula.conferido_em)}
+          </span>
+        )}
+        {podeConferir && aula.status === "lancado" && (
+          <Button
+            type="button"
+            size="sm"
+            className="ml-auto"
+            disabled={conferindo}
+            onClick={onConferir}
+          >
+            Conferir
+          </Button>
+        )}
+      </div>
+    </li>
   );
 }
 
@@ -432,9 +629,24 @@ function OcorrenciasTab({
   );
 }
 
+function ContadorAula({ valor, label }: { valor: number; label: string }) {
+  return (
+    <div className="rounded-md border border-border bg-paper px-4 py-3">
+      <div className="font-heading text-2xl leading-none text-tinta tabular-nums">
+        {valor}
+      </div>
+      <div className="mt-1 text-[11px] uppercase tracking-[0.12em] text-sepia">
+        {label}
+      </div>
+    </div>
+  );
+}
+
 function DadosTab({
   carregando,
   professor,
+  aulas,
+  lecionamentos,
 }: {
   carregando: boolean;
   professor:
@@ -443,35 +655,50 @@ function DadosTab({
         ativo: boolean;
       }
     | undefined;
+  aulas: RegistroAula[];
+  lecionamentos: Lecionamento[];
 }) {
   if (carregando) {
     return <Skeleton className="h-32 w-full" />;
   }
   if (!professor) {
-    return (
-      <p className="text-sm text-sepia">Professor não encontrado.</p>
-    );
+    return <p className="text-sm text-sepia">Professor não encontrado.</p>;
   }
 
+  const conferidas = aulas.filter((a) => a.status === "conferido").length;
+  const aguardando = aulas.filter((a) => a.status === "lancado").length;
+  const rascunhos = aulas.filter((a) => a.status === "rascunho").length;
+  const vinculosAtivos = lecionamentos.filter((l) => l.ativo).length;
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="font-heading text-lg tracking-tight">
-          Dados do professor
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
-          <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
-            Nome
-          </dt>
-          <dd>{professor.nome_completo || "—"}</dd>
-          <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
-            Status
-          </dt>
-          <dd>{professor.ativo ? "Ativo" : "Inativo"}</dd>
-        </dl>
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <ContadorAula valor={aulas.length} label="Aulas no total" />
+        <ContadorAula valor={rascunhos} label="Rascunhos" />
+        <ContadorAula valor={aguardando} label="Aguardando visto" />
+        <ContadorAula valor={conferidas} label="Conferidas" />
+        <ContadorAula valor={vinculosAtivos} label="Vínculos ativos" />
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-lg tracking-tight">
+            Dados do professor
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
+            <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+              Nome
+            </dt>
+            <dd>{professor.nome_completo || "—"}</dd>
+            <dt className="text-[11px] uppercase tracking-[0.18em] text-sepia self-center">
+              Status
+            </dt>
+            <dd>{professor.ativo ? "Ativo" : "Inativo"}</dd>
+          </dl>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
