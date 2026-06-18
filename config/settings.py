@@ -98,6 +98,9 @@ MIDDLEWARE = [
     # request sair carimbado com a escola. Cedo na pilha pra cobrir a
     # request inteira; ver apps/common/middleware.py.
     "apps.common.middleware.EscolaLogContextMiddleware",
+    # Reporta respostas 4xx ao Sentry (5xx já vêm pela DjangoIntegration).
+    # Cedo na pilha pra enxergar o status final devolvido ao cliente.
+    "apps.common.middleware.SentryHttpErrorMiddleware",
     # WhiteNoise serve os estáticos do Django em produção. Em DEBUG o
     # runserver continua servindo via finders — este middleware fica
     # inerte no dev, então não atrapalha o fluxo local.
@@ -353,7 +356,8 @@ LOGGING = {
 # testes. Sem DSN o SDK fica inerte (dev local não precisa configurar
 # nada). A `DjangoIntegration` instala signal handlers que capturam
 # exceções não tratadas + erros 5xx + erros de `logger.error/exception`
-# automaticamente; nenhum middleware adicional precisa ser ligado.
+# automaticamente. Os 4xx (que o DRF trata sem propagar exceção) são
+# cobertos à parte pelo `SentryHttpErrorMiddleware`.
 #
 # `send_default_pii=False` (default) — não envia username/email do
 # usuário pra Sentry por respeito à LGPD e ao princípio do menor dado.
@@ -375,6 +379,15 @@ if SENTRY_DSN and not TESTING:
         traces_sample_rate=0.0,
         send_default_pii=False,
     )
+
+# Status 4xx que o `SentryHttpErrorMiddleware` NÃO reporta. Default ignora
+# 401 (churn esperado do refresh de token, ruidoso e sem valor de alerta).
+# Configurável por env (CSV), ex.: `SENTRY_IGNORE_STATUS_CODES=401,404`.
+SENTRY_IGNORE_STATUS_CODES = {
+    int(c)
+    for c in config("SENTRY_IGNORE_STATUS_CODES", default="401").split(",")
+    if c.strip()
+}
 
 # Sentry Tunnel — endpoint proxy `/api/v1/_sentry/` que reencaminha
 # envelopes do frontend pro Sentry. Necessário porque adblockers
