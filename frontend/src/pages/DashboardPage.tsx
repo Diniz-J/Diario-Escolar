@@ -8,8 +8,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useRegistrosAula } from "@/features/aulas/hooks";
 import { useAlunos } from "@/features/alunos/hooks";
 import { useAuth } from "@/features/auth/useAuth";
+import { usePermissoes } from "@/features/auth/usePermissoes";
 import { MetricCard } from "@/features/dashboard/MetricCard";
 import { UltimasChamadasCard } from "@/features/dashboard/UltimasChamadasCard";
 import { UltimasOcorrenciasCard } from "@/features/dashboard/UltimasOcorrenciasCard";
@@ -67,6 +69,18 @@ export function DashboardPage() {
     const emAndamento = dados.filter((o) => o.status === "em_andamento").length;
     return { total: abertas + emAndamento, abertas, emAndamento };
   }, [ocorrenciasQuery.data]);
+
+  // Aulas aguardando visto da direção (status `lancado`). Só a direção
+  // confere, então só ela busca/vê o card. Pra direção o viewset devolve
+  // o diário da escola inteira; `enabled` evita o fetch pros demais perfis.
+  const { podeModificarCadastros } = usePermissoes();
+  const aulasPendentesQuery = useRegistrosAula(
+    podeModificarCadastros
+      ? { status: "lancado", ...(turmaFiltro ? { turma: turmaFiltro } : {}) }
+      : {},
+    podeModificarCadastros,
+  );
+  const aulasPendentes = aulasPendentesQuery.data?.length ?? 0;
 
   const totalAlunos = alunosQuery.data?.length ?? 0;
   const turmasComAluno = useMemo(() => {
@@ -154,6 +168,21 @@ export function DashboardPage() {
           href={linkAlunos}
           carregando={alunosQuery.isLoading}
         />
+
+        {podeModificarCadastros && (
+          <MetricCard
+            titulo="Aulas aguardando visto"
+            valor={aulasPendentes}
+            sublinha={
+              aulasPendentes > 0
+                ? "Pendentes de conferência"
+                : "Tudo conferido"
+            }
+            href="/professores"
+            carregando={aulasPendentesQuery.isLoading}
+            tomDestaque={aulasPendentes > 0}
+          />
+        )}
 
         <UltimasChamadasCard turmaFiltrada={turmaFiltro} />
         <UltimasOcorrenciasCard turmaFiltrada={turmaFiltro} />
