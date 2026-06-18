@@ -29,12 +29,18 @@ from django.core.management.base import BaseCommand, CommandError
 from apps.accounts.models import Usuario
 from apps.escola.models import Escola
 
-# (perfil, username, senha, first_name) — last_name é fixo "Demo".
+# Senha única pra todos os perfis de teste. Escolhida pra passar nos
+# validadores do Django (AUTH_PASSWORD_VALIDATORS) — em especial o de
+# similaridade com o username, que barraria algo como "diretor123" pro
+# usuário "demo_diretor". Mesma senha usada quando criamos via API.
+SENHA_DEMO = "Escola@2026!"
+
+# (perfil, username, first_name) — last_name é fixo "Demo".
 _PERFIS = [
-    (Usuario.Perfil.DIRETOR, "demo_diretor", "diretor123", "Diretor"),
-    (Usuario.Perfil.SECRETARIA, "demo_secretaria", "secretaria123", "Secretaria"),
-    (Usuario.Perfil.COORDENADOR, "demo_coordenador", "coordenador123", "Coordenador"),
-    (Usuario.Perfil.INSPETOR, "demo_inspetor", "inspetor123", "Inspetor"),
+    (Usuario.Perfil.DIRETOR, "demo_diretor", "Diretor"),
+    (Usuario.Perfil.SECRETARIA, "demo_secretaria", "Secretaria"),
+    (Usuario.Perfil.COORDENADOR, "demo_coordenador", "Coordenador"),
+    (Usuario.Perfil.INSPETOR, "demo_inspetor", "Inspetor"),
 ]
 
 
@@ -48,7 +54,7 @@ class Command(BaseCommand):
         escola = self._resolver_escola(opts["escola_id"])
         self.stdout.write(f"Escola: {escola.nome} (id={escola.id})\n")
 
-        for perfil, username, senha, first_name in _PERFIS:
+        for perfil, username, first_name in _PERFIS:
             usuario, criado = Usuario.objects.get_or_create(
                 username=username,
                 defaults={
@@ -56,16 +62,17 @@ class Command(BaseCommand):
                     "escola": escola,
                     "first_name": first_name,
                     "last_name": "Demo",
+                    "email": f"{username}@diario.test",
                 },
             )
             # Re-garante perfil/escola/senha mesmo se o usuário já existia.
             usuario.perfil = perfil
             usuario.escola = escola
-            usuario.set_password(senha)
+            usuario.set_password(SENHA_DEMO)
             usuario.save()
             marca = "+" if criado else "="
             self.stdout.write(
-                f"  {marca} {perfil:12} login={username:18} senha={senha}"
+                f"  {marca} {perfil:12} login={username:18} senha={SENHA_DEMO}"
             )
 
         self.stdout.write(
