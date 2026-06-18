@@ -13,7 +13,11 @@ from apps.common.permissions import (
     IsAdminOrDiretorOrProfessor,
     IsAdminOrDiretorOrProfessorOrInspetor,
 )
-from apps.common.views import EscopoEscolaMixin, ReadWritePermissionMixin
+from apps.common.views import (
+    EscopoEscolaMixin,
+    FiltroEscopoObrigatorioMixin,
+    ReadWritePermissionMixin,
+)
 from apps.escola.models import Aluno
 
 from .models import Avaliacao, NotaAvaliacao, NotaPeriodo, PeriodoAvaliativo
@@ -237,6 +241,7 @@ class AvaliacaoViewSet(
 
 
 class NotaAvaliacaoViewSet(
+    FiltroEscopoObrigatorioMixin,
     EscopoEscolaMixin,
     _AvaliacaoReadWriteMixin,
     viewsets.ReadOnlyModelViewSet,
@@ -249,6 +254,10 @@ class NotaAvaliacaoViewSet(
     dedicado `lancar-notas`. Acessar `/notas-avaliacao/` é útil pra
     inspeção, filtros por aluno e leitura do histórico.
     """
+
+    # `list` exige escopo (a UI sempre passa ?avaliacao=); sem isso seria
+    # 1 linha por (aluno × avaliação) da escola inteira.
+    FILTROS_ESCOPO = ("avaliacao", "aluno")
 
     # Annotate do último snapshot via Subquery — substitui o
     # `obj.history.first()` por linha do serializer (era 1 SELECT na
@@ -321,6 +330,7 @@ class NotaAvaliacaoViewSet(
 
 
 class NotaPeriodoViewSet(
+    FiltroEscopoObrigatorioMixin,
     EscopoEscolaMixin,
     _AvaliacaoReadWriteMixin,
     viewsets.ReadOnlyModelViewSet,
@@ -339,6 +349,10 @@ class NotaPeriodoViewSet(
     Filtros suportam `?turma=X&disciplina=Y&periodo=Z` pra listar a
     matriz daquela combinação.
     """
+
+    # `list` exige escopo (turma/disciplina/período/aluno) — a matriz
+    # inteira (aluno × disciplina × período) cresceria sem teto.
+    FILTROS_ESCOPO = ("periodo", "disciplina", "aluno", "turma")
 
     # Mesmo padrão do `NotaAvaliacaoViewSet`: annotate via Subquery
     # do último snapshot pra expor `ultima_edicao` sem hits adicionais

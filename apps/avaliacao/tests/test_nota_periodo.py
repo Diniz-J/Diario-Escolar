@@ -405,11 +405,18 @@ class EscopoTests(_Base):
             nota_final=Decimal("9.00"),
         )
 
-        resp = self._request_list(user=self.diretor)
+        # Escopo obrigatório no list: filtra pelo período da B de propósito
+        # — se o escopo de escola falhasse, a nota da B vazaria aqui.
+        resp = self._request_list(query=f"periodo={per_b.id}", user=self.diretor)
         self.assertEqual(resp.status_code, 200)
         # Diretor A não vê notas da B.
         nomes = [n["aluno_nome"] for n in resp.data]
         self.assertNotIn("Aluno B", nomes)
+
+    def test_list_sem_escopo_400(self):
+        """Sem filtro de escopo o list é recusado (evita matriz inteira)."""
+        resp = self._request_list(user=self.diretor)
+        self.assertEqual(resp.status_code, 400)
 
     def test_professor_pode_lancar(self):
         """Decisão do produto: qualquer professor da escola lança;

@@ -23,7 +23,11 @@ from apps.common.permissions import (
     IsAdminOrDiretorOrProfessor,
     IsAdminOrDiretorOrProfessorOrInspetor,
 )
-from apps.common.views import EscopoEscolaMixin, ReadWritePermissionMixin
+from apps.common.views import (
+    EscopoEscolaMixin,
+    FiltroEscopoObrigatorioMixin,
+    ReadWritePermissionMixin,
+)
 
 from .filters import RegistroPresencaFilter
 from .models import ItemPresenca, RegistroPresenca
@@ -99,6 +103,7 @@ class RegistroPresencaViewSet(
 
 
 class ItemPresencaViewSet(
+    FiltroEscopoObrigatorioMixin,
     EscopoEscolaMixin,
     _PresencaReadWriteMixin,
     mixins.ListModelMixin,
@@ -111,6 +116,10 @@ class ItemPresencaViewSet(
     Sem POST/DELETE de propósito: itens são criados pelo registro pai e
     removidos via cascade quando o registro é apagado.
     """
+
+    # `list` exige escopo (a UI sempre passa ?registro=); sem isso seria
+    # 1 linha por (aluno × chamada) da escola inteira.
+    FILTROS_ESCOPO = ("registro", "aluno")
 
     queryset = (
         ItemPresenca.objects.select_related("registro", "aluno", "escola")

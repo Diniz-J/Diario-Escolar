@@ -1,4 +1,7 @@
 """Mixins de view reutilizáveis."""
+from django.core.exceptions import ImproperlyConfigured
+from rest_framework.exceptions import ValidationError
+
 from apps.common.permissions import (
     IsAdminOrDiretor,
     IsAdminOrDiretorOrProfessor,
@@ -59,3 +62,43 @@ class ReadWritePermissionMixin:
         if self.action in ("list", "retrieve"):
             return [self.READ_PERMISSION()]
         return [self.WRITE_PERMISSION()]
+
+
+class FiltroEscopoObrigatorioMixin:
+    """Exige pelo menos um filtro de escopo no `list` — barra varredura geral.
+
+    Pensado pros endpoints "matriz" (aluno × avaliação, aluno × registro)
+    que a UI **sempre** consome escopados (`?avaliacao=`, `?registro=`...) e
+    cujo `list` sem filtro retornaria dezenas de milhares de linhas (ex.:
+    300 alunos × 50 avaliações).
+
+    Decisão de arquitetura (vs. paginar): paginar quebraria as telas de
+    lançamento em lote / chamada, que precisam de TODOS os alunos de uma
+    vez. Como o resultado já é limitado pelo tamanho da turma quando
+    escopado, basta **recusar (400) o `list` sem nenhum** dos
+    `FILTROS_ESCOPO`. Não afeta `retrieve` nem actions custom. Zero
+    mudança no front (que já manda o filtro).
+    """
+
+    FILTROS_ESCOPO: tuple[str, ...] = ()
+
+    def list(self, request, *args, **kwargs):
+        # Guard de configuração: sem `FILTROS_ESCOPO` o `any([])` seria
+        # sempre False e bricaria o list silenciosamente. Falha explícita
+        # (erro de dev, não 400 de cliente) em vez de silent failure.
+        if not self.FILTROS_ESCOPO:
+            raise ImproperlyConfigured(
+                f"{type(self).__name__} usa FiltroEscopoObrigatorioMixin "
+                "mas não definiu FILTROS_ESCOPO."
+            )
+        if not any(request.query_params.get(f) for f in self.FILTROS_ESCOPO):
+            raise ValidationError(
+                {
+                    "detail": (
+                        "Informe ao menos um filtro de escopo ("
+                        + ", ".join(self.FILTROS_ESCOPO)
+                        + ") — esta listagem não pode ser carregada inteira."
+                    )
+                }
+            )
+        return super().list(request, *args, **kwargs)

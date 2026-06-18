@@ -217,7 +217,11 @@ class ApiV1RoutingTests(TestCase):
             "/api/v1/professores/",
             "/api/v1/ocorrencias/",
             "/api/v1/registros-presenca/",
-            "/api/v1/itens-presenca/",
+            # itens-presenca fica fora deste smoke: o list exige um filtro
+            # de escopo com id VÁLIDO (FiltroEscopoObrigatorioMixin +
+            # ModelChoiceFilter do django-filter), e este teste de rotas não
+            # tem dados. Mounting/auth/escopo coberto em
+            # apps/presenca/tests/test_views.py.
         ):
             resp = self.client.get(path)
             self.assertEqual(
