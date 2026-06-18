@@ -110,19 +110,21 @@ Quatro classes granulares em `apps/common/permissions.py`, combinadas por ViewSe
 | Classe | Acesso |
 |---|---|
 | `IsAdmin` | Superuser Django ou `perfil=admin` |
-| `IsAdminOrDiretor` | Admin + `perfil=diretor` + `perfil=secretaria` |
-| `IsAdminOrDiretorOrProfessor` | Admin + diretor + secretaria + professor + inspetor |
+| `IsAdminOrDiretor` | Admin + `perfil=diretor` + `perfil=secretaria` + `perfil=coordenador` |
+| `IsAdminOrDiretorOrProfessor` | Admin + diretor + secretaria + coordenador + professor + inspetor |
 | `IsAdminOrDiretorOrProfessorOrInspetor` | Mesmo grupo do anterior (ver "Aliases de perfil" abaixo) |
 
-**Aliases de perfil**: `secretaria` opera como `diretor` (faz cadastros, gerencia usuários); `inspetor` opera como `professor` (lança ocorrência e chamada). A distinção entre eles é só **rótulo de UX** — sidebar e Dashboard mostram "Secretaria"/"Inspetor" no perfil, mas o conjunto de ações é idêntico ao do par equivalente. Decisão consciente pra escala de escola pequena/média onde os papéis são fluidos no dia a dia. Quando crescer pra rede grande, os perfis já existem distintos no enum `Usuario.Perfil` — basta refinar as classes pra separar.
+**Aliases de perfil**: `secretaria` e `coordenador` operam como `diretor` (fazem cadastros, gerenciam usuários); `inspetor` opera como `professor` (lança ocorrência e chamada). A distinção entre eles é só **rótulo de UX** — sidebar e Dashboard mostram "Secretaria"/"Coordenador"/"Inspetor" no perfil, mas o conjunto de ações é idêntico ao do par equivalente. Decisão consciente pra escala de escola pequena/média onde os papéis são fluidos no dia a dia. Quando crescer pra rede grande, os perfis já existem distintos no enum `Usuario.Perfil` — basta refinar as classes pra separar.
 
 `ReadWritePermissionMixin` (em `apps/common/views.py`) padroniza separação read/write por ação: `list`/`retrieve` usam `READ_PERMISSION`; o restante usa `WRITE_PERMISSION`. Apps com regra uniforme (ex.: `ocorrencias`) declaram `permission_classes` direto.
+
+`FiltroEscopoObrigatorioMixin` (mesmo arquivo) protege os endpoints **matriz** (`NotaAvaliacao`, `NotaPeriodo`, `ItemPresenca`) — uma linha por (aluno × avaliação) / (aluno × chamada). O `list` é recusado (400) sem um filtro de escopo (`?avaliacao=`, `?registro=`, etc.). As telas que os consomem (lançamento de notas em lote, chamada) sempre passam o filtro e precisam de todos os alunos de uma vez, então a escolha foi **limitar a carga por escopo em vez de paginar** — evita varredura de dezenas de milhares de linhas sem quebrar a UX.
 
 Por padrão, **escrita em cadastros** (Aluno, Turma, Disciplina, Professor, Lecionamento) é restrita a admin/diretor — professor tem leitura mas não cria/edita/exclui. O frontend espelha isso via hook `usePermissoes` (esconde botões "Novo/Editar/Excluir" pra perfil professor), evitando 403 visível.
 
 Todos os querysets são escopados à `escola` do usuário autenticado via `EscopoEscolaMixin`. Defesa contra IDOR na escrita: cada serializer com FK `escola` aplica o helper `validate_escola_do_usuario` — admin/superuser passam qualquer escola; não-admin só pode escrever na própria mesmo que envie outra explicitamente no payload.
 
-**Auto-escopo de escola na criação** — diretor/professor/secretaria/inspetor **não precisa selecionar escola** ao criar turma, ocorrência, aluno, etc. O `AutoEscopoEscolaSerializerMixin` (em `apps/common/serializers.py`) injeta `escola` no payload via `to_internal_value` quando o usuário tem `escola_id` no JWT e o campo foi omitido. O frontend nem mostra o select de escola pra esses perfis — multi-tenant fica invisível pro cliente final. Admin global (sem escola no perfil) continua precisando especificar `escola` no payload, com 400 explícito se omitir.
+**Auto-escopo de escola na criação** — diretor/professor/secretaria/coordenador/inspetor **não precisa selecionar escola** ao criar turma, ocorrência, aluno, etc. O `AutoEscopoEscolaSerializerMixin` (em `apps/common/serializers.py`) injeta `escola` no payload via `to_internal_value` quando o usuário tem `escola_id` no JWT e o campo foi omitido. O frontend nem mostra o select de escola pra esses perfis — multi-tenant fica invisível pro cliente final. Admin global (sem escola no perfil) continua precisando especificar `escola` no payload, com 400 explícito se omitir.
 
 ### Multi-tenancy
 
@@ -155,7 +157,7 @@ Cada app de domínio segue o mesmo layout (`models.py`, `serializers.py`, `views
 - Validator de CNPJ com dígito verificador.
 
 **`apps/accounts`**
-- `Usuario` estendendo `AbstractUser` com `perfil` (admin/diretor/professor/secretaria/inspetor) + FK opcional para `Escola`.
+- `Usuario` estendendo `AbstractUser` com `perfil` (admin/diretor/professor/secretaria/coordenador/inspetor) + FK opcional para `Escola`.
 - CRUD via `/api/v1/usuarios/` (admin e diretor). O serializer expõe `escola` (necessário para o frontend criar Professor com escola alinhada).
 - `UsuarioTokenObtainPairView` + `UsuarioTokenObtainPairSerializer` injetando os claims customizados.
 
@@ -197,7 +199,7 @@ Cada app de domínio segue o mesmo layout (`models.py`, `serializers.py`, `views
 **`apps/aulas`**
 - `RegistroAula` — diário de classe: o conteúdo programático efetivamente ministrado numa aula. Turma + disciplina + professor + data + `conteudo` (texto livre) + `status` (`rascunho` → `lancado` → `conferido`) + `conferido_por`/`conferido_em` (visto da direção). Único por `(escola, turma, disciplina, data)`. Auditado.
 - Invariantes em `clean()`/serializer: escola alinhada (turma/disciplina/professor), **`Lecionamento` ativo obrigatório** pro trio, data não-futura, conteúdo exigido ao lançar.
-- Viewset escopado: direção (admin/diretor/secretaria) vê a escola inteira; professor/inspetor só os próprios registros. `perform_create` bloqueia (403) o professor que tenta lançar em nome de outro.
+- Viewset escopado: direção (admin/diretor/secretaria/coordenador) vê a escola inteira; professor/inspetor só os próprios registros. `perform_create` bloqueia (403) o professor que tenta lançar em nome de outro.
 - Action `conferir` (só direção): `lancado → conferido`, grava quem/quando. O serializer recusa `status=conferido` (sem auto-conferência); aula conferida trava edição.
 - Action `agenda` (`?turma=&disciplina=&mes=YYYY-MM`): projeta os slots do mês a partir de `dias_semana` do `Lecionamento`, on-the-fly via `services.py` (sem tabela). Navega mês a mês; ignora feriados na v1.
 - Front (diário do professor + ficha do professor com PDF + card no dashboard) em PRs subsequentes.
