@@ -17,6 +17,18 @@ export function useProfessores() {
   });
 }
 
+// Professor único — usado pela ficha do professor (/professores/:id).
+export function useProfessor(id: number | undefined) {
+  return useQuery({
+    queryKey: [...PROFESSORES_KEY, "detail", id],
+    queryFn: async (): Promise<Professor> => {
+      const { data } = await api.get<Professor>(`/professores/${id}/`);
+      return data;
+    },
+    enabled: id != null && Number.isFinite(id),
+  });
+}
+
 // Ver `useAlunosPaginated` em features/alunos/hooks.ts pra justificativa.
 export function useProfessoresPaginated(pagination: {
   page: number;

@@ -21,6 +21,7 @@ const PERFIL_LABEL: Record<string, string> = {
   diretor: "Diretor",
   professor: "Professor",
   secretaria: "Secretaria",
+  coordenador: "Coordenador",
   inspetor: "Inspetor",
 };
 

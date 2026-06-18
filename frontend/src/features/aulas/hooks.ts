@@ -19,7 +19,9 @@ interface AulasFilter {
   data_fim?: string;
 }
 
-export function useRegistrosAula(filter: AulasFilter = {}) {
+// `enabled` permite desligar a query (ex.: id de professor inválido na URL),
+// evitando buscar todas as aulas da escola sem escopo. Default true.
+export function useRegistrosAula(filter: AulasFilter = {}, enabled = true) {
   return useQuery({
     queryKey: [...AULAS_KEY, filter],
     queryFn: async (): Promise<RegistroAula[]> => {
@@ -28,6 +30,7 @@ export function useRegistrosAula(filter: AulasFilter = {}) {
       });
       return data;
     },
+    enabled,
   });
 }
 
@@ -107,6 +110,26 @@ export function useUpdateRegistroAula() {
       toast.success("Aula atualizada.");
     },
     onError: () => toast.error("Não foi possível atualizar a aula."),
+  });
+}
+
+// Conferência da direção: `lancado` → `conferido`. A transição é exclusiva
+// da action `conferir` (backend grava quem/quando e exige IsAdminOrDiretor),
+// então não há equivalente via PATCH de status.
+export function useConferirAula() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number): Promise<RegistroAula> => {
+      const { data } = await api.post<RegistroAula>(
+        `/registros-aula/${id}/conferir/`,
+      );
+      return data;
+    },
+    onSuccess: () => {
+      invalidateAll(qc);
+      toast.success("Aula conferida.");
+    },
+    onError: () => toast.error("Não foi possível conferir a aula."),
   });
 }
 

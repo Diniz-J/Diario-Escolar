@@ -1,11 +1,11 @@
 """Views da app aulas — diário de classe do professor + visto da direção.
 
 Padrão de permissão:
-- Leitura/escrita: admin/diretor/secretaria/professor/inspetor.
-- Conferência (`conferir`): só admin/diretor/secretaria.
+- Leitura/escrita: admin/diretor/secretaria/coordenador/professor/inspetor.
+- Conferência (`conferir`): só admin/diretor/secretaria/coordenador.
 
 Escopo de visibilidade:
-- Direção (admin/diretor/secretaria) vê os registros de toda a escola.
+- Direção (admin/diretor/secretaria/coordenador) vê os registros de toda a escola.
 - Professor/inspetor vê e edita apenas os próprios registros.
 
 A transição pra `conferido` é exclusiva da action `conferir` — o serializer
@@ -34,7 +34,7 @@ from .serializers import RegistroAulaSerializer
 from .services import projetar_agenda
 
 # Perfis que enxergam o diário da escola inteira (não só o próprio).
-_PERFIS_DIRECAO = frozenset({"diretor", "secretaria"})
+_PERFIS_DIRECAO = frozenset({"diretor", "secretaria", "coordenador"})
 
 
 def _eh_direcao(user) -> bool:

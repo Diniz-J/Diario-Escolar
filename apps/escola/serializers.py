@@ -197,6 +197,10 @@ class LecionamentoSerializer(AutoEscopoEscolaSerializerMixin, serializers.ModelS
             "turma",
             "disciplina",
             "ano_letivo",
+            # Grade horária (0=segunda ... 6=domingo). Base da projeção da
+            # agenda do diário e exibida na ficha do professor. Sem isto no
+            # serializer o front recebe `undefined` e quebra ao iterar.
+            "dias_semana",
             "ativo",
             "criado_em",
             "atualizado_em",

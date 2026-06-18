@@ -22,6 +22,7 @@ import { PeriodosAvaliativosPage } from "@/pages/PeriodosAvaliativosPage";
 import { PlanoEnsinoDetalhePage } from "@/pages/PlanoEnsinoDetalhePage";
 import { PlanosEnsinoPage } from "@/pages/PlanosEnsinoPage";
 import { PresencaDetalhePage } from "@/pages/PresencaDetalhePage";
+import { ProfessorDetalhePage } from "@/pages/ProfessorDetalhePage";
 import { ProfessoresPage } from "@/pages/ProfessoresPage";
 import { PresencaPage } from "@/pages/PresencaPage";
 import { TurmaDetalhePage } from "@/pages/TurmaDetalhePage";
@@ -47,6 +48,10 @@ export function AppRoutes() {
           <Route path="/turmas/:id" element={<TurmaDetalhePage />} />
           <Route path="/disciplinas" element={<DisciplinasPage />} />
           <Route path="/professores" element={<ProfessoresPage />} />
+          <Route
+            path="/professores/:id"
+            element={<ProfessorDetalhePage />}
+          />
           <Route path="/planos-ensino" element={<PlanosEnsinoPage />} />
           <Route
             path="/planos-ensino/:id"

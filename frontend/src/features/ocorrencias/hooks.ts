@@ -14,6 +14,8 @@ interface OcorrenciasFilter {
   status?: OcorrenciaStatus;
   aluno?: number;
   turma?: number;
+  // Professor que registrou a ocorrência — usado na ficha do professor.
+  professor?: number;
   // Range de datas (ISO YYYY-MM-DD), filtrado server-side via OcorrenciaFilter.
   data_inicio?: string;
   data_fim?: string;
