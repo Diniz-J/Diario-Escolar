@@ -11,6 +11,7 @@ export type Perfil =
   | "diretor"
   | "professor"
   | "secretaria"
+  | "coordenador"
   | "inspetor";
 
 export interface LoginInput {

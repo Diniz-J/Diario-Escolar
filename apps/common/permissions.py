@@ -12,11 +12,13 @@ from rest_framework.permissions import BasePermission
 _PERFIL_ADMIN = "admin"
 _PERFIL_DIRETOR = "diretor"
 _PERFIL_SECRETARIA = "secretaria"
+_PERFIL_COORDENADOR = "coordenador"
 _PERFIL_PROFESSOR = "professor"
 _PERFIL_INSPETOR = "inspetor"
 
-# Decisão de design: `secretaria` opera como `diretor` e `inspetor` opera
-# como `professor` em termos de permissão. A distinção entre eles é só de
+# Decisão de design: `secretaria` e `coordenador` operam como `diretor` e
+# `inspetor` opera como `professor` em termos de permissão. A distinção
+# entre eles é só de
 # **rótulo de UX** (saudação, lista de usuários, identidade visual da
 # sidebar) — útil pra escala atual (escola pequena/média) onde os papéis
 # são fluidos no dia a dia. Quando o sistema crescer pra rede grande e
@@ -62,26 +64,31 @@ class IsAdmin(_BasePerfilPermission):
 
 
 class IsAdminOrDiretor(_BasePerfilPermission):
-    """Administradores (bypass), diretores ou secretaria.
+    """Administradores (bypass), diretores, secretaria ou coordenador.
 
-    `secretaria` entra aqui como alias funcional de diretor — mesma regra
-    do dia a dia escolar (matricula aluno, monta turma, cadastra prof).
+    `secretaria` e `coordenador` entram aqui como aliases funcionais de
+    diretor — mesma regra do dia a dia escolar (matricula aluno, monta
+    turma, cadastra prof).
     """
 
-    PERFIS_PERMITIDOS = frozenset({_PERFIL_DIRETOR, _PERFIL_SECRETARIA})
+    PERFIS_PERMITIDOS = frozenset(
+        {_PERFIL_DIRETOR, _PERFIL_SECRETARIA, _PERFIL_COORDENADOR}
+    )
 
 
 class IsAdminOrDiretorOrProfessor(_BasePerfilPermission):
-    """Administradores (bypass), diretores, secretaria, professores ou inspetores.
+    """Administradores (bypass), nível-diretor, professores ou inspetores.
 
     `inspetor` entra como alias de professor (lança ocorrência/chamada
-    como professor faria). `secretaria` continua como alias de diretor.
+    como professor faria). `secretaria` e `coordenador` continuam como
+    aliases de diretor.
     """
 
     PERFIS_PERMITIDOS = frozenset(
         {
             _PERFIL_DIRETOR,
             _PERFIL_SECRETARIA,
+            _PERFIL_COORDENADOR,
             _PERFIL_PROFESSOR,
             _PERFIL_INSPETOR,
         }
@@ -89,12 +96,12 @@ class IsAdminOrDiretorOrProfessor(_BasePerfilPermission):
 
 
 class IsAdminOrDiretorOrProfessorOrInspetor(_BasePerfilPermission):
-    """Administradores (bypass), diretores, secretaria, professores ou inspetores.
+    """Administradores (bypass), nível-diretor, professores ou inspetores.
 
     Hoje equivale a `IsAdminOrDiretorOrProfessor` por causa dos aliases
-    (secretaria → diretor, inspetor → professor). Mantida como classe
-    separada por compatibilidade de chamadores que referenciam o nome
-    e pra deixar explícita a intenção de "leitura ampla incluindo
+    (secretaria/coordenador → diretor, inspetor → professor). Mantida como
+    classe separada por compatibilidade de chamadores que referenciam o
+    nome e pra deixar explícita a intenção de "leitura ampla incluindo
     monitoramento" — se um dia inspetor virar perfil distinto de
     professor, esta classe é o ponto de retomada.
     """
@@ -103,6 +110,7 @@ class IsAdminOrDiretorOrProfessorOrInspetor(_BasePerfilPermission):
         {
             _PERFIL_DIRETOR,
             _PERFIL_SECRETARIA,
+            _PERFIL_COORDENADOR,
             _PERFIL_PROFESSOR,
             _PERFIL_INSPETOR,
         }

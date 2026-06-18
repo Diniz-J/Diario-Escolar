@@ -30,6 +30,7 @@ class Usuario(AbstractUser):
         DIRETOR = "diretor", "Diretor"
         PROFESSOR = "professor", "Professor"
         SECRETARIA = "secretaria", "Secretaria"
+        COORDENADOR = "coordenador", "Coordenador"
         INSPETOR = "inspetor", "Inspetor"
 
     email = models.EmailField("email address", blank=False)

@@ -38,6 +38,9 @@ class _PermissionMatrixTests(TestCase):
         cls.secretaria = Usuario.objects.create_user(
             username="sec", password="x", perfil=Usuario.Perfil.SECRETARIA
         )
+        cls.coordenador = Usuario.objects.create_user(
+            username="coord", password="x", perfil=Usuario.Perfil.COORDENADOR
+        )
         cls.inspetor = Usuario.objects.create_user(
             username="ins", password="x", perfil=Usuario.Perfil.INSPETOR
         )
@@ -68,6 +71,9 @@ class IsAdminTests(_PermissionMatrixTests):
     def test_secretaria_negado(self):
         self.assertFalse(self._check(IsAdmin, self.secretaria))
 
+    def test_coordenador_negado(self):
+        self.assertFalse(self._check(IsAdmin, self.coordenador))
+
     def test_inspetor_negado(self):
         self.assertFalse(self._check(IsAdmin, self.inspetor))
 
@@ -91,6 +97,10 @@ class IsAdminOrDiretorTests(_PermissionMatrixTests):
     def test_secretaria_aceito(self):
         """Alias de diretor — passa em IsAdminOrDiretor."""
         self.assertTrue(self._check(IsAdminOrDiretor, self.secretaria))
+
+    def test_coordenador_aceito(self):
+        """Alias de diretor — passa em IsAdminOrDiretor."""
+        self.assertTrue(self._check(IsAdminOrDiretor, self.coordenador))
 
     def test_inspetor_negado(self):
         """Inspetor não tem cadastro — fica fora de IsAdminOrDiretor."""
@@ -117,6 +127,12 @@ class IsAdminOrDiretorOrProfessorTests(_PermissionMatrixTests):
         """Alias de diretor."""
         self.assertTrue(self._check(IsAdminOrDiretorOrProfessor, self.secretaria))
 
+    def test_coordenador_aceito(self):
+        """Alias de diretor."""
+        self.assertTrue(
+            self._check(IsAdminOrDiretorOrProfessor, self.coordenador)
+        )
+
     def test_inspetor_aceito(self):
         """Alias de professor."""
         self.assertTrue(self._check(IsAdminOrDiretorOrProfessor, self.inspetor))
@@ -132,6 +148,7 @@ class PerfilConstantsConsistencyTests(TestCase):
         self.assertIn(permissions._PERFIL_ADMIN, valores_enum)
         self.assertIn(permissions._PERFIL_DIRETOR, valores_enum)
         self.assertIn(permissions._PERFIL_SECRETARIA, valores_enum)
+        self.assertIn(permissions._PERFIL_COORDENADOR, valores_enum)
         self.assertIn(permissions._PERFIL_PROFESSOR, valores_enum)
         self.assertIn(permissions._PERFIL_INSPETOR, valores_enum)
 
