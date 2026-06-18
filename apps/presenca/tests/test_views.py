@@ -340,8 +340,8 @@ class ItemPresencaViewTests(_PresencaSetup):
 
     def test_inspetor_le_e_edita(self):
         """Alias de professor — pode lançar status em item."""
-        # GET passa.
-        req = self.factory.get("/")
+        # GET passa (com filtro de escopo obrigatório).
+        req = self.factory.get(f"/?registro={self.item.registro_id}")
         force_authenticate(req, user=self.usuarios["inspetor"])
         resp = ItemPresencaViewSet.as_view({"get": "list"})(req)
         self.assertEqual(resp.status_code, 200)
@@ -350,6 +350,13 @@ class ItemPresencaViewTests(_PresencaSetup):
             "inspetor", {"status": ItemPresenca.Status.AUSENTE}, self.item.id
         )
         self.assertEqual(resp.status_code, 200)
+
+    def test_list_sem_escopo_400(self):
+        """Sem `?registro=`/`?aluno=` o list é recusado (FiltroEscopoObrigatorio)."""
+        req = self.factory.get("/")
+        force_authenticate(req, user=self.usuarios["diretor"])
+        resp = ItemPresencaViewSet.as_view({"get": "list"})(req)
+        self.assertEqual(resp.status_code, 400)
 
     def test_create_e_destroy_acoes_nao_existem(self):
         """ItemPresencaViewSet não inclui Create/Destroy mixins de propósito.

@@ -233,6 +233,13 @@ class EscopoEIdorTests(_Base):
         titulos = [a["titulo"] for a in resp.data]
         self.assertNotIn("X", titulos)
 
+    def test_notas_avaliacao_list_sem_escopo_400(self):
+        """`/notas-avaliacao/` sem `?avaliacao=`/`?aluno=` é recusado."""
+        resp = self._request(
+            "list", viewset_cls=NotaAvaliacaoViewSet, user=self.diretor
+        )
+        self.assertEqual(resp.status_code, 400)
+
     def test_idor_payload_escola_alheia_bloqueado(self):
         resp = self._request(
             "create",
