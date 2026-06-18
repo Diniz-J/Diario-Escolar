@@ -1,4 +1,5 @@
 """Mixins de view reutilizáveis."""
+from django.core.exceptions import ImproperlyConfigured
 from rest_framework.exceptions import ValidationError
 
 from apps.common.permissions import (
@@ -82,6 +83,14 @@ class FiltroEscopoObrigatorioMixin:
     FILTROS_ESCOPO: tuple[str, ...] = ()
 
     def list(self, request, *args, **kwargs):
+        # Guard de configuração: sem `FILTROS_ESCOPO` o `any([])` seria
+        # sempre False e bricaria o list silenciosamente. Falha explícita
+        # (erro de dev, não 400 de cliente) em vez de silent failure.
+        if not self.FILTROS_ESCOPO:
+            raise ImproperlyConfigured(
+                f"{type(self).__name__} usa FiltroEscopoObrigatorioMixin "
+                "mas não definiu FILTROS_ESCOPO."
+            )
         if not any(request.query_params.get(f) for f in self.FILTROS_ESCOPO):
             raise ValidationError(
                 {
