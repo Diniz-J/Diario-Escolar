@@ -540,10 +540,13 @@ function LecionamentosTab({
               </TableCell>
               <TableCell className="hidden md:table-cell">
                 <div className="flex flex-wrap gap-1">
-                  {l.dias_semana.length === 0 ? (
+                  {/* `dias_semana` pode vir ausente de backends antigos
+                      (campo só foi exposto no serializer junto desta tela);
+                      defaulta pra lista vazia pra não quebrar a aba. */}
+                  {(l.dias_semana ?? []).length === 0 ? (
                     <span className="text-xs text-muted-foreground">—</span>
                   ) : (
-                    l.dias_semana.map((d) => (
+                    (l.dias_semana ?? []).map((d) => (
                       <span
                         key={d}
                         className="text-xs bg-muted px-1.5 py-0.5 rounded"
