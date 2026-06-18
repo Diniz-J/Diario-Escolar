@@ -8,7 +8,13 @@ import type { JwtPayload } from "./types";
 
 export function decodeToken(token: string): JwtPayload | null {
   try {
-    return jwtDecode<JwtPayload>(token);
+    const payload = jwtDecode<JwtPayload>(token);
+    // O SimpleJWT serializa `user_id` como string no claim. Normalizamos
+    // pra number aqui — casa com o tipo declarado (JwtPayload.user_id) e
+    // com `Professor.usuario` (FK numérica vinda da API). Sem isso,
+    // comparações estritas falham com `9 === "9"` => false (ex.: achar o
+    // Professor do usuário logado no Diário de Aula).
+    return { ...payload, user_id: Number(payload.user_id) };
   } catch {
     // Token corrompido ou malformado — tratado como inválido.
     return null;
