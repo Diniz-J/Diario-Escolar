@@ -110,6 +110,26 @@ export function useUpdateRegistroAula() {
   });
 }
 
+// Conferência da direção: `lancado` → `conferido`. A transição é exclusiva
+// da action `conferir` (backend grava quem/quando e exige IsAdminOrDiretor),
+// então não há equivalente via PATCH de status.
+export function useConferirAula() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number): Promise<RegistroAula> => {
+      const { data } = await api.post<RegistroAula>(
+        `/registros-aula/${id}/conferir/`,
+      );
+      return data;
+    },
+    onSuccess: () => {
+      invalidateAll(qc);
+      toast.success("Aula conferida.");
+    },
+    onError: () => toast.error("Não foi possível conferir a aula."),
+  });
+}
+
 export function useDeleteRegistroAula() {
   const qc = useQueryClient();
   return useMutation({
