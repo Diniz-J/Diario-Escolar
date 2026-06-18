@@ -14,6 +14,8 @@ recusa `status=conferido`, então não há como o professor se autoconferir.
 from datetime import date
 
 from django.core.exceptions import ObjectDoesNotExist
+from django.http import HttpResponse
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
@@ -26,7 +28,7 @@ from apps.common.permissions import (
     IsAdminOrDiretorOrProfessor,
 )
 from apps.common.views import EscopoEscolaMixin, ReadWritePermissionMixin
-from apps.escola.models import Turma
+from apps.escola.models import Professor, Turma
 
 from .filters import RegistroAulaFilter
 from .models import RegistroAula
@@ -35,6 +37,51 @@ from .services import projetar_agenda
 
 # Perfis que enxergam o diário da escola inteira (não só o próprio).
 _PERFIS_DIRECAO = frozenset({"diretor", "secretaria", "coordenador"})
+
+_MESES = [
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
+]
+
+
+def _render_pdf(html_str: str) -> bytes:
+    """Helper module-level: renderiza HTML→PDF via WeasyPrint.
+
+    Mesmo padrão do boletim (apps/boletins/views.py): nível de função pra
+    ser mockável nos testes e com import lazy do WeasyPrint (que só carrega
+    libs do sistema quando de fato chamado — `manage.py check` no Windows
+    continua funcionando).
+    """
+    from weasyprint import HTML  # noqa: WPS433
+
+    return HTML(string=html_str).write_pdf()
+
+
+def _agrupar_por_mes(registros):
+    """Agrupa os registros (já ordenados por -data) em seções por mês."""
+    grupos: list[dict] = []
+    atual = None
+    for r in registros:
+        chave = (r.data.year, r.data.month)
+        if atual is None or atual["chave"] != chave:
+            atual = {
+                "chave": chave,
+                "label": f"{_MESES[r.data.month - 1]} {r.data.year}",
+                "aulas": [],
+            }
+            grupos.append(atual)
+        atual["aulas"].append(r)
+    return grupos
 
 
 def _eh_direcao(user) -> bool:
@@ -203,3 +250,88 @@ class RegistroAulaViewSet(
             mes=mes,
         )
         return Response(slots)
+
+    @action(detail=False, methods=["get"])
+    def pdf(self, request):
+        """Exporta o diário (recortado pelos filtros) em PDF com assinatura.
+
+        Reaproveita `get_queryset` (escopo por perfil) + `RegistroAulaFilter`,
+        então o PDF sai com o mesmo recorte da tela (professor/turma/
+        disciplina/status/período). O template é agnóstico do renderizador.
+        """
+        registros = list(self.filter_queryset(self.get_queryset()))
+
+        # Cabeçalho: resolve o professor do filtro (a ficha sempre manda),
+        # respeitando o escopo de escola pra não vazar nome de outra escola.
+        professor = None
+        professor_id = request.query_params.get("professor")
+        if professor_id:
+            professor = (
+                self._professores_no_escopo()
+                .filter(pk=professor_id)
+                .select_related("usuario")
+                .first()
+            )
+
+        contexto = {
+            "professor_nome": (
+                professor.usuario.get_full_name() if professor else None
+            ),
+            "escola_nome": registros[0].escola.nome if registros else "",
+            "filtros": self._descrever_filtros(request),
+            "grupos": _agrupar_por_mes(registros),
+            "total": len(registros),
+            "gerado_em": timezone.localtime(),
+        }
+        # WeasyPrint não tem servidor HTTP: a logo precisa de caminho
+        # absoluto (file://). Mesmo padrão do boletim.
+        from django.contrib.staticfiles import finders
+
+        contexto["logo_path"] = (
+            finders.find("branding/diario-diniz-badge-128.png") or ""
+        )
+
+        html_str = render_to_string("aula_diario_pdf.html", contexto)
+        pdf_bytes = _render_pdf(html_str)
+
+        if professor:
+            slug = (
+                professor.usuario.get_full_name()
+                or professor.usuario.username
+            )
+            slug = slug.strip().lower().replace(" ", "_")
+            nome_arquivo = f"diario_{slug}.pdf"
+        else:
+            nome_arquivo = "diario_aula.pdf"
+
+        resposta = HttpResponse(pdf_bytes, content_type="application/pdf")
+        resposta["Content-Disposition"] = (
+            f'attachment; filename="{nome_arquivo}"'
+        )
+        return resposta
+
+    def _professores_no_escopo(self):
+        """Professores visíveis pra request (mesmo escopo de escola da view)."""
+        qs = Professor.objects.all()
+        user = self.request.user
+        if _eh_direcao(user):
+            escola_id = getattr(user, "escola_id", None)
+            return qs.filter(escola_id=escola_id) if escola_id else qs
+        proprio = _professor_do_usuario(user)
+        return qs.filter(pk=proprio.id) if proprio else qs.none()
+
+    @staticmethod
+    def _descrever_filtros(request) -> str:
+        """Monta um rótulo legível dos filtros aplicados, pro cabeçalho."""
+        partes = []
+        inicio = request.query_params.get("data_inicio")
+        fim = request.query_params.get("data_fim")
+        if inicio or fim:
+            partes.append(f"{inicio or '...'} a {fim or '...'}")
+        status_filtro = request.query_params.get("status")
+        if status_filtro:
+            rotulo = dict(RegistroAula.Status.choices).get(
+                status_filtro, status_filtro
+            )
+            partes.append(f"Status: {rotulo}")
+        return " · ".join(partes) if partes else "Todas as aulas"

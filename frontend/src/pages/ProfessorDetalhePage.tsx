@@ -30,8 +30,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { NomeArquivoDialog } from "@/features/boletins/NomeArquivoDialog";
 import { DIAS_SEMANA_CURTO, STATUS_AULA } from "@/features/aulas/constants";
-import { useConferirAula, useRegistrosAula } from "@/features/aulas/hooks";
+import {
+  useBaixarDiarioPDF,
+  useConferirAula,
+  useRegistrosAula,
+} from "@/features/aulas/hooks";
 import { usePermissoes } from "@/features/auth/usePermissoes";
 import { useDisciplinas } from "@/features/disciplinas/hooks";
 import { useLecionamentos } from "@/features/lecionamentos/hooks";
@@ -240,6 +245,7 @@ export function ProfessorDetalhePage() {
             {tab === "diario" && (
               <DiarioTab
                 professorId={professorId}
+                professorNome={professorQuery.data?.nome_completo}
                 turmasPorId={turmasPorId}
                 disciplinasPorId={disciplinasPorId}
                 podeConferir={podeModificarCadastros}
@@ -285,13 +291,15 @@ const STATUS_OPCOES: RegistroAulaStatus[] = ["rascunho", "lancado", "conferido"]
 
 function DiarioTab({
   professorId,
+  professorNome,
   turmasPorId,
   disciplinasPorId,
   podeConferir,
-}: MapsProps & { podeConferir: boolean }) {
+}: MapsProps & { podeConferir: boolean; professorNome?: string }) {
   const [status, setStatus] = useState<string>(STATUS_TODOS);
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
+  const [pdfDialogAberto, setPdfDialogAberto] = useState(false);
 
   const temFiltro = status !== STATUS_TODOS || !!dataInicio || !!dataFim;
 
@@ -306,6 +314,26 @@ function DiarioTab({
       : {},
   );
   const conferir = useConferirAula();
+  const baixarPdf = useBaixarDiarioPDF();
+
+  // Nome default do arquivo: diario_<professor> (sem extensão).
+  const nomePdfDefault = `diario_${(professorNome || "aula")
+    .toLowerCase()
+    .replace(/\s+/g, "_")}`;
+
+  function exportarPdf(nome: string) {
+    if (!professorId) return;
+    baixarPdf.mutate(
+      {
+        professor: professorId,
+        ...(status !== STATUS_TODOS ? { status } : {}),
+        ...(dataInicio ? { data_inicio: dataInicio } : {}),
+        ...(dataFim ? { data_fim: dataFim } : {}),
+        nome,
+      },
+      { onSuccess: () => setPdfDialogAberto(false) },
+    );
+  }
 
   function limparFiltros() {
     setStatus(STATUS_TODOS);
@@ -378,6 +406,17 @@ function DiarioTab({
             Limpar
           </Button>
         )}
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="sm:ml-auto"
+          disabled={(aulasQuery.data?.length ?? 0) === 0}
+          onClick={() => setPdfDialogAberto(true)}
+        >
+          Exportar PDF
+        </Button>
       </div>
 
       {aulasQuery.isLoading ? (
@@ -416,6 +455,17 @@ function DiarioTab({
           ))}
         </div>
       )}
+
+      <NomeArquivoDialog
+        open={pdfDialogAberto}
+        onOpenChange={setPdfDialogAberto}
+        nomeDefault={nomePdfDefault}
+        extensao=".pdf"
+        titulo="Exportar diário em PDF"
+        descricao="O PDF sai com o recorte atual (status e período) e espaço de assinatura."
+        enviando={baixarPdf.isPending}
+        onConfirmar={exportarPdf}
+      />
     </div>
   );
 }
