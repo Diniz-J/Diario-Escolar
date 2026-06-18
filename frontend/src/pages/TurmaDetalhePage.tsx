@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +25,7 @@ import { useTurma } from "@/features/turmas/hooks";
 // filtrados por turma (backend já suporta ?turma=X via DjangoFilterBackend).
 export function TurmaDetalhePage() {
   const params = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const turmaId = params.id ? parseInt(params.id, 10) : undefined;
 
   const turmaQuery = useTurma(turmaId);
@@ -130,7 +131,13 @@ export function TurmaDetalhePage() {
                 </TableRow>
               ) : (
                 alunosQuery.data.map((aluno) => (
-                  <TableRow key={aluno.id}>
+                  // Linha clicável leva ao boletim do aluno — mesmo padrão
+                  // da AlunosPage. Antes faltava só aqui (déficit de UX).
+                  <TableRow
+                    key={aluno.id}
+                    className="cursor-pointer"
+                    onClick={() => navigate(`/boletim/${aluno.id}`)}
+                  >
                     <TableCell className="font-mono text-xs">
                       {aluno.matricula}
                     </TableCell>
