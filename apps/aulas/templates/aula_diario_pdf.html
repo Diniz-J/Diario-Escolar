@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-{# Diário de aula em PDF via WeasyPrint. CSS inline + tabelas pra A4. #}
+{# Diário de aula em PDF via WeasyPrint. Layout em blocos por aula, paleta olive/ferrugem. #}
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
@@ -18,9 +18,10 @@
     body {
       font-family: "DejaVu Sans", sans-serif;
       color: #2d2a24;
-      font-size: 10pt;
-      line-height: 1.4;
+      font-size: 9.5pt;
+      line-height: 1.5;
     }
+    /* Marca no topo: logo + nome do produto. */
     .marca { display: table; width: 100%; margin-bottom: 4pt; }
     .marca .logo-cell {
       display: table-cell; vertical-align: middle; width: 36pt;
@@ -35,45 +36,69 @@
     }
     h1 {
       font-family: Georgia, "DejaVu Serif", serif; font-size: 22pt;
-      font-weight: 500; letter-spacing: -0.01em; margin: 4pt 0 0 0;
+      font-weight: 500; letter-spacing: -0.01em; margin: 6pt 0 0 0;
       color: #2d2a24;
     }
-    .filete { height: 1px; width: 40px; background: #b07d62; margin: 8pt 0 14pt 0; }
-    .meta {
-      width: 100%; border-collapse: separate; border-spacing: 16pt 0;
-      font-size: 9pt; color: #6b6859; margin-bottom: 16pt;
+    .filete { height: 1px; width: 48pt; background: #b07d62; margin: 8pt 0 14pt 0; }
+    /* Meta em duas fileiras: principal (Professor + Escola) e auxiliar (Recorte/Aulas/Emitido em). */
+    .meta-principal {
+      width: 100%; border-collapse: separate; border-spacing: 18pt 0;
+      margin-bottom: 8pt;
     }
-    .meta td { padding: 0; vertical-align: top; border: none; }
-    .meta .label {
+    .meta-principal td { width: 50%; padding: 0; vertical-align: top; border: none; }
+    .meta-divisor { height: 1px; background: #ece9e0; margin: 8pt 0; }
+    .meta-aux {
+      width: 100%; border-collapse: separate; border-spacing: 18pt 0;
+      margin-bottom: 18pt;
+    }
+    .meta-aux td { width: 33%; padding: 0; vertical-align: top; border: none; }
+    .label {
       font-size: 7pt; text-transform: uppercase; letter-spacing: 0.18em;
       color: #6b6859; display: block; margin-bottom: 2pt;
     }
-    .meta .valor { color: #2d2a24; font-weight: 500; }
-    h2 {
-      font-family: Georgia, "DejaVu Serif", serif; font-size: 12pt;
-      font-weight: 500; color: #3a4524; margin: 16pt 0 6pt 0;
+    .valor { color: #2d2a24; font-weight: 500; }
+    .valor-aux { color: #2d2a24; font-size: 8.5pt; }
+    /* Cabeçalho de grupo (mês). */
+    .grupo-titulo {
+      font-family: Georgia, "DejaVu Serif", serif; font-size: 10pt;
+      font-weight: 500; color: #3a4524; margin: 12pt 0 6pt 0;
+      text-transform: uppercase; letter-spacing: 0.14em;
     }
-    table.aulas {
-      width: 100%; border-collapse: collapse; font-size: 9pt;
-      margin-bottom: 4pt;
+    /* Bloco por aula: header + body + footer condicional. */
+    .aula-bloco {
+      border-top: 1px solid #ece9e0; padding: 10pt 0;
+      page-break-inside: avoid;
     }
-    table.aulas th {
-      text-align: left; font-size: 7pt; text-transform: uppercase;
-      letter-spacing: 0.12em; color: #6b6859; font-weight: normal;
-      border-bottom: 1px solid #d8d4c8; padding: 4pt 6pt;
+    .aula-bloco:last-child { border-bottom: 1px solid #ece9e0; }
+    .aula-header { display: table; width: 100%; margin-bottom: 4pt; }
+    .aula-header .head-esq { display: table-cell; vertical-align: middle; }
+    .aula-header .head-dir { display: table-cell; vertical-align: middle; text-align: right; }
+    .aula-data {
+      font-family: Georgia, "DejaVu Serif", serif; font-size: 11pt;
+      font-weight: 500; color: #2d2a24;
     }
-    table.aulas td {
-      vertical-align: top; padding: 5pt 6pt;
-      border-bottom: 1px solid #ece9e0;
+    .aula-ctx { color: #5b6939; font-size: 9pt; padding-left: 10pt; }
+    /* Badge tintado por status. */
+    .badge {
+      display: inline-block; font-size: 7.5pt; padding: 2pt 8pt;
+      border-radius: 999pt; text-transform: uppercase;
+      letter-spacing: 0.08em; font-weight: 500; white-space: nowrap;
     }
-    .col-data { width: 56pt; white-space: nowrap; font-weight: 500; }
-    .col-ctx { width: 110pt; color: #6b6859; }
-    .col-status { width: 64pt; white-space: nowrap; }
-    .conferido-nota { font-size: 7.5pt; color: #6b6859; }
+    .badge-rascunho  { background: #ece2cc; color: #5e4a14; }
+    .badge-lancado   { background: #e8d3c5; color: #7a3e1f; }
+    .badge-conferido { background: #d6dec6; color: #3a4524; }
+    .aula-conteudo {
+      color: #2d2a24; font-size: 9pt; line-height: 1.6;
+      margin-top: 4pt;
+    }
+    .aula-conferido-nota {
+      color: #6b6859; font-size: 7.5pt; margin-top: 8pt;
+      font-style: italic;
+    }
     .vazio { color: #6b6859; font-style: italic; }
     /* Assinaturas: tabela invisível pra duas colunas lado a lado. */
     .assinaturas {
-      width: 100%; margin-top: 36pt; border-collapse: separate;
+      width: 100%; margin-top: 40pt; border-collapse: separate;
       border-spacing: 24pt 0;
     }
     .assinaturas td { width: 50%; vertical-align: bottom; text-align: center; }
@@ -94,63 +119,62 @@
   <h1>Diário de Aula</h1>
   <div class="filete"></div>
 
-  <table class="meta">
+  <table class="meta-principal">
     <tr>
-      {% if professor_nome %}
       <td>
         <span class="label">Professor</span>
-        <span class="valor">{{ professor_nome }}</span>
+        <span class="valor">{{ professor_nome|default:"—" }}</span>
       </td>
-      {% endif %}
       <td>
         <span class="label">Escola</span>
         <span class="valor">{{ escola_nome|default:"—" }}</span>
       </td>
+    </tr>
+  </table>
+
+  <div class="meta-divisor"></div>
+
+  <table class="meta-aux">
+    <tr>
       <td>
         <span class="label">Recorte</span>
-        <span class="valor">{{ filtros }}</span>
+        <span class="valor-aux">{{ filtros }}</span>
       </td>
       <td>
         <span class="label">Aulas</span>
-        <span class="valor">{{ total }}</span>
+        <span class="valor-aux">{{ total }}</span>
       </td>
       <td>
         <span class="label">Emitido em</span>
-        <span class="valor">{{ gerado_em|date:"d/m/Y H:i" }}</span>
+        <span class="valor-aux">{{ gerado_em|date:"d/m/Y H:i" }}</span>
       </td>
     </tr>
   </table>
 
   {% for grupo in grupos %}
-  <h2>{{ grupo.label }}</h2>
-  <table class="aulas">
-    <thead>
-      <tr>
-        <th class="col-data">Data</th>
-        <th class="col-ctx">Turma / Disciplina</th>
-        <th>Conteúdo</th>
-        <th class="col-status">Status</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for aula in grupo.aulas %}
-      <tr>
-        <td class="col-data">{{ aula.data|date:"d/m/Y" }}</td>
-        <td class="col-ctx">{{ aula.turma.nome }} · {{ aula.disciplina.nome }}</td>
-        <td>
-          {% if aula.conteudo %}{{ aula.conteudo }}{% else %}<span class="vazio">—</span>{% endif %}
-          {% if aula.status == "conferido" and aula.conferido_em %}
-          <div class="conferido-nota">
-            Conferido por {{ aula.conferido_por.get_full_name|default:"—" }}
-            em {{ aula.conferido_em|date:"d/m/Y H:i" }}
-          </div>
-          {% endif %}
-        </td>
-        <td class="col-status">{{ aula.get_status_display }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="grupo-titulo">{{ grupo.label }}</div>
+  {% for aula in grupo.aulas %}
+  <div class="aula-bloco">
+    <div class="aula-header">
+      <div class="head-esq">
+        <span class="aula-data">{{ aula.data|date:"d/m/Y" }}</span>
+        <span class="aula-ctx">{{ aula.turma.nome }} · {{ aula.disciplina.nome }}</span>
+      </div>
+      <div class="head-dir">
+        <span class="badge badge-{{ aula.status }}">{{ aula.get_status_display }}</span>
+      </div>
+    </div>
+    <div class="aula-conteudo">
+      {% if aula.conteudo %}{{ aula.conteudo }}{% else %}<span class="vazio">—</span>{% endif %}
+    </div>
+    {% if aula.status == "conferido" and aula.conferido_em %}
+    <div class="aula-conferido-nota">
+      Conferido por {{ aula.conferido_por.get_full_name|default:"—" }}
+      em {{ aula.conferido_em|date:"d/m/Y H:i" }}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
   {% empty %}
   <p class="vazio">Nenhuma aula no recorte selecionado.</p>
   {% endfor %}
