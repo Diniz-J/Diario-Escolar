@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { ExportarMenu } from "@/components/ExportarMenu";
 import { Pagination } from "@/components/Pagination";
@@ -35,6 +36,7 @@ import type { Professor } from "@/types/api";
 const PAGE_SIZE = 20;
 
 export function ProfessoresPage() {
+  const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const professoresQuery = useProfessoresPaginated({
     page,
@@ -201,7 +203,11 @@ export function ProfessoresPage() {
                   disciplinas: [],
                 };
                 return (
-                <TableRow key={p.id}>
+                <TableRow
+                  key={p.id}
+                  className="cursor-pointer"
+                  onClick={() => navigate(`/professores/${p.id}`)}
+                >
                   <TableCell>{p.nome_completo || "—"}</TableCell>
                   <TableCell className="hidden md:table-cell">
                     {agg.turmas.length === 0 ? (
@@ -250,7 +256,7 @@ export function ProfessoresPage() {
                       </span>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     {podeModificarCadastros && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
