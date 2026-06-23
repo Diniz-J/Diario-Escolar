@@ -178,6 +178,10 @@ export function PlanosEnsinoPage() {
                         Preenchido
                       </span>
                     ) : (
+                      // Mostarda pastel — mesmo hex do "em andamento" de
+                      // ocorrências (DESIGN.md §6.1) e do "rascunho" das
+                      // aulas. Pattern compartilhado pra status "em curso";
+                      // não existe utility/token correspondente.
                       <span className="text-[10px] uppercase tracking-wide bg-[#FCE7BC] text-[#854D0E] px-1.5 py-0.5 rounded">
                         Em branco
                       </span>

@@ -200,6 +200,9 @@ export function AvaliacaoDetalhePage() {
       )}
 
       {avaliacao && avaliacao.periodo_nome === null && (
+        // Alerta em mostarda pastel — mesmo hex do "em andamento" de
+        // ocorrências (DESIGN.md §6.1). Pattern compartilhado pra status
+        // "em curso/atenção"; não existe utility/token correspondente.
         <div className="rounded-md border border-ferrugem/40 bg-[#FCE7BC]/40 px-4 py-3 text-sm text-tinta">
           A data desta avaliação não cai em nenhum período avaliativo
           cadastrado. Cadastre um período em{" "}
