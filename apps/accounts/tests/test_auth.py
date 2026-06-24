@@ -7,11 +7,12 @@ aqui.
 """
 import jwt
 from django.conf import settings
+from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from apps.accounts.models import Usuario
+from apps.accounts.models import PasswordResetToken, Usuario
 from apps.escola.models import Escola
 
 
@@ -240,3 +241,108 @@ class ApiV1RoutingTests(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
         resp = self.client.get("/api/v1/escolas/")
         self.assertEqual(resp.status_code, 200)
+
+
+class AdminEnviarResetSenhaTests(TestCase):
+    """`POST /api/v1/usuarios/<id>/enviar-reset-senha/` — action restrita
+    a admin/diretor/secretaria/coordenador pra disparar reset de senha
+    pra outro usuário (ex.: professor esqueceu, secretaria reseta).
+    """
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        cls.escola_a = Escola.objects.create(nome="Escola A")
+        cls.escola_b = Escola.objects.create(nome="Escola B")
+        cls.admin = Usuario.objects.create_user(
+            username="adm",
+            password="x123x123x",
+            email="adm@diariodiniz.local",
+            perfil=Usuario.Perfil.ADMIN,
+        )
+        cls.diretor_a = Usuario.objects.create_user(
+            username="diretor_a",
+            password="x123x123x",
+            email="diretor_a@diariodiniz.local",
+            perfil=Usuario.Perfil.DIRETOR,
+            escola=cls.escola_a,
+        )
+        cls.professor_a = Usuario.objects.create_user(
+            username="prof_a",
+            password="x123x123x",
+            email="prof_a@diariodiniz.local",
+            perfil=Usuario.Perfil.PROFESSOR,
+            escola=cls.escola_a,
+        )
+        cls.professor_b = Usuario.objects.create_user(
+            username="prof_b",
+            password="x123x123x",
+            email="prof_b@diariodiniz.local",
+            perfil=Usuario.Perfil.PROFESSOR,
+            escola=cls.escola_b,
+        )
+
+    def setUp(self) -> None:
+        self.client = APIClient()
+        mail.outbox = []
+
+    def _bearer(self, user) -> str:
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        token = RefreshToken.for_user(user).access_token
+        return f"Bearer {token}"
+
+    def _url(self, usuario_id: int) -> str:
+        return f"/api/v1/usuarios/{usuario_id}/enviar-reset-senha/"
+
+    def test_admin_dispara_reset_para_qualquer_escola(self):
+        self.client.credentials(HTTP_AUTHORIZATION=self._bearer(self.admin))
+        resp = self.client.post(self._url(self.professor_b.id))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["email"], self.professor_b.email)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertTrue(
+            PasswordResetToken.objects.filter(usuario=self.professor_b).exists()
+        )
+
+    def test_diretor_dispara_reset_na_propria_escola(self):
+        self.client.credentials(HTTP_AUTHORIZATION=self._bearer(self.diretor_a))
+        resp = self.client.post(self._url(self.professor_a.id))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_diretor_nao_dispara_reset_em_outra_escola(self):
+        """Guard de IDOR — diretor da A não vê/atinge usuário da B."""
+        self.client.credentials(HTTP_AUTHORIZATION=self._bearer(self.diretor_a))
+        resp = self.client.post(self._url(self.professor_b.id))
+        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertFalse(
+            PasswordResetToken.objects.filter(usuario=self.professor_b).exists()
+        )
+
+    def test_professor_nao_pode_disparar_reset(self):
+        self.client.credentials(HTTP_AUTHORIZATION=self._bearer(self.professor_a))
+        resp = self.client.post(self._url(self.professor_a.id))
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_usuario_sem_email_retorna_422(self):
+        sem_email = Usuario.objects.create_user(
+            username="sem_email",
+            password="x123x123x",
+            email="",
+            perfil=Usuario.Perfil.PROFESSOR,
+            escola=self.escola_a,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=self._bearer(self.diretor_a))
+        resp = self.client.post(self._url(sem_email.id))
+        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertFalse(
+            PasswordResetToken.objects.filter(usuario=sem_email).exists()
+        )
+
+    def test_sem_autenticacao_401(self):
+        resp = self.client.post(self._url(self.professor_a.id))
+        self.assertEqual(resp.status_code, 401)
+        self.assertEqual(len(mail.outbox), 0)
