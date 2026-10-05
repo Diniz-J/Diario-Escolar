@@ -65,6 +65,22 @@ class OcorrenciaEmailTests(TestCase):
         self.assertIn("Conversa excessiva", email.body)
         self.assertIn("1º A", email.body)
 
+    def test_html_do_email_nao_vaza_comentario_do_template(self):
+        # Regressão: `{# #}` multilinha não é comentário no Django e
+        # aparecia como texto no corpo do email.
+        aluno = Aluno.objects.create(
+            escola=self.escola,
+            matricula="A3",
+            nome_completo="Carla Souza",
+            turma=self.turma,
+            nome_responsavel="Paula Souza",
+            email_responsavel="paula@example.com",
+        )
+        self._criar_ocorrencia(aluno)
+        html, _mimetype = mail.outbox[0].alternatives[0]
+        self.assertNotIn("{#", html)
+        self.assertNotIn("Template HTML do email", html)
+
     def test_aluno_sem_email_nao_quebra_e_nao_envia(self):
         aluno = Aluno.objects.create(
             escola=self.escola,
