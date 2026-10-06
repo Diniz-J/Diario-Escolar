@@ -99,7 +99,20 @@ normalizado no `save()` (lowercase+strip), unique por `(escola, email)`.
 `ResponsavelAluno` é o vínculo M2M (resolve "múltiplos responsáveis"),
 `PROTECT` nos dois lados, `clean()` exige escola igual, **auditado** — é o
 modelo que decide quem vê os dados de quem. Semeadura:
-`manage.py portal_semear_responsaveis`. **Sem endpoint ainda** (fatia 1).
+`manage.py portal_semear_responsaveis`. Backend entregue até a fatia 5:
+autenticação isolada (`/api/v1/portal/auth/`, tokens com `tipo=responsavel`
+e `responsavel_id` — o staff recusa), convite e senha (`ConviteResponsavel`,
+comando `portal_convidar_responsaveis`) e leituras em `leituras.py`, todas a
+partir dos vínculos (`filhos_do`). **Nenhum convite em produção antes da
+fatia 6** (o link cai numa tela que ainda não existe).
+
+**`materiais/`** — mural do professor pra turma (fatia 5 do `PORTAL.md`).
+`Material` = turma + disciplina + professor + título + descrição + link
+(só http/https, sem upload). **Auditado**. Mesmo molde do `RegistroAula`:
+`Lecionamento` ativo obrigatório, professor só vê/edita os próprios e não
+publica em nome de outro (403), direção vê a escola toda. `DELETE` = soft
+delete (`ativo=False`). O portal lê em `/portal/alunos/<id>/materiais/`
+(só a turma atual do filho; filho desativado vê lista vazia).
 
 **`tarefas/`** — esqueleto vazio (só `__init__.py`/`apps.py`/`migrations`). Feature **removida** do produto; frontend não tem `TarefasPage` nem feature `tarefas/`. Diretório mantido pra não quebrar migrations históricas.
 

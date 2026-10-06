@@ -268,9 +268,29 @@ A fatia 3 pode ser mergeada e deployada; o que espera é rodar o
 | 3 | `ConviteResponsavel`, convidar, aceitar, reset próprio, comando de lote | Convite reusado falha; expirado falha; só nível-diretor convida; lote respeita a cota |
 | 4 | Leituras: filhos, comunicados, boletim, ocorrências | Responsável A não lê nada do aluno de B; id alheio na URL dá 404; rascunho invisível |
 | 5 | `Material` + CRUD do professor + leitura no portal | Professor não publica em turma que não leciona; responsável só vê a turma do filho |
+| 5b | Tela do professor pro mural (staff) | Professor só vê turma/disciplina que leciona no formulário; build limpo |
 | 6 | Frontend do portal sob `/portal` | Build limpo; sessão de responsável não alcança rota administrativa; storage em namespace próprio |
 
 ---
+
+### Como ficou a fatia 5
+
+App `apps/materiais`, molde do `RegistroAula`: `Lecionamento` ativo
+obrigatório (no `clean()` e no serializer), professor só vê e edita os
+próprios materiais e não publica em nome de outro, direção vê a escola
+toda. Link só `http`/`https` — vira `<a href>` no portal, e `javascript:`
+seria vetor de ataque no clique. Excluir desativa (some do portal).
+
+No portal, `/portal/alunos/<id>/materiais/` mostra só a turma **atual** do
+filho. Filho desativado vê lista vazia, divergindo do resto do portal de
+propósito: boletim, ocorrências e comunicados são histórico dele; o mural
+é conteúdo corrente da turma, e o aluno transferido seguiria vendo o que a
+turma que deixou recebe depois. Material novo **não** dispara email: cada
+um seria um lote da cota compartilhada com os comunicados.
+
+A tela do **professor** pra publicar não estava em nenhuma fatia — as seis
+originais cobrem só o portal dos pais. Virou a fatia 5b, antes ou junto da
+6. Até lá o mural se alimenta pela API e pelo admin.
 
 ## 6. Pendências conhecidas
 

@@ -10,6 +10,7 @@ from rest_framework import serializers
 from apps.avaliacao.models import PeriodoAvaliativo
 from apps.comunicados.models import Comunicado
 from apps.escola.models import Aluno
+from apps.materiais.models import Material
 from apps.ocorrencias.models import Ocorrencia
 
 
@@ -52,6 +53,18 @@ class OcorrenciaPortalSerializer(serializers.ModelSerializer):
         if obj.professor and obj.professor.usuario:
             return obj.professor.usuario.get_full_name() or None
         return None
+
+
+class MaterialPortalSerializer(serializers.ModelSerializer):
+    disciplina = serializers.CharField(source="disciplina.nome", read_only=True)
+    professor = serializers.CharField(
+        source="professor.usuario.get_full_name", read_only=True
+    )
+
+    class Meta:
+        model = Material
+        fields = ["id", "titulo", "descricao", "link", "disciplina", "professor", "publicado_em"]
+        read_only_fields = fields
 
 
 class ComunicadoPortalSerializer(serializers.ModelSerializer):
