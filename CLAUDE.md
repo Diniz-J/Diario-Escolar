@@ -15,6 +15,14 @@ escolar completo nem uma plataforma de ensino (LMS/EdTech).
 > Posicionamento: ERP administrativo escolar procedural — gestão disciplinar,
 > presença e rastreabilidade. Não é LMS, não é app do aluno, não é EdTech.
 
+Decidido em out/2026: existe um **portal de leitura para o responsável**
+(ver [`PORTAL.md`](./PORTAL.md)) — o pai acompanha comunicados, boletim,
+ocorrências e o mural de materiais dos filhos vinculados. Isso **não**
+torna o produto um app do aluno nem um LMS: o aluno continua sem login, e
+o portal é só leitura (nada de entrega de atividade, correção ou chat).
+A ressalva de posicionamento acima segue valendo com essa única exceção —
+não a use pra justificar outras frentes de EdTech.
+
 Meta de curto prazo: **1 escola usando o sistema de verdade** antes de expandir
 escopo. Prioridade em estabilidade, rastreabilidade, deploy e UX administrativa.
 
@@ -92,7 +100,7 @@ gated por `VITE_SENTRY_DSN`).
 
 ### Frontend — `frontend/src/`
 
-- **`features/<dominio>/hooks.ts`** — TanStack Query: `useXxx` (list), `useCreate`, `useUpdate`, `useDelete`/`useDeactivate`, com invalidação de cache + toast. Domínios: `alunos`, `auth`, `boletins`, `dashboard`, `disciplinas`, `escolas`, `lecionamentos`, `ocorrencias`, `planos-ensino`, `presenca`, `professores`, `tarefas`, `turmas`, `usuarios`.
+- **`features/<dominio>/hooks.ts`** — TanStack Query: `useXxx` (list), `useCreate`, `useUpdate`, `useDelete`/`useDeactivate`, com invalidação de cache + toast. Domínios: `alunos`, `auth`, `boletins`, `dashboard`, `disciplinas`, `escolas`, `lecionamentos`, `ocorrencias`, `planos-ensino`, `presenca`, `professores`, `turmas`, `usuarios`, `comunicados`.
 - **`features/auth/`** — `AuthProvider`, `useAuth`, `usePermissoes` (regra de UI por perfil; `podeModificarCadastros` = admin/diretor), tokenStorage em localStorage, decode JWT. `user.escola_id` é o sinal usado pelos FormDialogs pra decidir se renderiza o select de escola.
 - **`lib/api.ts`** — axios único. Request interceptor injeta Bearer. Response interceptor: 401 → refresh → refaz request (promise compartilhada contra thundering herd).
 - **`lib/queryClient.ts`** — staleTime 30s, retry off pra 401/403.
@@ -200,8 +208,11 @@ gated por `VITE_SENTRY_DSN`).
 ## 5. Roadmap — status e próximos passos
 
 > Visão estratégica: validar operação real numa escola antes de expandir.
-> NÃO focar agora em: portal do aluno, app mobile nativo, gamificação, financeiro,
-> LMS, IA, microserviços, Kubernetes, arquitetura enterprise.
+> NÃO focar agora em: portal **do aluno** (login de aluno), app mobile nativo,
+> gamificação, financeiro, LMS, IA, microserviços, Kubernetes, arquitetura
+> enterprise.
+> Em andamento (out/2026): portal **do responsável**, só leitura — ver FASE 6
+> e [`PORTAL.md`](./PORTAL.md). Não confundir os dois.
 > Focar em: estabilidade, rastreabilidade, deploy, operação, UX administrativa.
 
 ### MARCO: aplicação NO AR (demo)
@@ -302,6 +313,41 @@ gated por `VITE_SENTRY_DSN`).
 11. ✅ **Email ao responsável na ocorrência (entrega real em prod)** — campos `nome/email_responsavel` no Aluno; envio em thread daemon (fire-and-forget) com `EMAIL_TIMEOUT=10s`, protegido por try/except. Backend de email = **Brevo via HTTP API** (`django-anymail`) — Resend e Gmail SMTP foram tentados e falharam pelo bloqueio de SMTP outbound do Render free (set/2025). Sender verificado: `diniz.diarioescolar@gmail.com`. 300 emails/dia free. PRs #43 (campos), #44 (off-thread fix), #48 (Brevo). **Validado em 2026-05-30 com entrega externa.** Falta: múltiplos responsáveis, telefone, flag `recebe_notificacao`.
 12. **Email assíncrono dedicado** — fila (Celery/Dramatiq/RQ) com retry + histórico, quando o volume crescer. Hoje é thread daemon best-effort. PENDENTE.
 13. **Timeline do aluno** — centraliza ocorrências, presença, advertências. Pode reaproveitar a API HistoricalRecords pra mostrar mudanças no histórico. PENDENTE.
+
+### FASE 6 — Portal do Responsável — EM ANDAMENTO
+
+Desenho completo, decisões e invariantes de segurança em
+[`PORTAL.md`](./PORTAL.md). Resumo das decisões, pra não reabrir discussão:
+
+- **Só o responsável autentica.** Aluno não loga.
+- **Conta só por convite da escola.** Sem auto-registro — qualquer pessoa
+  poderia se declarar responsável de qualquer aluno, e matrícula é
+  previsível (vetor de enumeração).
+- **Identidade em modelo separado** (`Responsavel`, herdando
+  `AbstractBaseUser` mas **não** sendo `AUTH_USER_MODEL`), com autenticação
+  própria. Usuário externo não encosta na superfície do staff.
+- **Mural de materiais é texto + link, sem upload.** Não existe
+  `FileField`/`MEDIA_ROOT` no projeto e o disco do Render é efêmero; anexo
+  exigiria object storage.
+- **Mesma app de frontend, sob `/portal`**, com namespace próprio no
+  storage de token.
+- **Convite individual na UI + management command de lote**, porque a cota
+  de 300 emails/dia do Brevo é compartilhada com os comunicados.
+- **Aluno desativado não corta o acesso**: o responsável mantém o
+  histórico, mas para de receber comunicado novo.
+
+Risco central, documentado por não ser óbvio: o SimpleJWT resolve o claim
+de id contra o `AUTH_USER_MODEL`, então um token de `Responsavel` de pk N
+apresentado num endpoint de staff carregaria o `Usuario` de pk N. Cada
+token carrega claim de tipo e **cada lado recusa o token do outro**, com
+teste nos dois sentidos.
+
+Fatias (um PR cada): 1) modelo e vínculo · 2) auth isolado · 3) convite e
+senha · 4) leituras · 5) mural · 6) frontend.
+
+**Portão: a fatia 2 (login externo) não sobe antes da PR #105 estar
+mergeada e deployada.** A fatia 1 é só modelo/migration/admin, não abre
+caminho de autenticação, e pode ir em paralelo.
 
 ### FASE 5 — Evolução SaaS
 14. **Multi-tenancy real** — middleware de tenant, RLS PostgreSQL, billing. Só após validação comercial.

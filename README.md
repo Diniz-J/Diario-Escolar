@@ -1,6 +1,6 @@
 # Diário Escolar
 
-Aplicação web para registro escolar — gestão disciplinar (ocorrências, com notificação por email ao responsável), presença, tarefas, planos de ensino, boletim e cadastros (alunos, turmas, disciplinas, professores).
+Aplicação web para registro escolar — gestão disciplinar (ocorrências, com notificação por email ao responsável), presença, comunicados aos responsáveis, planos de ensino, boletim e cadastros (alunos, turmas, disciplinas, professores).
 
 Monorepo:
 
@@ -58,7 +58,8 @@ Diario-Escolar/
 │   ├── escola/              — Escola, Turma, Disciplina, Aluno, Professor, Lecionamento
 │   ├── ocorrencias/         — Ocorrencia + services.py (email ao responsável)
 │   ├── presenca/            — RegistroPresenca + ItemPresenca
-│   ├── tarefas/             — Tarefa + EntregaTarefa
+│   ├── tarefas/             — esqueleto vazio (feature removida; ver apps/avaliacao)
+│   ├── comunicados/        — Comunicado + ComunicadoDestinatario (avisos por email)
 │   ├── planos_ensino/       — PlanoEnsino
 │   ├── boletins/            — agregação on-the-fly (sem modelo; services.py)
 │   └── aulas/               — RegistroAula (diário de classe) + projeção de agenda
@@ -67,13 +68,13 @@ Diario-Escolar/
 │   │   ├── components/      — AppLayout (sidebar + drawer mobile), ProtectedRoute, ui/* (shadcn)
 │   │   ├── features/        — domínio por pasta: auth, alunos, turmas, escolas,
 │   │   │                     professores, lecionamentos, disciplinas, dashboard,
-│   │   │                     ocorrencias, presenca, tarefas, planos-ensino,
+│   │   │                     ocorrencias, presenca, comunicados, planos-ensino,
 │   │   │                     boletins, usuarios
 │   │   ├── lib/             — api (axios + interceptors), queryClient, utils
 │   │   ├── pages/           — Login, Dashboard, Alunos, Turmas (+ detalhe),
 │   │   │                     Disciplinas, Professores, PlanosEnsino (+ detalhe),
 │   │   │                     Ocorrencias (+ detalhe), Presenca (+ detalhe),
-│   │   │                     Tarefas (+ detalhe), Boletim, 404
+│   │   │                     Comunicados (+ detalhe), Boletim, 404
 │   │   ├── routes.tsx       — mapa central de rotas
 │   │   ├── types/api.ts     — interfaces que casam com os serializers do backend
 │   │   ├── App.tsx          — providers globais (Query, Auth, Toaster)
@@ -93,6 +94,7 @@ Diario-Escolar/
 ├── DEPLOY.md                — guia de deploy (Render + Vercel) + Brevo
 ├── DESIGN.md                — norte visual da marca (tokens, voz, componentes, anti-patterns)
 ├── CLAUDE.md                — guia pra agentes de IA (guardrails + mapa + roadmap)
+├── PORTAL.md                — desenho do portal do responsável (decisões + segurança)
 ├── manage.py
 ├── requirements.txt
 ├── .env.example
@@ -170,10 +172,7 @@ Cada app de domínio segue o mesmo layout (`models.py`, `serializers.py`, `views
 - `Lecionamento` — vínculo granular **professor × turma × disciplina** (substituiu a antiga M2M `Professor.disciplinas`). Permite responder "quais turmas o prof X dá?" e "quem leciona Mat no 1º A?". `ano_letivo` derivado da turma; unique `(professor, turma, disciplina)`; `clean()` valida escola alinhada nos três. Campo `dias_semana` (`ArrayField` de inteiros, 0=segunda…6=domingo) registra a grade horária — base pra projetar os slots do diário de aula.
 - CRUD completo para todos via API, filtros declarativos + busca por nome/matrícula.
 
-**`apps/tarefas`**
-- `Tarefa` — turma + disciplina + professor + título + descrição + `data_lancamento` + `prazo` opcional + `vale_nota` + `nota_maxima` + `peso`.
-- `EntregaTarefa` — `entregue` + `data_entrega` + `nota` + `observacao` por aluno.
-- Status calculado server-side (pendente/atrasada/entregue). Leitura inclui inspetor; escrita admin/diretor/professor.
+**`apps/tarefas`** — **esqueleto vazio.** `Tarefa` e `EntregaTarefa` foram removidos: a frente virou `apps/avaliacao` (PR #72), com os dados migrados em `avaliacao.0003_migrar_tarefas` (`Tarefa(vale_nota=True)` virou `Avaliacao`; sem nota foi descartada por decisão de produto). O diretório e o registro em `INSTALLED_APPS` seguem existindo só pra resolver as migrations históricas — não há model, view, rota nem tela.
 
 **`apps/planos_ensino`**
 - `PlanoEnsino` — ementa, conteúdo programático, objetivos gerais/específicos, habilidades BNCC, carga horária, metodologia, recursos, avaliação, `ativo`. Único por `(escola, turma, disciplina, ano_letivo)` com invariantes cruzadas. Casca criada num dialog enxuto; campos longos preenchidos na tela de detalhe.
@@ -266,12 +265,6 @@ GET|PUT|PATCH|DELETE /api/v1/registros-presenca/{id}/
 GET             /api/v1/itens-presenca/
 GET|PATCH|PUT   /api/v1/itens-presenca/{id}/
 
-GET|POST        /api/v1/tarefas/
-GET|PUT|PATCH|DELETE /api/v1/tarefas/{id}/
-
-GET|POST        /api/v1/entregas-tarefa/
-GET|PUT|PATCH|DELETE /api/v1/entregas-tarefa/{id}/
-
 GET             /api/v1/boletins/aluno/{aluno_id}/        (agregação read-only)
 
 GET|POST        /api/v1/registros-aula/                   (diário de classe)
@@ -307,8 +300,6 @@ Single-Page Application em React 19 + TypeScript que consome a API REST do backe
 | `/comunicados` | Lista de comunicados (rascunhos primeiro, depois falhas, enviados por último); filtro por status; botão "Enviar" nas linhas em rascunho |
 | `/comunicados/:id` | Detalhe com a mensagem, autoria e o log de entrega por aluno (enviados / falhas / sem email), filtrável |
 | `/presenca/:id` | Tela da chamada com resumo P/A/J/R e edição inline por aluno (optimistic update) |
-| `/tarefas` | Lista de tarefas com busca |
-| `/tarefas/:id` | Detalhe com resumo de entregas e marcação por aluno |
 | `/boletim/:alunoId` | Boletim agregado do aluno (frequência + notas + ocorrências) com layout de impressão |
 
 Botões de criação/edição/exclusão em cadastros (Alunos, Turmas, Disciplinas, Professores) só aparecem para admin/diretor — controlado por `usePermissoes`.
@@ -325,13 +316,13 @@ Botões de criação/edição/exclusão em cadastros (Alunos, Turmas, Disciplina
 
 Light mode permanente com paleta de marca **Diário Diniz**: olive como cor primária (CTAs, sidebar), linho como fundo principal (papel), paper (off-white) em cards e inputs, ferrugem como accent quente (filetes, foco, indicadores), tinta + sepia como texto. Os tokens vivem em `src/index.css` como CSS variables e estão mapeados pros tokens do shadcn (`--background`, `--primary`, `--card`, etc.) — qualquer componente shadcn off-the-shelf herda automaticamente. A fonte da verdade visual da marca (tokens, voz, componentes cristalizados, anti-patterns) vive em [`DESIGN.md`](./DESIGN.md).
 
-Tipografia mista: **Fraunces** (serif variável) em títulos via `font-heading`, **Geist** (sans) no corpo. A combinação dá tom editorial sem perder legibilidade — assinatura visual consistente entre Login, sidebar, Dashboard e todas as 8 telas de lista (Alunos, Turmas, Disciplinas, Professores, PlanosEnsino, Ocorrencias, Presenca, Tarefas), cada uma com header em Fraunces + filete ferrugem e tabelas em `bg-paper`. Detalhes e formulários ainda herdam paleta via tokens shadcn mas serão repaginados nas próximas ondas.
+Tipografia mista: **Fraunces** (serif variável) em títulos via `font-heading`, **Geist** (sans) no corpo. A combinação dá tom editorial sem perder legibilidade — assinatura visual consistente entre Login, sidebar, Dashboard e todas as 8 telas de lista (Alunos, Turmas, Disciplinas, Professores, PlanosEnsino, Ocorrencias, Presenca, Comunicados), cada uma com header em Fraunces + filete ferrugem e tabelas em `bg-paper`. Detalhes e formulários ainda herdam paleta via tokens shadcn mas serão repaginados nas próximas ondas.
 
-Status badges 100% na paleta da marca (ocorrências, tarefas, presença) — sem amber/blue/green/red genéricos do Tailwind.
+Status badges 100% na paleta da marca (ocorrências, comunicados, presença) — sem amber/blue/green/red genéricos do Tailwind.
 
 Layout responsivo: a sidebar fixa (≥768px) vira um drawer (`Sheet`) com botão hamburguer abaixo de 768px. Padding e tipografia ajustam por breakpoint (`p-4 md:p-8`, `text-2xl md:text-3xl`). Headers de detalhe com muitas ações empilham até `lg` (1024px) pra evitar competição visual em tablet portrait. Tabelas escondem colunas secundárias em telas estreitas (`hidden sm:table-cell` / `md:` / `lg:`) em vez de scroll horizontal — os dados completos ficam acessíveis clicando na linha (vai pro detalhe). Funciona em celular (chamada de presença em sala) e tablet.
 
-Soft delete UX: listagens com soft delete (Aluno) escondem inativos por padrão. Toggle `Switch` "Mostrar inativos" na `AlunosPage` inverte e mostra só os inativos com badge `[ inativo ]`. Selects de criação (ex.: nova ocorrência) ficam restritos a ativos. Telas que apenas resolvem nome de aluno em registros antigos (ocorrências, presenças, tarefas) carregam todos os alunos pra não quebrar histórico.
+Soft delete UX: listagens com soft delete (Aluno) escondem inativos por padrão. Toggle `Switch` "Mostrar inativos" na `AlunosPage` inverte e mostra só os inativos com badge `[ inativo ]`. Selects de criação (ex.: nova ocorrência) ficam restritos a ativos. Telas que apenas resolvem nome de aluno em registros antigos (ocorrências, presenças, comunicados) carregam todos os alunos pra não quebrar histórico.
 
 ---
 
@@ -433,7 +424,7 @@ feature/* → develop → main
 
 - **Infra:** Docker (dev + prod), deploy no ar (Render + Vercel), backup do PostgreSQL (`scripts/`), CI no GitHub Actions.
 - **Segurança:** rate limit no login (5/min), JWT blacklist + rotação de refresh, hardening de produção (CSRF trusted origins, proxy SSL, cookies secure/HSTS), guard de IDOR consistente em todos os serializers com FK `escola`.
-- **Audit log:** `django-simple-history` nos 9 modelos do núcleo (Aluno, Professor, Lecionamento, Ocorrencia, RegistroPresenca, ItemPresenca, Tarefa, EntregaTarefa, PlanoEnsino, Usuario) com aba History no `/admin/` mostrando diff lado a lado. `populate_history --auto` no boot pra marco-zero dos registros pré-PR.
+- **Audit log:** `django-simple-history` nos 14 modelos do núcleo (Usuario, Aluno, Professor, Lecionamento, Ocorrencia, RegistroPresenca, ItemPresenca, PlanoEnsino, RegistroAula, PeriodoAvaliativo, Avaliacao, NotaAvaliacao, NotaPeriodo, Comunicado) com aba History no `/admin/` mostrando diff lado a lado. `populate_history --auto` no boot pra marco-zero dos registros pré-PR.
 - **Comunicação:** notificação por email ao responsável funcional em produção via **Brevo HTTP API** (`django-anymail`) — off-thread, protegido, sem domínio próprio, 300 emails/dia free. Resend e Gmail SMTP foram tentados e falharam pelo bloqueio de SMTP outbound do Render free desde set/2025.
 - **Observabilidade:** Sentry SDK no backend e frontend — captura exceções não tratadas + `logger.error/exception` + erros de render React via `<Sentry.ErrorBoundary>`. Plano free (Developer) 5k events/mês.
 - **Produto:** Dashboard com métricas (4 cards) + filtro por turma; soft delete + UX completa (toggle "Mostrar inativos" + Reativar); auto-escopo de escola em criação (multi-tenant invisível pro usuário); **import/export em massa CSV/XLSX** (6 entidades via `django-import-export`: Turma/Disciplina/Aluno/Professor/Lecionamento/PlanoEnsino) com gating comercial por escola (flag `importacao_em_lote_habilitada`).
@@ -444,7 +435,7 @@ feature/* → develop → main
 A lista priorizada por fases vive em [`CLAUDE.md`](./CLAUDE.md) (seção Roadmap). Resumo do que ainda falta:
 
 - **Robustez:** paginação no backend (DRF `PageNumberPagination`) antes do volume real, logging estruturado JSON.
-- **Produto:** PDF do Boletim (WeasyPrint), export de Ocorrências/Presença/Tarefas (escopo operacional), métricas avançadas no dashboard (reincidência, presença média). **Diário de classe (`RegistroAula`)** com backend pronto (app `aulas`) — pendente o front (diário do professor, ficha do professor com tabs + export PDF, card de conferência no dashboard).
+- **Produto:** PDF do Boletim (WeasyPrint), export de Ocorrências/Presença (escopo operacional), métricas avançadas no dashboard (reincidência, presença média). **Diário de classe (`RegistroAula`)** com backend pronto (app `aulas`) — pendente o front (diário do professor, ficha do professor com tabs + export PDF, card de conferência no dashboard).
 - **Comunicação:** múltiplos responsáveis por aluno + telefone + flag `recebe_notificacao`, fila assíncrona dedicada (Celery/Dramatiq/RQ) quando o volume crescer, timeline do aluno (consumindo HistoricalRecords + ocorrências + presença).
 - **Senhas:** trocar a própria senha, reset por e-mail (agora viável via Brevo), admin resetar senha de terceiro pela UI.
 - **Dev experience:** drf-spectacular (gera client TypeScript), `repositories.py` por app, linting unificado (`ruff` + ESLint no fluxo).
