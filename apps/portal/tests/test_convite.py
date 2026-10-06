@@ -20,6 +20,7 @@ from rest_framework.test import APIClient
 from apps.accounts.models import Usuario
 from apps.escola.models import Escola
 from apps.portal.models import ConviteResponsavel, Responsavel
+from apps.portal.services import INTERVALO_MINIMO_REDEFINICAO, definir_senha
 
 SENHA_STAFF = "senha-super-segura-123"
 SENHA_NOVA = "Nova-senha-do-pai-2026"
@@ -116,6 +117,15 @@ class ConvidarTests(_ConviteSetup):
         self.assertEqual(self._convidar(ativada).status_code, 400)
         self.assertEqual(len(mail.outbox), 0)
 
+    def test_conta_criada_sem_senha_pode_ser_convidada(self):
+        """Pelo admin a senha é só leitura: a conta nascia com `""`, que o
+        Django trata como senha utilizável — convite recusado, conta presa."""
+        sem_senha = Responsavel.objects.create(
+            escola=self.escola, email="admin@example.com", nome="Pelo admin"
+        )
+        self.assertFalse(sem_senha.has_usable_password())
+        self.assertEqual(self._convidar(sem_senha).status_code, 200)
+
     def test_falha_no_envio_da_502_e_invalida_o_convite(self):
         with mock.patch(ENVIO, side_effect=ConnectionError("provedor fora")):
             resp = self._convidar(self.semeado)
@@ -160,6 +170,16 @@ class DefinirSenhaTests(_ConviteSetup):
         self.assertIn("password", resp.data)
         self.assertEqual(self._definir(token).status_code, 200)
 
+    def test_link_so_e_consumido_uma_vez_mesmo_em_corrida(self):
+        """Duas requisições simultâneas passam pelo `buscar_valido` antes de
+        qualquer uma consumir o link; só uma pode gravar a senha."""
+        self._token()
+        convite = ConviteResponsavel.objects.get()
+        # Os dois "requests" já têm o convite em mão, validado.
+        self.assertTrue(definir_senha(convite, SENHA_NOVA))
+        self.assertFalse(definir_senha(convite, "Senha-do-atacante-2026"))
+        self.assertEqual(self._login().status_code, 200)
+
     def test_conta_desativada_depois_do_convite_nao_define_senha(self):
         token = self._token()
         Responsavel.objects.filter(pk=self.semeado.pk).update(ativo=False)
@@ -191,6 +211,24 @@ class EsqueciSenhaTests(_ConviteSetup):
         self.assertEqual({r.status_code for r in respostas}, {200})
         self.assertEqual(len({str(r.data["detail"]) for r in respostas}), 1)
         self.assertEqual(len(mail.outbox), 1)
+
+    def test_pedidos_repetidos_nao_mandam_outro_email_nem_matam_o_link(self):
+        """Sem limite por conta, dava pra disparar milhares de emails pro
+        mesmo pai (cota compartilhada) e cada pedido matava o link anterior."""
+        self._responsavel(self.escola, "ativa@example.com", senha="x-Senha-123")
+        for _ in range(3):
+            self.assertEqual(self._esqueci("ativa@example.com").status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(self._definir(token_do_email(mail.outbox[0])).status_code, 200)
+
+    def test_passada_a_janela_um_pedido_novo_manda_outro_link(self):
+        self._responsavel(self.escola, "ativa@example.com", senha="x-Senha-123")
+        self._esqueci("ativa@example.com")
+        ConviteResponsavel.objects.update(
+            criado_em=timezone.now() - INTERVALO_MINIMO_REDEFINICAO - timedelta(seconds=1)
+        )
+        self._esqueci("ativa@example.com")
+        self.assertEqual(len(mail.outbox), 2)
 
     def test_trocar_a_senha_derruba_as_sessoes_antigas(self):
         ativa = self._responsavel(self.escola, "ativa@example.com", senha="x-Senha-123")

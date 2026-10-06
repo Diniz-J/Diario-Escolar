@@ -325,7 +325,12 @@ class PortalDefinirSenhaView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        definir_senha(convite, senha)
+        if not definir_senha(convite, senha):
+            # Outra requisição consumiu o link entre a busca e aqui.
+            return Response(
+                {"detail": "Link inválido ou expirado."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return Response(
             {"detail": "Senha definida. Você já pode entrar no portal."},
             status=status.HTTP_200_OK,

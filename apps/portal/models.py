@@ -97,6 +97,12 @@ class Responsavel(AbstractBaseUser, BaseModelEscopado):
         `ItemPresenca.save()`, que força a escola do registro pai.
         """
         self.email = normalizar_email(self.email)
+        # Conta criada sem senha (ex.: pelo admin, onde o campo é só
+        # leitura) ficaria com `""` — que o Django considera senha
+        # *utilizável*. O convite recusaria ("já ativou"), o lote pularia e
+        # o login nunca passaria: conta presa. Marca como sem senha.
+        if not self.password:
+            self.set_unusable_password()
         super().save(*args, **kwargs)
 
 

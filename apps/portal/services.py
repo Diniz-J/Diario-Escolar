@@ -11,6 +11,7 @@ que tem limite por execução (`PORTAL.md`, seção 2).
 """
 import logging
 import threading
+from datetime import timedelta
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
@@ -18,11 +19,14 @@ from django.db import transaction
 from django.template.loader import render_to_string
 from django.utils import timezone
 
-from .models import ConviteResponsavel
+from .models import ConviteResponsavel, Responsavel
 
 logger = logging.getLogger(__name__)
 
 Finalidade = ConviteResponsavel.Finalidade
+
+# Janela em que um pedido novo de "esqueci a senha" não gera outro email.
+INTERVALO_MINIMO_REDEFINICAO = timedelta(minutes=15)
 
 _TEXTOS = {
     Finalidade.CONVITE: {
@@ -118,9 +122,17 @@ def solicitar_redefinicao(responsaveis) -> None:
 
 
 def _enviar_redefinicoes(ids: list[int]) -> None:
-    from .models import Responsavel
-
+    recente = timezone.now() - INTERVALO_MINIMO_REDEFINICAO
     for responsavel in Responsavel.objects.select_related("escola").filter(pk__in=ids):
+        # Já tem link de redefinição pendente e recente: não manda outro.
+        # Sem isso o "esqueci" só tinha limite por IP — dava pra disparar
+        # milhares de emails pro mesmo pai, queimando a cota compartilhada
+        # com comunicados e ocorrências, e cada pedido matava o link
+        # anterior. O pai usa o que já chegou.
+        if ConviteResponsavel.pendentes(responsavel).filter(
+            finalidade=Finalidade.REDEFINICAO, criado_em__gte=recente
+        ).exists():
+            continue
         try:
             emitir_link(responsavel, Finalidade.REDEFINICAO)
         except Exception:  # noqa: BLE001 — vira evento no Sentry
@@ -130,17 +142,28 @@ def _enviar_redefinicoes(ids: list[int]) -> None:
             )
 
 
-def definir_senha(convite: ConviteResponsavel, senha: str) -> None:
-    """Grava a senha e consome o link — atômico.
+def definir_senha(convite: ConviteResponsavel, senha: str) -> bool:
+    """Grava a senha e consome o link — atômico. False se o link já foi usado.
+
+    O consumo é um `UPDATE` condicional com rowcount checado, não
+    ler-e-gravar: duas requisições simultâneas com o mesmo token passariam
+    as duas pela checagem de `buscar_valido` e gravariam senha duas vezes.
+    Só uma ganha o UPDATE; a outra recebe False. Mesmo padrão do envio
+    dos comunicados.
 
     Trocar a senha muda a impressão gravada nos tokens (`tokens.py`), então
     toda sessão aberta antes cai no próximo request.
     """
+    agora = timezone.now()
     with transaction.atomic():
+        consumido = ConviteResponsavel.objects.filter(
+            pk=convite.pk, usado_em__isnull=True, expira_em__gt=agora
+        ).update(usado_em=agora, atualizado_em=agora)
+        if not consumido:
+            return False
         responsavel = convite.responsavel
         responsavel.set_password(senha)
         responsavel.save(update_fields=["password", "atualizado_em"])
-        convite.usado_em = timezone.now()
-        convite.save(update_fields=["usado_em", "atualizado_em"])
         # Qualquer outro link pendente (ex.: convite + redefinição) morre.
-        ConviteResponsavel.pendentes(responsavel).update(expira_em=timezone.now())
+        ConviteResponsavel.pendentes(responsavel).update(expira_em=agora)
+    return True
