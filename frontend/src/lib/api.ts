@@ -6,7 +6,6 @@ import {
   getRefreshToken,
   setTokens,
 } from "@/features/auth/tokenStorage";
-import type { TokenPair } from "@/features/auth/types";
 
 // Cliente HTTP único do app. Toda chamada à API passa por aqui.
 //
@@ -68,13 +67,17 @@ async function executarRefresh(): Promise<string> {
     throw new Error("Sem refresh token disponível.");
   }
   // Usa o axios puro (sem interceptor) pra evitar recursão.
-  const resp = await axios.post<TokenPair>(
+  const resp = await axios.post<{ access: string; refresh?: string }>(
     `${import.meta.env.VITE_API_URL}/auth/token/refresh/`,
     { refresh },
   );
-  // O endpoint de refresh devolve só `access`; mantemos o refresh anterior.
+  // O backend rotaciona o refresh (`ROTATE_REFRESH_TOKENS` +
+  // `BLACKLIST_AFTER_ROTATION`): devolve um refresh novo e põe o antigo na
+  // blacklist. Guardar o antigo derrubava a sessão no refresh seguinte
+  // (~2h de uso), em vez de durar os 7 dias do refresh. O fallback pro
+  // anterior só vale se um dia a rotação for desligada.
   const novoAccess = resp.data.access;
-  setTokens({ access: novoAccess, refresh });
+  setTokens({ access: novoAccess, refresh: resp.data.refresh ?? refresh });
   return novoAccess;
 }
 
