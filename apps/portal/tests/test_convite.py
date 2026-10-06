@@ -4,11 +4,13 @@ Verificação da fatia: convite reusado falha, expirado falha, só nível
 diretor convida, lote respeita a cota. Mais: link novo invalida o antigo,
 "esqueci" não revela conta, e trocar a senha derruba as sessões antigas.
 """
+import importlib
 import re
 from datetime import timedelta
 from io import StringIO
 from unittest import mock
 
+from django.apps import apps as django_apps
 from django.core import mail
 from django.core.management import call_command
 from django.core.management.base import CommandError
@@ -125,6 +127,26 @@ class ConvidarTests(_ConviteSetup):
         )
         self.assertFalse(sem_senha.has_usable_password())
         self.assertEqual(self._convidar(sem_senha).status_code, 200)
+
+    def test_apagar_quem_convidou_nao_e_bloqueado(self):
+        """Com `PROTECT`, apagar a secretaria que mandou um convite dava
+        `ProtectedError` (500 no `DELETE /usuarios/<id>/`)."""
+        secretaria = self._staff("secretaria", Usuario.Perfil.SECRETARIA, self.escola)
+        self._convidar(self.semeado, como=secretaria)
+        secretaria.delete()
+        self.assertIsNone(ConviteResponsavel.objects.get().enviado_por)
+
+    def test_migration_conserta_conta_gravada_com_senha_vazia(self):
+        """O `save()` corrige o próximo save; linhas já no banco com `""`
+        precisam da migration 0003."""
+        Responsavel.objects.filter(pk=self.semeado.pk).update(password="")
+        migration = importlib.import_module(
+            "apps.portal.migrations.0003_responsavel_senha_vazia"
+        )
+        migration.marcar_sem_senha(django_apps, None)
+        self.semeado.refresh_from_db()
+        self.assertFalse(self.semeado.has_usable_password())
+        self.assertEqual(self._convidar(self.semeado).status_code, 200)
 
     def test_falha_no_envio_da_502_e_invalida_o_convite(self):
         with mock.patch(ENVIO, side_effect=ConnectionError("provedor fora")):

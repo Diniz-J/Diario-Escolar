@@ -202,9 +202,13 @@ class ConviteResponsavel(TimeStampedModel):
     usado_em = models.DateTimeField(null=True, blank=True)
     # Quem da escola disparou o convite. Nulo na redefinição (pedida pelo
     # próprio responsável) e no comando de lote.
+    #
+    # `SET_NULL`, não `PROTECT`: é campo de auditoria, não FK de tenant.
+    # Com `PROTECT`, apagar a secretaria que mandou um convite levantaria
+    # `ProtectedError` no `DELETE /usuarios/<id>/` — que vira 500.
     enviado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
         related_name="convites_responsavel",
         null=True,
         blank=True,

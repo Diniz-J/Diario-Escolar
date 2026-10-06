@@ -23,7 +23,7 @@ class Migration(migrations.Migration):
                 ('token_hash', models.CharField(max_length=64, unique=True)),
                 ('expira_em', models.DateTimeField()),
                 ('usado_em', models.DateTimeField(blank=True, null=True)),
-                ('enviado_por', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='convites_responsavel', to=settings.AUTH_USER_MODEL)),
+                ('enviado_por', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='convites_responsavel', to=settings.AUTH_USER_MODEL)),
                 ('responsavel', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='convites', to='portal.responsavel')),
             ],
             options={
