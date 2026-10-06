@@ -193,8 +193,22 @@ média da sala, nem contagem de ocorrências de terceiros.
 ### 4.3. Comunicados
 
 Só aparecem os `enviado`. Rascunho nunca vaza — é texto em revisão pela
-direção. O comunicado é visível se o destino for a escola do filho, ou se a
-turma do filho estiver entre as turmas endereçadas.
+direção.
+
+Como ficou (fatia 4), **divergindo** do desenho original ("visível se a
+turma do filho estiver entre as endereçadas"): a visibilidade parte do log
+de entrega (`ComunicadoDestinatario`), que registra os alunos endereçados
+no momento do disparo. Pela turma atual, o filho que trocou de turma
+herdaria os avisos antigos da turma nova e perderia os da antiga; pelo log,
+cada um vê o que foi de fato endereçado a ele. De quebra: filho desativado
+mantém os avisos antigos e não recebe novos (a regra da seção 2), e o aluno
+sem email também tem linha no log, então o pai vê no portal o aviso que não
+chegou por email. Cada comunicado lista só os filhos **daquele**
+responsável que ele alcançou.
+
+O período do boletim também é escopado pela escola do filho: o helper do
+staff (`resolver_janela_por_periodo`) busca por id sem escopo, então o
+portal faz a busca própria e período de outra escola dá 404.
 
 ### 4.4. Convite e senha
 
@@ -261,6 +275,12 @@ A fatia 3 pode ser mergeada e deployada; o que espera é rodar o
 ## 6. Pendências conhecidas
 
 - Convergir `Aluno.email_responsavel` com `Responsavel.email` (seção 3).
+- **Nota aparece pro responsável assim que o professor lança.** O boletim
+  do portal reaproveita o `montar_boletim` do staff, que não tem etapa de
+  publicação: nota provisória ou digitada errada chega direto ao pai. Se
+  virar problema na operação, o caminho natural é o portal mostrar só
+  períodos encerrados (o `PeriodoAvaliativo` já calcula `estado`) — fatia
+  própria, decidida com a escola.
 - Anexo de arquivo no mural, se virar necessidade — depende de object
   storage.
 - Responsável com filhos em escolas diferentes: hoje `Responsavel` é
