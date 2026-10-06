@@ -116,8 +116,28 @@ disciplina, igual o `RegistroAula` do diário de classe já faz.
 O campo de texto continua existindo e **continua sendo o destino do email
 de comunicado e de ocorrência** na v1. Não troco o que funciona em produção
 no mesmo passo que crio o modelo novo. A duplicidade é consciente e
-temporária; convergir é fatia posterior, com data migration semeando
-`Responsavel` a partir dos campos atuais para a escola não redigitar nada.
+temporária; convergir é fatia posterior.
+
+A escola não redigita nada: `manage.py portal_semear_responsaveis` converte
+os campos atuais do aluno em contas e vínculos, deduplicando por email
+(irmãos viram uma conta com dois vínculos).
+
+**Por que management command e não data migration.** Primeiro, migration
+não é testável sem dependência nova, e esta lógica — agrupamento,
+deduplicação, nome de fallback — precisa de teste. Segundo, a semeadura
+não é parte do schema: é operação de dados que a escola escolhe quando
+rodar, e que vale rodar de novo a cada turma nova matriculada. Terceiro, o
+projeto já resolve esse tipo de tarefa assim (`popular_alunos_mock`,
+`comunicados_retomar`). É idempotente, tem `--dry-run` e `--escola-id`.
+
+**Aluno sem email de responsável é pulado, de propósito.** O email é a
+âncora da identidade: é por ele que o convite sai e é com ele que o
+responsável loga. Uma conta sem email seria uma linha impossível de
+convidar ou autenticar — e como boa parte desses alunos também está sem
+`nome_responsavel`, o resultado seria uma pilha de registros anônimos.
+Quem está sem email já aparece como tal na listagem de alunos e no log de
+entrega dos comunicados. Quando a escola preencher o email, roda o comando
+de novo.
 
 ---
 
@@ -192,7 +212,7 @@ então pode ser construída e mergeada antes, em paralelo à revisão da
 
 | # | Fatia | Verificação |
 |---|---|---|
-| 1 | `Responsavel`, `ResponsavelAluno`, data migration de semeadura, admin | Migration roda sobre os dados atuais; vínculos conferem; suíte verde |
+| 1 | `Responsavel`, `ResponsavelAluno`, comando de semeadura, admin | Semeadura deduplica irmãos, é idempotente e pula aluno sem email; conta nasce sem senha utilizável; suíte verde |
 | 2 | Autenticação isolada do portal (login, refresh, claim de tipo) | Token de cada lado recusado no outro; token sem claim recusado nos dois; rate limit no login |
 | 3 | `ConviteResponsavel`, convidar, aceitar, reset próprio, comando de lote | Convite reusado falha; expirado falha; só nível-diretor convida; lote respeita a cota |
 | 4 | Leituras: filhos, comunicados, boletim, ocorrências | Responsável A não lê nada do aluno de B; id alheio na URL dá 404; rascunho invisível |

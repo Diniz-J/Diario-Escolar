@@ -90,6 +90,17 @@ gated por `VITE_SENTRY_DSN`).
 - Auto-geração: criar registro gera um `ItemPresenca(P)` por aluno ativo da turma, em transação atômica.
 - `ItemPresencaViewSet` não expõe POST/DELETE (ciclo de vida pertence ao pai). Leitura inclui inspetor.
 
+**`portal/`** — portal do responsável (ver [`PORTAL.md`](./PORTAL.md)).
+`Responsavel` herda `AbstractBaseUser` **sem** ser `AUTH_USER_MODEL` (o
+projeto só tem um, e é `accounts.Usuario`) — ganha hash de senha e
+`last_login`, mas nada aqui passa pelos backends de auth do Django, então
+o `is_active` da base é irrelevante: quem manda é o campo `ativo`. Email
+normalizado no `save()` (lowercase+strip), unique por `(escola, email)`.
+`ResponsavelAluno` é o vínculo M2M (resolve "múltiplos responsáveis"),
+`PROTECT` nos dois lados, `clean()` exige escola igual, **auditado** — é o
+modelo que decide quem vê os dados de quem. Semeadura:
+`manage.py portal_semear_responsaveis`. **Sem endpoint ainda** (fatia 1).
+
 **`tarefas/`** — esqueleto vazio (só `__init__.py`/`apps.py`/`migrations`). Feature **removida** do produto; frontend não tem `TarefasPage` nem feature `tarefas/`. Diretório mantido pra não quebrar migrations históricas.
 
 **`planos_ensino/`** — `PlanoEnsino` (ementa, conteúdo programático, objetivos, habilidades BNCC, carga horária, metodologia, recursos, avaliação, `ativo`). Único por `(escola, turma, disciplina, ano_letivo)`. Casca criada num dialog; campos longos preenchidos na tela de detalhe. **Auditado**.
@@ -344,6 +355,14 @@ teste nos dois sentidos.
 
 Fatias (um PR cada): 1) modelo e vínculo · 2) auth isolado · 3) convite e
 senha · 4) leituras · 5) mural · 6) frontend.
+
+**Fatia 1 entregue**: app `portal` com `Responsavel` (`AbstractBaseUser`,
+não `AUTH_USER_MODEL`; email normalizado no `save`, unique por
+`(escola, email)`) e `ResponsavelAluno` (M2M auditado, `PROTECT` nos dois
+lados, `clean()` exige mesma escola). Semeadura por
+`manage.py portal_semear_responsaveis` — idempotente, deduplica irmãos por
+email, inclui aluno inativo, pula aluno sem email (o email é a âncora da
+identidade). Conta nasce sem senha utilizável: acesso só pelo convite.
 
 **Portão: a fatia 2 (login externo) não sobe antes da PR #105 estar
 mergeada e deployada.** A fatia 1 é só modelo/migration/admin, não abre

@@ -82,6 +82,7 @@ LOCAL_APPS: list[str] = [
     "apps.escola",
     "apps.ocorrencias",
     "apps.comunicados",
+    "apps.portal",
     "apps.presenca",
     "apps.tarefas",
     "apps.boletins",
