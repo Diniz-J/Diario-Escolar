@@ -200,6 +200,7 @@ Cada app de domínio segue o mesmo layout (`models.py`, `serializers.py`, `views
 - Permissão: **leitura** para nível-diretor + professor/inspetor (o corpo docente acompanha o que foi comunicado); **escrita e envio** só para nível-diretor. Guard de IDOR no payload `escola`.
 - `filter_queryset` é aplicado só no `list`: o `get_object()` do DRF também o chama, e isso fazia `GET /comunicados/{id}/destinatarios/?status=sem_email` devolver 400 (o filtro da viewset comparava um status de *destinatário* com os status de *comunicado*).
 - Envio em **thread daemon** (via `transaction.on_commit`, pra thread não correr com o commit da request); síncrono em `TESTING`. Mesmo provedor das ocorrências (Brevo via HTTP API).
+- **Recuperação de falha.** Se a materialização do público falhar, o comunicado **volta pra rascunho** (nada foi enviado ainda) em vez de ficar preso em `enviando` — estado que não é editável nem reenviável. Se o processo morrer no meio do lote (deploy/restart, já que thread daemon não sobrevive ao shutdown), `python manage.py comunicados_retomar` retoma de onde parou: `_disparar` reagrupa só as linhas `pendente`, então ninguém recebe duas vezes. O disparo carimba `atualizado_em` a cada 25 emails, o que permite distinguir um lote travado de um lote grande em curso e impede retomada concorrente (o comando ainda faz claim otimista por cima disso). Ver [`DEPLOY.md`](./DEPLOY.md).
 
 **`apps/presenca`**
 - `RegistroPresenca` — chamada de uma turma num dia; única por `(escola, turma, data)`; `professor` opcional.

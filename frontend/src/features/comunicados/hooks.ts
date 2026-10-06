@@ -23,6 +23,13 @@ interface ComunicadosFilter {
 
 const COMUNICADOS_BASE_KEY = ["comunicados"] as const;
 
+// Em produção o disparo roda em background e a resposta do `enviar` volta
+// com `status="enviando"` e `total_enviados=0`. Sem re-busca, a tela ficava
+// parada nesse estado até o usuário recarregar à mão — justamente na janela
+// em que ele mais quer saber se o comunicado saiu. Enquanto houver algo em
+// `enviando`, busca de novo neste intervalo; em estado final, desliga.
+const POLL_ENVIANDO_MS = 5_000;
+
 export function useComunicadosPaginated(
   filter: ComunicadosFilter = {},
   pagination: { page: number; page_size?: number },
@@ -37,6 +44,12 @@ export function useComunicadosPaginated(
       return normalizarPaginado(data);
     },
     placeholderData: (previous) => previous,
+    // Idem no detalhe: se alguma linha da página está em `enviando`, os
+    // contadores dela ainda vão mudar.
+    refetchInterval: (query) =>
+      query.state.data?.results.some((c) => c.status === "enviando")
+        ? POLL_ENVIANDO_MS
+        : false,
   });
 }
 
@@ -48,6 +61,9 @@ export function useComunicado(id: number | undefined) {
       return data;
     },
     enabled: id != null && Number.isFinite(id),
+    // Acompanha o lote até ele terminar; para de buscar em estado final.
+    refetchInterval: (query) =>
+      query.state.data?.status === "enviando" ? POLL_ENVIANDO_MS : false,
   });
 }
 
@@ -85,7 +101,9 @@ export function useComunicadoPrevia(
 export function useComunicadoDestinatarios(
   id: number | undefined,
   filter: { status?: ComunicadoDestinatarioStatus } = {},
-  options: { enabled?: boolean } = {},
+  // `poll`: o chamador liga enquanto o comunicado está em `enviando` — as
+  // linhas vão mudando de `pendente` pra `enviado`/`falhou` durante o lote.
+  options: { enabled?: boolean; poll?: boolean } = {},
 ) {
   return useQuery({
     queryKey: [...COMUNICADOS_BASE_KEY, "destinatarios", id, filter],
@@ -98,6 +116,7 @@ export function useComunicadoDestinatarios(
     },
     enabled:
       (options.enabled ?? true) && id != null && Number.isFinite(id),
+    refetchInterval: options.poll ? POLL_ENVIANDO_MS : false,
   });
 }
 

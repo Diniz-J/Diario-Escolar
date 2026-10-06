@@ -83,12 +83,16 @@ export function ComunicadoDetalhePage() {
   // requisição que só voltaria vazia.
   const temLog = comunicado != null && comunicado.status !== "rascunho";
 
+  // Lote em andamento: as linhas ainda estão virando de `pendente` pra
+  // `enviado`/`falhou`, então o log acompanha junto com o comunicado.
+  const enviando = comunicado?.status === "enviando";
+
   const destinatariosQuery = useComunicadoDestinatarios(
     id,
     filtroDest !== FILTRO_TODOS
       ? { status: filtroDest as ComunicadoDestinatarioStatus }
       : {},
-    { enabled: temLog },
+    { enabled: temLog, poll: enviando },
   );
 
   const turmasDoComunicado = useMemo(() => {
@@ -269,6 +273,13 @@ export function ComunicadoDetalhePage() {
             </Select>
           </CardHeader>
           <CardContent className="space-y-4">
+            {enviando && (
+              <p className="text-sm text-muted-foreground">
+                Envio em andamento — esta tela atualiza sozinha conforme o
+                lote avança.
+              </p>
+            )}
+
             <div className="flex flex-wrap gap-6">
               <div>
                 <div className="text-[11px] uppercase tracking-[0.18em] text-sepia">

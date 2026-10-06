@@ -184,6 +184,30 @@ def _agrupar_por_email(comunicado: Comunicado) -> dict[str, dict]:
     return grupos
 
 
+# A cada quantos grupos enviados o disparo carimba sinal de vida no
+# comunicado. Baixo demais vira um UPDATE por email; alto demais faz um
+# lote travado parecer vivo por tempo longo. 25 dá granularidade de
+# segundos num lote real sem pesar no banco.
+_HEARTBEAT_CADA = 25
+
+
+def _tocar(comunicado_id: int) -> None:
+    """Atualiza `atualizado_em` pra sinalizar que o lote está progredindo.
+
+    Nunca levanta: é telemetria de progresso, não pode derrubar o envio.
+    """
+    try:
+        Comunicado.objects.filter(pk=comunicado_id).update(
+            atualizado_em=timezone.now()
+        )
+    except Exception:
+        logger.warning(
+            "Comunicado %s: falha ao carimbar progresso.",
+            comunicado_id,
+            exc_info=True,
+        )
+
+
 def _marcar(ids: list[int], status: str, erro: str = "") -> None:
     """Aplica o resultado do envio a todas as linhas de um grupo."""
     ComunicadoDestinatario.objects.filter(id__in=ids).update(
@@ -215,6 +239,7 @@ def _disparar(comunicado_id: int, escola_id: int) -> None:
 
         enviados_ids: list[int] = []
         falhas = 0
+        processados = 0
 
         if grupos:
             # Uma conexão pro lote inteiro em vez de uma por mensagem.
@@ -269,6 +294,15 @@ def _disparar(comunicado_id: int, escola_id: int) -> None:
                             falhas += len(grupo["ids"])
                         else:
                             enviados_ids.extend(grupo["ids"])
+
+                        processados += 1
+                        if processados % _HEARTBEAT_CADA == 0:
+                            # Carimba sinal de vida. `comunicados_retomar`
+                            # usa `atualizado_em` pra decidir se um lote em
+                            # `enviando` travou ou só é grande: sem este
+                            # toque, um lote legítimo de 2000 emails seria
+                            # considerado parado e reenviado em paralelo.
+                            _tocar(comunicado_id)
                 finally:
                     # Fechar a conexão nunca deve mascarar o resultado do
                     # lote: o que importa já está persistido nas linhas.
@@ -367,7 +401,34 @@ def enviar_comunicado(comunicado: Comunicado, usuario=None) -> bool:
         return False
 
     comunicado.refresh_from_db()
-    total = _materializar_destinatarios(comunicado)
+    try:
+        total = _materializar_destinatarios(comunicado)
+    except Exception:
+        # Nenhum email saiu ainda, então devolver pro rascunho é seguro —
+        # e necessário: sem isto o comunicado ficava preso em `enviando`,
+        # que não é editável nem reenviável (o `enviar` devolve 409 por
+        # não estar mais em rascunho). Era um beco sem saída que só um
+        # UPDATE manual no banco resolvia.
+        #
+        # As linhas já inseridas são removidas: sem ATOMIC_REQUESTS a
+        # request não roda em transação, então um `bulk_create` que falhou
+        # no meio pode ter commitado parte dos lotes. Apagá-las deixa a
+        # próxima tentativa partir do zero.
+        logger.exception(
+            "Comunicado %s: falha ao materializar destinatários — "
+            "revertido para rascunho.",
+            comunicado.pk,
+        )
+        ComunicadoDestinatario.objects.filter(comunicado=comunicado).delete()
+        Comunicado.objects.filter(
+            pk=comunicado.pk, status=Comunicado.Status.ENVIANDO
+        ).update(
+            status=Comunicado.Status.RASCUNHO,
+            enviado_por=None,
+            atualizado_em=timezone.now(),
+        )
+        raise
+
     Comunicado.objects.filter(pk=comunicado.pk).update(
         total_destinatarios=total, atualizado_em=agora
     )
