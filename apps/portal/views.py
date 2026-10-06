@@ -2,7 +2,7 @@
 
 Rotas sob `/api/v1/portal/` (ver `urls.py`). Isoladas do staff: usam a
 `PortalJWTAuthentication` e tokens próprios (`tokens.py`). As leituras do
-portal (filhos, boletim, comunicados, ocorrências) entram na fatia 4.
+portal (filhos, boletim, comunicados, ocorrências) ficam em `leituras.py`.
 
 Exceção: `ConvidarResponsavelView` é endpoint do **staff** (autenticação
 padrão), roteado em `config/urls.py` fora do prefixo do portal.
