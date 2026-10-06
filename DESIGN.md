@@ -200,6 +200,24 @@ default):
 Regra: sempre comentar no código que aquele hex é deliberado, com
 referência à decisão (parágrafo desta seção, idealmente).
 
+### 6.3 Família mostarda — pattern compartilhado
+
+O hex `#FCE7BC` / `#854D0E` (mostarda pastel + âmbar escuro) começou
+como o badge "em andamento" de ocorrências (§6.1) e virou pattern
+recorrente pra qualquer status "em curso / em rascunho / atenção sem
+urgência". Reaparece em:
+
+- `features/aulas/constants.ts` — badge `rascunho` do diário de classe.
+- `pages/PlanosEnsinoPage.tsx` — badge "Em branco" (plano cadastrado mas
+  ainda sem conteúdo preenchido).
+- `pages/AvaliacaoDetalhePage.tsx` — alerta "período não alocado"
+  (versão translúcida `bg-[#FCE7BC]/40`).
+
+Por enquanto sem utility/token correspondente (pastel fora do shadcn
+default). Cada uso traz comentário inline justificando, no espírito da
+§6.2. Quando aparecer um 5º uso, vale extrair pra constante
+compartilhada.
+
 ---
 
 ## 7. Antecipações (norte, ainda não cristalizado)
@@ -290,21 +308,27 @@ Coisas a evitar e/ou a migrar quando cruzar pelo arquivo.
 `text-amber-700 bg-amber-50`, `text-red-700`, `text-green-700`,
 `text-blue-700` — não combinam com a paleta linho/olive.
 
-**Estado atual da dívida:**
-- ❌ `frontend/src/features/ocorrencias/constants.ts` — ainda usa
-  `amber/blue/green/red`. Migrar pra paleta da marca (§6.1).
-- ❌ `frontend/src/features/tarefas/constants.ts` — mesmo problema.
-  Mapear status `pendente/atrasada/entregue_no_prazo/entregue_com_atraso`
-  pra mostarda/terracota/olive/petrol seguindo §6.2.
-- ✅ `frontend/src/features/presenca/constants.ts` — já migrado, é a
-  referência.
+**Estado atual da dívida — TUDO PAGO:**
+- ✅ `frontend/src/features/presenca/constants.ts` — pastels terrosos
+  P/A/J/R, referência da §6.2.
+- ✅ `frontend/src/features/ocorrencias/constants.ts` — migrado pra
+  paleta da marca, referência da §6.1.
+- ✅ `frontend/src/features/aulas/constants.ts` — STATUS_AULA na paleta
+  da marca, mostarda compartilhada (§6.3) no rascunho.
+- ✅ `features/tarefas` — feature removida do front; backend `apps/tarefas`
+  hoje é só esqueleto (sem models/views).
+
+Anti-pattern continua valendo pra qualquer badge novo: nunca usar tons
+Tailwind crus.
 
 ### 8.2 Classes `dark:` mortas
 
 Light é permanente. Toda classe `dark:bg-X dark:text-Y` é código morto e
 confunde (dá impressão que dark existe). Remover ao tocar no arquivo.
 
-Aparece principalmente nos dois `constants.ts` da dívida acima.
+✅ Hoje (jun/2026) o codebase está limpo dessa dívida. Anti-pattern
+preventivo: ao trazer snippet de fora (shadcn doc, exemplo do Tailwind),
+remover os `dark:*` antes de colar.
 
 ### 8.3 Override de paleta inline
 
