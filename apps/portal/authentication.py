@@ -6,7 +6,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
 from .models import Responsavel
-from .tokens import CLAIM_RESPONSAVEL_ID, PortalAccessToken
+from .tokens import CLAIM_RESPONSAVEL_ID, PortalAccessToken, token_vale_para
 
 
 class PortalJWTAuthentication(JWTAuthentication):
@@ -27,13 +27,19 @@ class PortalJWTAuthentication(JWTAuthentication):
         # Conta desativada depois do login perde o acesso já no próximo
         # request, sem esperar o access expirar.
         try:
-            return Responsavel.objects.get(
+            responsavel = Responsavel.objects.get(
                 pk=validated_token[CLAIM_RESPONSAVEL_ID], ativo=True
             )
         except (Responsavel.DoesNotExist, ValueError) as exc:
             raise AuthenticationFailed(
                 _("Conta não encontrada ou inativa."), code="user_not_found"
             ) from exc
+        # Senha trocada depois da emissão: a sessão antiga cai.
+        if not token_vale_para(validated_token, responsavel):
+            raise AuthenticationFailed(
+                _("Sessão encerrada. Entre de novo."), code="token_revoked"
+            )
+        return responsavel
 
 
 class IsResponsavel(BasePermission):

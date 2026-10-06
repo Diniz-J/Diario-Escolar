@@ -23,9 +23,15 @@ que decide quem pode ver os dados de qual aluno, então é **auditado**.
 Esta fatia não expõe endpoint nenhum — é só schema, admin e semeadura. O
 login externo entra na fatia 2.
 """
+import hashlib
+import secrets
+from datetime import timedelta
+
+from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 from simple_history.models import HistoricalRecords
 
 from apps.common.models import BaseModelEscopado, TimeStampedModel
@@ -152,3 +158,107 @@ class ResponsavelAluno(TimeStampedModel):
                         )
                     }
                 )
+
+
+class ConviteResponsavel(TimeStampedModel):
+    """Link de uso único pra o responsável definir a senha.
+
+    Duas finalidades com o mesmo fluxo (link com token → definir senha):
+
+    - **convite**: primeira ativação, disparado pela escola. Vale 7 dias —
+      o pai pode só abrir o email no fim de semana.
+    - **redefinição**: "esqueci a senha", pedido pelo próprio responsável.
+      Vale 1 hora, igual ao `PasswordResetToken` do staff.
+
+    Mesmo molde do `PasswordResetToken`: só o hash SHA-256 fica no banco;
+    o token cru circula apenas no link do email.
+
+    Emitir um link novo invalida os pendentes do mesmo responsável (expira
+    na hora, sem marcar como usado — `usado_em` continua significando "a
+    senha foi definida por este link"). Só o último link enviado funciona.
+    """
+
+    class Finalidade(models.TextChoices):
+        CONVITE = "convite", "Convite"
+        REDEFINICAO = "redefinicao", "Redefinição de senha"
+
+    VALIDADE = {
+        Finalidade.CONVITE: timedelta(days=7),
+        Finalidade.REDEFINICAO: timedelta(hours=1),
+    }
+
+    responsavel = models.ForeignKey(
+        Responsavel, on_delete=models.PROTECT, related_name="convites"
+    )
+    finalidade = models.CharField(max_length=20, choices=Finalidade.choices)
+    token_hash = models.CharField(max_length=64, unique=True)
+    expira_em = models.DateTimeField()
+    usado_em = models.DateTimeField(null=True, blank=True)
+    # Quem da escola disparou o convite. Nulo na redefinição (pedida pelo
+    # próprio responsável) e no comando de lote.
+    enviado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="convites_responsavel",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        verbose_name = "convite de responsável"
+        verbose_name_plural = "convites de responsável"
+        ordering = ["-criado_em"]
+        # O comando de lote e a invalidação filtram os pendentes por
+        # responsável.
+        indexes = [models.Index(fields=["responsavel", "usado_em"])]
+
+    def __str__(self) -> str:
+        return f"{self.get_finalidade_display()} → {self.responsavel.email}"
+
+    @classmethod
+    def gerar(cls, responsavel, finalidade, enviado_por=None):
+        """Cria o link e invalida os pendentes. Retorna (instance, token_cru)."""
+        agora = timezone.now()
+        cls.pendentes(responsavel).update(expira_em=agora)
+        token_cru = secrets.token_urlsafe(48)
+        instance = cls.objects.create(
+            responsavel=responsavel,
+            finalidade=finalidade,
+            token_hash=cls._hash(token_cru),
+            expira_em=agora + cls.VALIDADE[finalidade],
+            enviado_por=enviado_por,
+        )
+        return instance, token_cru
+
+    @classmethod
+    def pendentes(cls, responsavel):
+        """Links ainda utilizáveis do responsável."""
+        return cls.objects.filter(
+            responsavel=responsavel,
+            usado_em__isnull=True,
+            expira_em__gt=timezone.now(),
+        )
+
+    @classmethod
+    def buscar_valido(cls, token_cru: str):
+        """Devolve o link se ainda for utilizável; senão None."""
+        try:
+            obj = cls.objects.select_related("responsavel").get(
+                token_hash=cls._hash(token_cru)
+            )
+        except cls.DoesNotExist:
+            return None
+        if obj.usado_em is not None or obj.expira_em <= timezone.now():
+            return None
+        if not obj.responsavel.ativo:
+            return None
+        return obj
+
+    def invalidar(self) -> None:
+        """Expira o link sem marcar como usado (ex.: o email não saiu)."""
+        self.expira_em = timezone.now()
+        self.save(update_fields=["expira_em", "atualizado_em"])
+
+    @staticmethod
+    def _hash(token_cru: str) -> str:
+        return hashlib.sha256(token_cru.encode("utf-8")).hexdigest()

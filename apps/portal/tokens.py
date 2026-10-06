@@ -11,6 +11,8 @@ responsável de pk N ao `Usuario` de pk N. Sem `user_id` no payload, o
 `outstand()`/`blacklist()` da biblioteca não acha usuário e deixa a FK
 nula; a blacklist funciona só pelo `jti`.
 """
+import hashlib
+
 from django.utils.translation import gettext_lazy as _
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.settings import api_settings
@@ -19,6 +21,24 @@ from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 from apps.common.authentication import CLAIM_TIPO, TIPO_RESPONSAVEL
 
 CLAIM_RESPONSAVEL_ID = "responsavel_id"
+CLAIM_SENHA = "senha_ver"
+
+
+def impressao_senha(responsavel) -> str:
+    """Impressão curta do hash da senha atual, gravada no token.
+
+    Trocar a senha muda a impressão e derruba todo token emitido antes —
+    sem isso, uma sessão roubada sobreviveria ao "esqueci a senha" até o
+    refresh expirar (7 dias). Mesma ideia do `CHECK_REVOKE_TOKEN` do
+    SimpleJWT, que só funciona via `for_user()` (que o portal não usa).
+    É hash do hash: não expõe nada da senha.
+    """
+    return hashlib.sha256(responsavel.password.encode("utf-8")).hexdigest()[:16]
+
+
+def token_vale_para(token, responsavel) -> bool:
+    """True se o token foi emitido com a senha atual do responsável."""
+    return token.get(CLAIM_SENHA) == impressao_senha(responsavel)
 
 
 def exigir_token_do_portal(token) -> None:
@@ -58,6 +78,7 @@ class PortalRefreshToken(RefreshToken):
         token = cls()
         token[CLAIM_TIPO] = TIPO_RESPONSAVEL
         token[CLAIM_RESPONSAVEL_ID] = str(responsavel.pk)
+        token[CLAIM_SENHA] = impressao_senha(responsavel)
         # Usado pelo `EscolaLogContextMiddleware` pra carimbar o log.
         token["escola_id"] = responsavel.escola_id
         token.outstand()

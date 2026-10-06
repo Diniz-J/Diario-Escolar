@@ -240,6 +240,11 @@ REST_FRAMEWORK = {
         # login do staff: brute force contra pais não pode bloquear a
         # secretaria logando do mesmo IP (escola atrás de um NAT só).
         "portal_login": None if TESTING else "5/min",
+        # Convite do portal disparado pela escola, por usuário. Mesma lição
+        # do `reset_senha`: cada chamada é um email da cota compartilhada.
+        # 30/hora cobre o convite individual do dia a dia; onboarding em
+        # massa vai pelo comando `portal_convidar_responsaveis`.
+        "convite_responsavel": None if TESTING else "30/hour",
     },
     # Paginação **opt-in**: só ativa quando o cliente envia `?page=N` ou
     # `?page_size=N`. Sem isso, retorna array cru. Ver `apps/common/pagination.py`.
