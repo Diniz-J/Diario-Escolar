@@ -268,7 +268,7 @@ A fatia 3 pode ser mergeada e deployada; o que espera é rodar o
 | 4 | Leituras: filhos, comunicados, boletim, ocorrências | ✅ #109 | Responsável A não lê nada do aluno de B; id alheio na URL dá 404; rascunho invisível |
 | 5 | `Material` + CRUD do professor + leitura no portal | ✅ #110 | Professor não publica em turma que não leciona; responsável só vê a turma do filho |
 | 5b | Tela do professor pro mural (staff) | ✅ #111 | Professor só vê turma/disciplina que leciona no formulário; build limpo |
-| 6 | Frontend do portal sob `/portal` | **pendente** — plano aprovado abaixo | Build limpo; sessão de responsável não alcança rota administrativa; storage em namespace próprio |
+| 6 | Frontend do portal sob `/portal` | ✅ | Chunk do portal sem string de tela do staff (e vice-versa); `/portal` manda pro login do portal e `/dashboard` pro do staff, verificado em navegador; storage em `portal_*` |
 | 6b | Tela "Responsáveis" no staff + botão Convidar | **pendente** | Só nível-diretor convida; status da conta visível; build limpo |
 
 **Onde paramos (out/2026):** o backend do portal está completo e em
@@ -276,7 +276,7 @@ produção (fatias 1–5), e o mural do staff também (5b). **Falta todo o lado
 do pai** — a fatia 6 — e a tela de convite do staff (6b). Enquanto a 6 não
 entra, o portão acima continua valendo: nenhum convite em produção.
 
-### Fatia 6 — plano aprovado (out/2026)
+### Fatia 6 — entregue (out/2026)
 
 **Separação do bundle** (seção 4.5): hoje o `App.tsx` importa o
 `AppRoutes` estaticamente, com todas as telas do staff. A raiz passa a
@@ -317,6 +317,16 @@ portal não contém tela do staff (procurar uma string só do staff nele).
 - Link do mural só renderiza se for `http(s)`, com `noopener noreferrer`.
 - Boletim em componente **próprio** do portal — não reaproveitar a
   `BoletimPage` do staff (469 linhas, arrasta exportação e PDF).
+
+**Como foi verificado:** o build gera `PortalApp-*.js` (25 kB) separado do
+`StaffApp-*.js` (275 kB), e seis strings exclusivas do staff ("Mostrar
+inativos", "Planos de ensino", "Notas finais", "Períodos avaliativos",
+"Novo comunicado", "Lecionamento") não aparecem no chunk do portal — nem
+as do portal no chunk do staff. O roteamento foi exercitado no `dist`
+servido, num Chromium headless: `/portal` cai em `/portal/entrar`,
+`/portal/definir-senha` sem token mostra o erro de link, `/dashboard`
+segue caindo em `/login` (a reestruturação da raiz não quebrou o staff) e
+a 404 continua de pé. Zero erro de JS no console.
 
 **Teste manual no preview:** o front não tem teste automatizado e o preview
 do Vercel usa a API de produção. Pra ter uma conta de teste, mandar **um**

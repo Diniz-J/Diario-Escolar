@@ -99,7 +99,12 @@ normalizado no `save()` (lowercase+strip), unique por `(escola, email)`.
 `ResponsavelAluno` é o vínculo M2M (resolve "múltiplos responsáveis"),
 `PROTECT` nos dois lados, `clean()` exige escola igual, **auditado** — é o
 modelo que decide quem vê os dados de quem. Semeadura:
-`manage.py portal_semear_responsaveis`. Backend entregue até a fatia 5:
+`manage.py portal_semear_responsaveis`. **Fatia 6 entregue**: frontend do
+portal sob `/portal`, em chunk próprio (`React.lazy` no `App.tsx` separa a
+árvore do staff da do portal), sessão independente em
+`features/portal/` (storage `portal_*`, `portalApi` que guarda o refresh
+rotacionado, `PortalAuthContext` lendo `/portal/me/`) e seis telas
+mobile-first em `src/portal/`. Backend entregue até a fatia 5:
 autenticação isolada (`/api/v1/portal/auth/`, tokens com `tipo=responsavel`
 e `responsavel_id` — o staff recusa), convite e senha (`ConviteResponsavel`,
 comando `portal_convidar_responsaveis`) e leituras em `leituras.py`, todas a
