@@ -9,7 +9,6 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
-from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -328,9 +327,12 @@ class LogoutView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            RefreshToken(refresh).blacklist()
+            # `StaffRefreshToken`, não o `RefreshToken` cru: recusa o refresh
+            # do portal do responsável, mantendo a invariante de que cada
+            # lado recusa o token do outro (PORTAL.md, seção 4.1).
+            StaffRefreshToken(refresh).blacklist()
         except TokenError:
-            # Token inválido/expirado/já na blacklist — do ponto de vista
-            # do usuário a sessão já está encerrada, então respondemos ok.
+            # Token inválido/expirado/já na blacklist/do portal — do ponto de
+            # vista da sessão do staff não há o que encerrar, então ok.
             pass
         return Response(status=status.HTTP_205_RESET_CONTENT)
