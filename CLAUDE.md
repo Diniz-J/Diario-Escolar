@@ -15,6 +15,14 @@ escolar completo nem uma plataforma de ensino (LMS/EdTech).
 > Posicionamento: ERP administrativo escolar procedural — gestão disciplinar,
 > presença e rastreabilidade. Não é LMS, não é app do aluno, não é EdTech.
 
+Decidido em out/2026: existe um **portal de leitura para o responsável**
+(ver [`PORTAL.md`](./PORTAL.md)) — o pai acompanha comunicados, boletim,
+ocorrências e o mural de materiais dos filhos vinculados. Isso **não**
+torna o produto um app do aluno nem um LMS: o aluno continua sem login, e
+o portal é só leitura (nada de entrega de atividade, correção ou chat).
+A ressalva de posicionamento acima segue valendo com essa única exceção —
+não a use pra justificar outras frentes de EdTech.
+
 Meta de curto prazo: **1 escola usando o sistema de verdade** antes de expandir
 escopo. Prioridade em estabilidade, rastreabilidade, deploy e UX administrativa.
 
@@ -82,6 +90,17 @@ gated por `VITE_SENTRY_DSN`).
 - Auto-geração: criar registro gera um `ItemPresenca(P)` por aluno ativo da turma, em transação atômica.
 - `ItemPresencaViewSet` não expõe POST/DELETE (ciclo de vida pertence ao pai). Leitura inclui inspetor.
 
+**`portal/`** — portal do responsável (ver [`PORTAL.md`](./PORTAL.md)).
+`Responsavel` herda `AbstractBaseUser` **sem** ser `AUTH_USER_MODEL` (o
+projeto só tem um, e é `accounts.Usuario`) — ganha hash de senha e
+`last_login`, mas nada aqui passa pelos backends de auth do Django, então
+o `is_active` da base é irrelevante: quem manda é o campo `ativo`. Email
+normalizado no `save()` (lowercase+strip), unique por `(escola, email)`.
+`ResponsavelAluno` é o vínculo M2M (resolve "múltiplos responsáveis"),
+`PROTECT` nos dois lados, `clean()` exige escola igual, **auditado** — é o
+modelo que decide quem vê os dados de quem. Semeadura:
+`manage.py portal_semear_responsaveis`. **Sem endpoint ainda** (fatia 1).
+
 **`tarefas/`** — esqueleto vazio (só `__init__.py`/`apps.py`/`migrations`). Feature **removida** do produto; frontend não tem `TarefasPage` nem feature `tarefas/`. Diretório mantido pra não quebrar migrations históricas.
 
 **`planos_ensino/`** — `PlanoEnsino` (ementa, conteúdo programático, objetivos, habilidades BNCC, carga horária, metodologia, recursos, avaliação, `ativo`). Único por `(escola, turma, disciplina, ano_letivo)`. Casca criada num dialog; campos longos preenchidos na tela de detalhe. **Auditado**.
@@ -92,7 +111,7 @@ gated por `VITE_SENTRY_DSN`).
 
 ### Frontend — `frontend/src/`
 
-- **`features/<dominio>/hooks.ts`** — TanStack Query: `useXxx` (list), `useCreate`, `useUpdate`, `useDelete`/`useDeactivate`, com invalidação de cache + toast. Domínios: `alunos`, `auth`, `boletins`, `dashboard`, `disciplinas`, `escolas`, `lecionamentos`, `ocorrencias`, `planos-ensino`, `presenca`, `professores`, `tarefas`, `turmas`, `usuarios`.
+- **`features/<dominio>/hooks.ts`** — TanStack Query: `useXxx` (list), `useCreate`, `useUpdate`, `useDelete`/`useDeactivate`, com invalidação de cache + toast. Domínios: `alunos`, `auth`, `boletins`, `dashboard`, `disciplinas`, `escolas`, `lecionamentos`, `ocorrencias`, `planos-ensino`, `presenca`, `professores`, `turmas`, `usuarios`, `comunicados`.
 - **`features/auth/`** — `AuthProvider`, `useAuth`, `usePermissoes` (regra de UI por perfil; `podeModificarCadastros` = admin/diretor), tokenStorage em localStorage, decode JWT. `user.escola_id` é o sinal usado pelos FormDialogs pra decidir se renderiza o select de escola.
 - **`lib/api.ts`** — axios único. Request interceptor injeta Bearer. Response interceptor: 401 → refresh → refaz request (promise compartilhada contra thundering herd).
 - **`lib/queryClient.ts`** — staleTime 30s, retry off pra 401/403.
@@ -200,8 +219,11 @@ gated por `VITE_SENTRY_DSN`).
 ## 5. Roadmap — status e próximos passos
 
 > Visão estratégica: validar operação real numa escola antes de expandir.
-> NÃO focar agora em: portal do aluno, app mobile nativo, gamificação, financeiro,
-> LMS, IA, microserviços, Kubernetes, arquitetura enterprise.
+> NÃO focar agora em: portal **do aluno** (login de aluno), app mobile nativo,
+> gamificação, financeiro, LMS, IA, microserviços, Kubernetes, arquitetura
+> enterprise.
+> Em andamento (out/2026): portal **do responsável**, só leitura — ver FASE 6
+> e [`PORTAL.md`](./PORTAL.md). Não confundir os dois.
 > Focar em: estabilidade, rastreabilidade, deploy, operação, UX administrativa.
 
 ### MARCO: aplicação NO AR (demo)
@@ -303,6 +325,49 @@ gated por `VITE_SENTRY_DSN`).
 12. **Email assíncrono dedicado** — fila (Celery/Dramatiq/RQ) com retry + histórico, quando o volume crescer. Hoje é thread daemon best-effort. PENDENTE.
 13. **Timeline do aluno** — centraliza ocorrências, presença, advertências. Pode reaproveitar a API HistoricalRecords pra mostrar mudanças no histórico. PENDENTE.
 
+### FASE 6 — Portal do Responsável — EM ANDAMENTO
+
+Desenho completo, decisões e invariantes de segurança em
+[`PORTAL.md`](./PORTAL.md). Resumo das decisões, pra não reabrir discussão:
+
+- **Só o responsável autentica.** Aluno não loga.
+- **Conta só por convite da escola.** Sem auto-registro — qualquer pessoa
+  poderia se declarar responsável de qualquer aluno, e matrícula é
+  previsível (vetor de enumeração).
+- **Identidade em modelo separado** (`Responsavel`, herdando
+  `AbstractBaseUser` mas **não** sendo `AUTH_USER_MODEL`), com autenticação
+  própria. Usuário externo não encosta na superfície do staff.
+- **Mural de materiais é texto + link, sem upload.** Não existe
+  `FileField`/`MEDIA_ROOT` no projeto e o disco do Render é efêmero; anexo
+  exigiria object storage.
+- **Mesma app de frontend, sob `/portal`**, com namespace próprio no
+  storage de token.
+- **Convite individual na UI + management command de lote**, porque a cota
+  de 300 emails/dia do Brevo é compartilhada com os comunicados.
+- **Aluno desativado não corta o acesso**: o responsável mantém o
+  histórico, mas para de receber comunicado novo.
+
+Risco central, documentado por não ser óbvio: o SimpleJWT resolve o claim
+de id contra o `AUTH_USER_MODEL`, então um token de `Responsavel` de pk N
+apresentado num endpoint de staff carregaria o `Usuario` de pk N. Cada
+token carrega claim de tipo e **cada lado recusa o token do outro**, com
+teste nos dois sentidos.
+
+Fatias (um PR cada): 1) modelo e vínculo · 2) auth isolado · 3) convite e
+senha · 4) leituras · 5) mural · 6) frontend.
+
+**Fatia 1 entregue**: app `portal` com `Responsavel` (`AbstractBaseUser`,
+não `AUTH_USER_MODEL`; email normalizado no `save`, unique por
+`(escola, email)`) e `ResponsavelAluno` (M2M auditado, `PROTECT` nos dois
+lados, `clean()` exige mesma escola). Semeadura por
+`manage.py portal_semear_responsaveis` — idempotente, deduplica irmãos por
+email, inclui aluno inativo, pula aluno sem email (o email é a âncora da
+identidade). Conta nasce sem senha utilizável: acesso só pelo convite.
+
+**Portão: a fatia 2 (login externo) não sobe antes da PR #105 estar
+mergeada e deployada.** A fatia 1 é só modelo/migration/admin, não abre
+caminho de autenticação, e pode ir em paralelo.
+
 ### FASE 5 — Evolução SaaS
 14. **Multi-tenancy real** — middleware de tenant, RLS PostgreSQL, billing. Só após validação comercial.
 15. **Segurança e compliance** — httpOnly cookies, LGPD formal, retenção de logs, auditoria avançada.
@@ -342,7 +407,7 @@ Pendências de segurança de produção ficam no `CLAUDE.local.md` (não version
 - Limitação restante: usuários puros (diretor/secretaria/coordenador sem perfil de professor) ainda dependem do `/admin/` do Django — não têm página de gestão dedicada. Fica pra quando uma `UsuariosPage` aparecer no roadmap.
 
 ### Meta de curto prazo — STATUS
-Infra ✅, segurança operacional ✅, audit log ✅, comunicação por email **funcional em prod** ✅, **Sentry em prod ✅ (DSN setado + smoke test confirmado + captura de 4xx)**, **identidade visual completa ✅ (Login + Sidebar + Dashboard + listagens + detalhes + forms; DESIGN.md durável travado)**, auto-escopo de escola ✅, **diário de classe ✅ (5 fatias + redesenho do PDF #97)**, **fluxo de senha completo ✅ (próprio + esqueci + admin reseta de terceiro, PR #100)**, **performance ✅ (índices, annotates, bulk, prefetch + escopo obrigatório nos endpoints matriz)**. **Próximo objetivo crítico: migração pra OVH 🔴** — o projeto ficou em sleep e segue em Render free + Vercel; a data de expiração do Postgres free (~90 dias, referência antiga: 2026-06-26) **já passou**, então confirmar se o banco está de pé e se há dump recente ANTES de qualquer coisa. Dump local já feito (PG 18 custom format, ~222KB), restore smoke-testado num container PG 18 local. Resta: provisionar VPS OVH, restaurar dump, ajustar `ALLOWED_HOSTS`/`CSRF_TRUSTED_ORIGINS`/`CORS_ALLOWED_ORIGINS`/`DATABASE_URL`, rotacionar `SECRET_KEY`, trocar `VITE_API_URL` no Vercel. Frontend continua no Vercel — só backend+banco saem do Render. Próximas frentes pós-OVH: fila assíncrona pra email (item 12), múltiplos responsáveis no aluno, dashboard com mais métricas.
+Infra ✅, segurança operacional ✅, audit log ✅, comunicação por email **funcional em prod** ✅, **Sentry em prod ✅ (DSN setado + smoke test confirmado + captura de 4xx)**, **identidade visual completa ✅ (Login + Sidebar + Dashboard + listagens + detalhes + forms; DESIGN.md durável travado)**, auto-escopo de escola ✅, **diário de classe ✅ (5 fatias + redesenho do PDF #97)**, **fluxo de senha completo ✅ (próprio + esqueci + admin reseta de terceiro, PR #100)**, **performance ✅ (índices, annotates, bulk, prefetch + escopo obrigatório nos endpoints matriz)**. **Próximo objetivo crítico: migração pra OVH 🔴** — segue em Render free + Vercel. O Postgres free foi **reiniciado em out/2026**, então a validade de ~90 dias voltou a contar: **~30 dias de folga a partir de 2026-10-06** (vence por volta de 2026-11-05). É o prazo real da migração — passou disso, o banco expira de novo. Dump local já feito (PG 18 custom format, ~222KB), restore smoke-testado num container PG 18 local. Resta: provisionar VPS OVH, restaurar dump, ajustar `ALLOWED_HOSTS`/`CSRF_TRUSTED_ORIGINS`/`CORS_ALLOWED_ORIGINS`/`DATABASE_URL`, rotacionar `SECRET_KEY`, trocar `VITE_API_URL` no Vercel. Frontend continua no Vercel — só backend+banco saem do Render. Próximas frentes pós-OVH: fila assíncrona pra email (item 12), múltiplos responsáveis no aluno, dashboard com mais métricas.
 
 ---
 
