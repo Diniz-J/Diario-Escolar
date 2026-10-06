@@ -369,7 +369,15 @@ token carrega claim de tipo e **cada lado recusa o token do outro**, com
 teste nos dois sentidos.
 
 Fatias (um PR cada): 1) modelo e vínculo · 2) auth isolado · 3) convite e
-senha · 4) leituras · 5) mural · 6) frontend.
+senha · 4) leituras · 5) mural · 5b) tela do mural no staff · 6) frontend
+do portal · 6b) tela "Responsáveis" + botão Convidar no staff.
+
+**Status (out/2026):** 1–5b entregues (#106–#111) — backend do portal
+completo em produção, mural do staff no ar. **Pendentes: 6 (todo o lado do
+pai) e 6b.** Plano aprovado da 6, escopo da 6b e achados do staff que
+saíram dos CRs estão no `PORTAL.md`, seções 5 e 6 (os de segurança, no
+`CLAUDE.local.md`).
+**Nenhum convite em produção antes da fatia 6.**
 
 **Fatia 1 entregue**: app `portal` com `Responsavel` (`AbstractBaseUser`,
 não `AUTH_USER_MODEL`; email normalizado no `save`, unique por

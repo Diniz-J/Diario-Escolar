@@ -206,9 +206,8 @@ sem email também tem linha no log, então o pai vê no portal o aviso que não
 chegou por email. Cada comunicado lista só os filhos **daquele**
 responsável que ele alcançou.
 
-O período do boletim também é escopado pela escola do filho: o helper do
-staff (`resolver_janela_por_periodo`) busca por id sem escopo, então o
-portal faz a busca própria e período de outra escola dá 404.
+O período do boletim também é escopado pela escola do filho: o portal faz
+a busca própria do período, e período de outra escola dá 404.
 
 ### 4.4. Convite e senha
 
@@ -261,15 +260,81 @@ disso o responsável cairia num 404, e o convite (7 dias) venceria sem uso.
 A fatia 3 pode ser mergeada e deployada; o que espera é rodar o
 `portal_convidar_responsaveis` e o botão de convite.
 
-| # | Fatia | Verificação |
-|---|---|---|
-| 1 | `Responsavel`, `ResponsavelAluno`, comando de semeadura, admin | Semeadura deduplica irmãos, é idempotente e pula aluno sem email; conta nasce sem senha utilizável; suíte verde |
-| 2 | Autenticação isolada do portal (login, refresh, claim de tipo) | Token de cada lado recusado no outro; token sem claim recusado nos dois; rate limit no login |
-| 3 | `ConviteResponsavel`, convidar, aceitar, reset próprio, comando de lote | Convite reusado falha; expirado falha; só nível-diretor convida; lote respeita a cota |
-| 4 | Leituras: filhos, comunicados, boletim, ocorrências | Responsável A não lê nada do aluno de B; id alheio na URL dá 404; rascunho invisível |
-| 5 | `Material` + CRUD do professor + leitura no portal | Professor não publica em turma que não leciona; responsável só vê a turma do filho |
-| 5b | Tela do professor pro mural (staff) | Professor só vê turma/disciplina que leciona no formulário; build limpo |
-| 6 | Frontend do portal sob `/portal` | Build limpo; sessão de responsável não alcança rota administrativa; storage em namespace próprio |
+| # | Fatia | Status | Verificação |
+|---|---|---|---|
+| 1 | `Responsavel`, `ResponsavelAluno`, comando de semeadura, admin | ✅ #106 | Semeadura deduplica irmãos, é idempotente e pula aluno sem email; conta nasce sem senha utilizável; suíte verde |
+| 2 | Autenticação isolada do portal (login, refresh, claim de tipo) | ✅ #107 | Token de cada lado recusado no outro; token sem claim recusado nos dois; rate limit no login |
+| 3 | `ConviteResponsavel`, convidar, aceitar, reset próprio, comando de lote | ✅ #108 | Convite reusado falha; expirado falha; só nível-diretor convida; lote respeita a cota |
+| 4 | Leituras: filhos, comunicados, boletim, ocorrências | ✅ #109 | Responsável A não lê nada do aluno de B; id alheio na URL dá 404; rascunho invisível |
+| 5 | `Material` + CRUD do professor + leitura no portal | ✅ #110 | Professor não publica em turma que não leciona; responsável só vê a turma do filho |
+| 5b | Tela do professor pro mural (staff) | ✅ #111 | Professor só vê turma/disciplina que leciona no formulário; build limpo |
+| 6 | Frontend do portal sob `/portal` | **pendente** — plano aprovado abaixo | Build limpo; sessão de responsável não alcança rota administrativa; storage em namespace próprio |
+| 6b | Tela "Responsáveis" no staff + botão Convidar | **pendente** | Só nível-diretor convida; status da conta visível; build limpo |
+
+**Onde paramos (out/2026):** o backend do portal está completo e em
+produção (fatias 1–5), e o mural do staff também (5b). **Falta todo o lado
+do pai** — a fatia 6 — e a tela de convite do staff (6b). Enquanto a 6 não
+entra, o portão acima continua valendo: nenhum convite em produção.
+
+### Fatia 6 — plano aprovado (out/2026)
+
+**Separação do bundle** (seção 4.5): hoje o `App.tsx` importa o
+`AppRoutes` estaticamente, com todas as telas do staff. A raiz passa a
+carregar sob demanda (`React.lazy`) duas árvores — `/portal/*` → app do
+portal, resto → app do staff — compartilhando só `QueryClient`, `Toaster`
+e os componentes de `components/ui`. Verificar no build que o chunk do
+portal não contém tela do staff (procurar uma string só do staff nele).
+
+**Sessão própria** em `features/portal/`:
+
+- Storage com chaves próprias (`portal_access_token`,
+  `portal_refresh_token`) — sessão de pai e de staff no mesmo navegador
+  não se sobrescrevem.
+- Cliente HTTP próprio (`portalApi`), com refresh em `/portal/auth/refresh/`
+  que **guarda o refresh rotacionado** (o backend rotaciona e põe o
+  anterior na blacklist; o cliente do staff errava isso — corrigido no
+  #112).
+- `PortalAuthContext` carregando o responsável por `/portal/me/`, e rota
+  protegida própria que manda pra `/portal/entrar`.
+
+**Telas** — mobile-first (o pai acessa pelo celular), visual do
+`DESIGN.md`:
+
+| Rota | Tela |
+|---|---|
+| `/portal/entrar` | Login (email + senha) |
+| `/portal/esqueci-senha` | Pede o link de redefinição |
+| `/portal/definir-senha?token=` | Define a senha — convite **e** reset. É a tela que o link do email abre |
+| `/portal` | Início: filhos + comunicados recentes |
+| `/portal/alunos/:id` | Abas Boletim (com seletor de período), Ocorrências, Mural |
+| `/portal/comunicados`, `/portal/comunicados/:id` | Comunicados, com pra qual filho |
+
+**Requisitos de segurança no front** (saíram dos CRs das fatias 4 e 5b):
+
+- `mensagem` do comunicado renderizada como **texto**, nunca HTML
+  (`whitespace-pre-wrap` pras quebras de linha). Nada de
+  `dangerouslySetInnerHTML`.
+- Link do mural só renderiza se for `http(s)`, com `noopener noreferrer`.
+- Boletim em componente **próprio** do portal — não reaproveitar a
+  `BoletimPage` do staff (469 linhas, arrasta exportação e PDF).
+
+**Teste manual no preview:** o front não tem teste automatizado e o preview
+do Vercel usa a API de produção. Pra ter uma conta de teste, mandar **um**
+convite pra si mesmo (`POST /api/v1/responsaveis/<id>/convidar/` num
+responsável com o próprio email), copiar o token do email (o link aponta
+pro domínio de produção) e abrir `/portal/definir-senha?token=...` no
+preview. Um convite, pra si mesmo — não fura o espírito do portão.
+
+### Fatia 6b — tela "Responsáveis" no staff
+
+O `PORTAL.md` decidiu "convite individual na UI", mas nenhuma fatia tinha
+tela de responsáveis no staff — mesma lacuna que virou a 5b. Escopo:
+listagem das contas da escola com status (sem convite / convidado / ativo),
+vínculos com os alunos e o botão **Convidar** (usa o
+`/responsaveis/<id>/convidar/` da fatia 3, que já tem rate limit). Precisa
+de endpoint de listagem de responsáveis no staff, que ainda não existe. Até
+a 6b, o onboarding depois da fatia 6 sai pelo comando de lote
+`portal_convidar_responsaveis`.
 
 ---
 
@@ -317,3 +382,20 @@ despublicados". Link abre em aba nova com `rel="noopener noreferrer"`.
   FASE 5 (multi-tenancy).
 - Telefone e flag `recebe_notificacao` no responsável, já listados como
   pendência do email de ocorrência no `CLAUDE.md`.
+- PDF do boletim no portal — fora da fatia 4 (WeasyPrint síncrono e lento
+  no free tier). Entra se o pai pedir.
+
+### Achados fora do portal (registrados como tarefa, sem PR ainda)
+
+Saíram das revisões das fatias e afetam o **staff**. Dois deles são de
+segurança e ficam fora deste arquivo (repo público): o detalhe está no
+`CLAUDE.local.md` de quem mantém o projeto.
+
+- **`ProtectedError` vira 500** — o projeto não trata em lugar nenhum;
+  apagar registro referenciado por `PROTECT` (ex.: usuário que deu visto
+  numa aula) responde 500 em vez de 4xx. Caminho: exception handler do DRF
+  em `apps/common/`, mensagem genérica sem listar objetos (vazaria dado
+  entre escolas).
+- **Refresh do staff derrubava a sessão em ~2h** — o cliente guardava o
+  refresh antigo, que o backend põe na blacklist na rotação. Corrigido no
+  **#112** (aberto).
