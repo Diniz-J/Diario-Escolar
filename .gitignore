@@ -54,7 +54,7 @@ htmlcov/
 
 # Claude Code / MCP
 .claude/
-CLAUDE.md
+CLAUDE.local.md
 .claude.json
 .claude.local.json
 .mcp.json
