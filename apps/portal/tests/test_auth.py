@@ -29,6 +29,7 @@ URL_LOGOUT = reverse("api_v1:portal_logout")
 URL_ME = reverse("api_v1:portal_me")
 URL_STAFF_LOGIN = reverse("api_v1:token_obtain_pair")
 URL_STAFF_REFRESH = reverse("api_v1:token_refresh")
+URL_STAFF_LOGOUT = reverse("api_v1:logout")
 URL_STAFF = reverse("api_v1:turma-list")
 
 
@@ -147,6 +148,22 @@ class SeparacaoDeTokenTests(_PortalAuthSetup):
         _, refresh = self._tokens_staff()
         resp = self.client.post(URL_REFRESH, {"refresh": refresh}, format="json")
         self.assertEqual(resp.status_code, 401)
+
+    def test_logout_do_staff_nao_invalida_refresh_do_portal(self):
+        """O logout do staff usava `RefreshToken` cru e blacklistava o
+        refresh do portal — contradizia "cada lado recusa o token do outro"."""
+        access_staff, _ = self._tokens_staff()
+        _, refresh_portal = self._tokens_portal()
+        resp = self.client.post(
+            URL_STAFF_LOGOUT,
+            {"refresh": refresh_portal},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {access_staff}",
+        )
+        self.assertEqual(resp.status_code, 205)
+        # O refresh do portal segue válido: o logout do staff não agiu nele.
+        resp = self.client.post(URL_REFRESH, {"refresh": refresh_portal}, format="json")
+        self.assertEqual(resp.status_code, 200)
 
     def test_token_do_portal_nao_liga_ao_usuario_na_blacklist(self):
         """O `OutstandingToken` tem FK pro `Usuario`: tem que ficar nula."""
