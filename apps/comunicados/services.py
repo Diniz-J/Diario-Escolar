@@ -31,20 +31,12 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from apps.common.logging import escola_context
+from apps.common.texto import normalizar_email
 from apps.escola.models import Aluno
 
 from .models import Comunicado, ComunicadoDestinatario
 
 logger = logging.getLogger(__name__)
-
-
-def _normalizar_email(valor: str | None) -> str:
-    """Normaliza pra comparação de duplicados.
-
-    Lowercase + strip: `Maria@Example.com ` e `maria@example.com` são o
-    mesmo endereço e não devem render dois emails pro mesmo responsável.
-    """
-    return (valor or "").strip().lower()
 
 
 def resolver_alunos(comunicado: Comunicado):
@@ -82,7 +74,7 @@ def contar_previa(comunicado: Comunicado) -> dict[str, int]:
     total_sem_email = 0
     for email_responsavel in valores:
         total_alunos += 1
-        email = _normalizar_email(email_responsavel)
+        email = normalizar_email(email_responsavel)
         if email:
             emails.add(email)
         else:
@@ -144,7 +136,7 @@ def _materializar_destinatarios(comunicado: Comunicado) -> int:
     for aluno in resolver_alunos(comunicado).only(
         "id", "nome_completo", "nome_responsavel", "email_responsavel"
     ):
-        email = _normalizar_email(aluno.email_responsavel)
+        email = normalizar_email(aluno.email_responsavel)
         linhas.append(
             ComunicadoDestinatario(
                 comunicado=comunicado,

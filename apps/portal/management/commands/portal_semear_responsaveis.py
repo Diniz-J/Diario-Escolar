@@ -4,8 +4,11 @@ A escola já digitou `nome_responsavel` e `email_responsavel` em cada aluno
 — o portal não pode exigir que ela redigite tudo. Este comando converte
 esses campos nas contas e nos vínculos do portal.
 
-**Idempotente**: tudo via `get_or_create`. Rodar de novo não duplica,
-apenas completa o que faltar (aluno novo matriculado depois, por exemplo).
+**Idempotente**: nada é duplicado. Rodar de novo completa o que faltar —
+aluno novo matriculado depois, e o nome do responsável quando a escola
+preencher `nome_responsavel` em algum dos cadastros depois da primeira
+rodada (nesse caso o fallback "Responsável" é substituído; nome real já
+gravado é preservado).
 
 **Deduplica por email.** Irmãos na mesma escola compartilham o email do
 responsável: viram **uma** conta com **dois** vínculos. Sem isso o pai de
@@ -38,7 +41,8 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from apps.escola.models import Aluno
-from apps.portal.models import Responsavel, ResponsavelAluno, normalizar_email
+from apps.common.texto import normalizar_email
+from apps.portal.models import Responsavel, ResponsavelAluno
 
 NOME_PADRAO = "Responsável"
 
@@ -102,8 +106,14 @@ class Command(BaseCommand):
 
         criados_resp = 0
         criados_vinc = 0
-        with transaction.atomic():
-            for (esc_id, email), grupo in grupos.items():
+        nomes_preenchidos = 0
+
+        for (esc_id, email), grupo in grupos.items():
+            # Transação por grupo, não por lote inteiro: numa escola de
+            # milhares de alunos o lote único seria uma transação longa
+            # segurando locks. Como o comando é idempotente, uma
+            # interrupção no meio só deixa o resto pra próxima rodada.
+            with transaction.atomic():
                 responsavel, criado = Responsavel.objects.get_or_create(
                     escola_id=esc_id,
                     email=email,
@@ -114,6 +124,18 @@ class Command(BaseCommand):
                     responsavel.set_unusable_password()
                     responsavel.save(update_fields=["password"])
                     criados_resp += 1
+                elif grupo["nome"] and responsavel.nome == NOME_PADRAO:
+                    # `get_or_create` só aplica `defaults` na criação, então
+                    # sem isto a conta semeada antes de a escola preencher
+                    # `nome_responsavel` ficaria como "Responsável" pra
+                    # sempre, mesmo rodando o comando de novo.
+                    #
+                    # Só substitui o fallback: nome real já gravado é
+                    # preservado, porque pode ter sido corrigido à mão no
+                    # admin e o cadastro do aluno é a fonte menos confiável.
+                    responsavel.nome = grupo["nome"]
+                    responsavel.save(update_fields=["nome"])
+                    nomes_preenchidos += 1
 
                 for aluno in grupo["alunos"]:
                     _vinculo, vinc_criado = ResponsavelAluno.objects.get_or_create(
@@ -122,10 +144,13 @@ class Command(BaseCommand):
                     if vinc_criado:
                         criados_vinc += 1
 
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"{criados_resp} responsáveis criados, "
-                f"{criados_vinc} vínculos criados. "
-                f"{pulados} alunos sem email de responsável foram pulados."
-            )
+        resumo = (
+            f"{criados_resp} responsáveis criados, "
+            f"{criados_vinc} vínculos criados"
         )
+        if nomes_preenchidos:
+            resumo += f", {nomes_preenchidos} nomes preenchidos"
+        resumo += (
+            f". {pulados} alunos sem email de responsável foram pulados."
+        )
+        self.stdout.write(self.style.SUCCESS(resumo))

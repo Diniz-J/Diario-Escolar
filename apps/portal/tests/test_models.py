@@ -149,3 +149,37 @@ class ResponsavelAlunoTests(_PortalSetup):
 
         with self.assertRaises(ProtectedError):
             self.responsavel.delete()
+
+
+class HistoricoTests(_PortalSetup):
+    def test_hash_de_senha_fica_fora_do_historico(self):
+        """Usuário externo: rastro permanente de credencial sem contrapartida.
+
+        Divergência consciente do `Usuario`, onde o hash vai pro histórico
+        por valor de auditoria do staff.
+        """
+        campos = {f.name for f in Responsavel.history.model._meta.fields}
+        self.assertNotIn("password", campos)
+        self.assertNotIn("last_login", campos)
+        # O resto continua auditado — é o que justifica ter histórico.
+        self.assertIn("email", campos)
+        self.assertIn("nome", campos)
+        self.assertIn("ativo", campos)
+
+    def test_mudanca_de_email_e_auditada(self):
+        r = Responsavel.objects.create(
+            escola=self.escola_a, nome="Maria", email="antigo@example.com"
+        )
+        r.email = "novo@example.com"
+        r.save()
+        emails = list(r.history.order_by("history_date").values_list("email", flat=True))
+        self.assertEqual(emails, ["antigo@example.com", "novo@example.com"])
+
+    def test_vinculo_sem_indice_redundante(self):
+        """O unique (responsavel, aluno) já cobre filtro só por responsavel.
+
+        Regressão de custo: um índice dedicado em `responsavel` duplicaria
+        o prefixo mais à esquerda do índice do constraint.
+        """
+        nomes = {i.name for i in ResponsavelAluno._meta.indexes}
+        self.assertEqual(nomes, set())

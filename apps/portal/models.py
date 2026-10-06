@@ -29,18 +29,8 @@ from django.db import models
 from simple_history.models import HistoricalRecords
 
 from apps.common.models import BaseModelEscopado, TimeStampedModel
+from apps.common.texto import normalizar_email
 from apps.escola.models import Aluno, Escola
-
-
-def normalizar_email(valor: str | None) -> str:
-    """Normaliza o email pra comparação e armazenamento.
-
-    Lowercase + strip. Sem isto o unique por `(escola, email)` seria
-    furado — `Maria@Example.com ` e `maria@example.com` são o mesmo
-    responsável e criariam duas contas pro mesmo pai. Mesma lição da
-    deduplicação dos comunicados.
-    """
-    return (valor or "").strip().lower()
 
 
 class Responsavel(AbstractBaseUser, BaseModelEscopado):
@@ -66,9 +56,17 @@ class Responsavel(AbstractBaseUser, BaseModelEscopado):
         Aluno, through="ResponsavelAluno", related_name="responsaveis"
     )
 
-    # `last_login` fica fora do histórico pelo mesmo motivo do `Usuario`:
-    # geraria uma entrada por login, afogando as mudanças que importam.
-    history = HistoricalRecords(excluded_fields=["last_login"])
+    # `last_login` fica fora pelo mesmo motivo do `Usuario`: geraria uma
+    # entrada por login, afogando as mudanças que importam.
+    #
+    # `password` também fica fora, e aqui **divergindo** do `Usuario` de
+    # propósito. No staff o hash no histórico tem valor de auditoria; aqui
+    # é usuário externo, e guardar todo hash já usado numa tabela que
+    # ninguém expira deixa um rastro permanente de credencial de terceiro
+    # — sem contrapartida, porque hash antigo não serve pra investigar
+    # nada (não loga mais). Se um dia for preciso saber *quando* a senha
+    # mudou, o lugar é um campo de data, não o histórico do hash.
+    history = HistoricalRecords(excluded_fields=["last_login", "password"])
 
     class Meta:
         verbose_name = "responsável"
@@ -127,14 +125,11 @@ class ResponsavelAluno(TimeStampedModel):
                 name="responsavelaluno_unique_responsavel_aluno",
             ),
         ]
-        indexes = [
-            # Toda leitura do portal parte do responsável autenticado pra
-            # descobrir quais alunos ele pode ver.
-            models.Index(
-                fields=["responsavel"],
-                name="respaluno_idx_responsavel",
-            ),
-        ]
+        # Sem `indexes` de propósito: toda leitura do portal parte do
+        # responsável autenticado, e o índice do `UniqueConstraint` acima
+        # — btree em (responsavel, aluno) — já atende filtro só por
+        # `responsavel`, que é seu prefixo mais à esquerda. Um índice
+        # dedicado seria custo de escrita e espaço sem ganho de leitura.
 
     def __str__(self) -> str:
         return f"{self.responsavel.nome} → {self.aluno.nome_completo}"

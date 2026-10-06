@@ -153,3 +153,42 @@ class SemeaduraTests(TestCase):
         self.assertEqual(ResponsavelAluno.objects.count(), 0)
         self.assertIn("dry-run", saida)
         self.assertIn("mae@example.com", saida)
+
+    def test_segunda_rodada_preenche_nome_que_faltava(self):
+        """`get_or_create` só aplica defaults na criação.
+
+        Sem tratamento, a conta semeada antes de a escola preencher o
+        `nome_responsavel` ficaria como "Responsável" para sempre, mesmo
+        rodando o comando de novo — contrariando a promessa de que a
+        segunda rodada completa o que faltou.
+        """
+        aluno = self._aluno("Ana", "mae@example.com", "")
+        self._semear()
+        self.assertEqual(Responsavel.objects.get().nome, "Responsável")
+
+        aluno.nome_responsavel = "Maria Silva"
+        aluno.save(update_fields=["nome_responsavel"])
+        saida = self._semear()
+
+        self.assertEqual(Responsavel.objects.get().nome, "Maria Silva")
+        self.assertIn("1 nomes preenchidos", saida)
+
+    def test_nao_sobrescreve_nome_real_ja_gravado(self):
+        """Nome corrigido à mão no admin não é atropelado pelo cadastro.
+
+        O cadastro do aluno é a fonte menos confiável: quem ajustou o nome
+        no admin sabe mais que o campo digitado na matrícula.
+        """
+        aluno = self._aluno("Ana", "mae@example.com", "Maria")
+        self._semear()
+        responsavel = Responsavel.objects.get()
+        responsavel.nome = "Maria Aparecida Silva"
+        responsavel.save(update_fields=["nome"])
+
+        aluno.nome_responsavel = "M. Silva"
+        aluno.save(update_fields=["nome_responsavel"])
+        self._semear()
+
+        self.assertEqual(
+            Responsavel.objects.get().nome, "Maria Aparecida Silva"
+        )

@@ -4,6 +4,7 @@ Enquanto não existe tela de gestão de responsáveis (fatia 6), o admin é
 como a secretaria confere a semeadura e corrige um email errado.
 """
 from django.contrib import admin
+from django.db.models import Count
 from simple_history.admin import SimpleHistoryAdmin
 
 from .models import Responsavel, ResponsavelAluno
@@ -27,9 +28,22 @@ class ResponsavelAdmin(SimpleHistoryAdmin):
     readonly_fields = ("password", "last_login", "criado_em", "atualizado_em")
     inlines = (ResponsavelAlunoInline,)
 
-    @admin.display(description="alunos")
+    def get_queryset(self, request):
+        """Anota a contagem de vínculos.
+
+        Sem isto, `total_alunos` dispararia um `COUNT(*)` por linha da
+        listagem.
+        """
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("escola")
+            .annotate(_total_alunos=Count("vinculos"))
+        )
+
+    @admin.display(description="alunos", ordering="_total_alunos")
     def total_alunos(self, obj) -> int:
-        return obj.vinculos.count()
+        return obj._total_alunos
 
 
 @admin.register(ResponsavelAluno)
