@@ -1,29 +1,39 @@
+import { Suspense, lazy } from "react";
+import { Route, Routes } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 
 import { Toaster } from "@/components/ui/sonner";
-import { AuthProvider } from "@/features/auth/AuthContext";
 import { queryClient } from "@/lib/queryClient";
-import { AppRoutes } from "@/routes";
 
-// Componente raiz: encadeia os provedores globais.
-//
-// Ordem importa: o AuthProvider faz uma chamada à API (login),
-// portanto QueryClientProvider precisa estar acima caso futuramente o
-// AuthContext queira usar useQuery internamente. Hoje não usa, mas
-// deixar a ordem assim evita refator depois.
-//
-// <Toaster /> renderiza no canto da tela; toasts são disparados via
-// `toast()` do sonner em qualquer ponto do app.
+// As duas árvores carregam sob demanda e viram chunks separados: o
+// responsável não baixa a UI administrativa e o funcionário não baixa a do
+// portal (`PORTAL.md`, seção 4.5). Elas compartilham só o `QueryClient`, o
+// `Toaster` e os componentes de `components/ui` — nenhum contexto de
+// sessão, porque as sessões são independentes (tokens em chaves próprias).
+const StaffApp = lazy(() => import("@/StaffApp"));
+const PortalApp = lazy(() => import("@/portal/PortalApp"));
+
+function Carregando() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <p className="text-sm text-muted-foreground">Carregando...</p>
+    </div>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AppRoutes />
-        {/* `bottom-right` evita que toasts sobreponham botões de ação
-            no canto superior direito das páginas (ex.: Resolver/Arquivar
-            em ocorrências). */}
-        <Toaster richColors position="bottom-right" />
-      </AuthProvider>
+      <Suspense fallback={<Carregando />}>
+        <Routes>
+          <Route path="/portal/*" element={<PortalApp />} />
+          <Route path="/*" element={<StaffApp />} />
+        </Routes>
+      </Suspense>
+      {/* `bottom-right` evita que toasts sobreponham botões de ação
+          no canto superior direito das páginas (ex.: Resolver/Arquivar
+          em ocorrências). */}
+      <Toaster richColors position="bottom-right" />
     </QueryClientProvider>
   );
 }
