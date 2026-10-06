@@ -517,3 +517,83 @@ export interface NotaPeriodoHistoricoEvento {
   em: string | null;
   tipo: HistoricoTipo;
 }
+
+// Comunicados aos responsáveis (app `comunicados`).
+//
+// Ciclo de vida: `rascunho` é o único estado editável — salvar NUNCA
+// envia. O disparo é a action `POST /comunicados/{id}/enviar/`, que leva
+// a `enviando` e, ao fim do lote, a `enviado` ou `falhou`.
+export type ComunicadoStatus =
+  | "rascunho"
+  | "enviando"
+  | "enviado"
+  | "falhou";
+
+// `escola` atinge todos os responsáveis de alunos ativos; `turmas` só os
+// das turmas selecionadas.
+export type ComunicadoDestino = "escola" | "turmas";
+
+export interface Comunicado {
+  id: number;
+  escola: number;
+  titulo: string;
+  mensagem: string;
+  destino: ComunicadoDestino;
+  destino_display: string;
+  turmas: number[];
+  status: ComunicadoStatus;
+  status_display: string;
+  // Espelha `Comunicado.editavel` do backend (status === "rascunho").
+  // Vem do servidor pra que a UI não reimplemente a regra.
+  editavel: boolean;
+  enviado_em: string | null;
+  criado_por: number | null;
+  criado_por_nome: string | null;
+  enviado_por: number | null;
+  enviado_por_nome: string | null;
+  total_destinatarios: number;
+  total_enviados: number;
+  total_falhas: number;
+  total_sem_email: number;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+// `escola` opcional — backend auto-preenche (`AutoEscopoEscolaMixin`).
+// Só conteúdo e público são editáveis; o resultado do disparo é read-only.
+export type ComunicadoInput = {
+  escola?: number;
+  titulo: string;
+  mensagem: string;
+  destino: ComunicadoDestino;
+  turmas: number[];
+};
+
+// Resposta de `GET /comunicados/{id}/previa/` — alcance sem enviar nada.
+// `total_emails` é a contagem depois da dedup de irmãos: é o número de
+// mensagens que o provedor vai realmente receber.
+export interface ComunicadoPrevia {
+  total_alunos: number;
+  total_emails: number;
+  total_sem_email: number;
+}
+
+export type ComunicadoDestinatarioStatus =
+  | "pendente"
+  | "enviado"
+  | "falhou"
+  | "sem_email";
+
+export interface ComunicadoDestinatario {
+  id: number;
+  comunicado: number;
+  aluno: number;
+  aluno_nome: string;
+  turma_nome: string | null;
+  email: string;
+  nome_responsavel: string;
+  status: ComunicadoDestinatarioStatus;
+  status_display: string;
+  erro: string;
+  enviado_em: string | null;
+}

@@ -188,6 +188,19 @@ Cada app de domínio segue o mesmo layout (`models.py`, `serializers.py`, `views
 - Guard de IDOR no payload `escola`.
 - **Notificação por email** (`services.py`): ao criar uma ocorrência (`perform_create`), envia email ao `email_responsavel` do aluno. O disparo roda em **thread daemon** (fire-and-forget) — o POST volta na hora; o email é melhor-esforço protegido por `try/except`. Em `TESTING` o envio é síncrono pra deixar `mail.outbox` determinístico. Provedor em produção: **Brevo via HTTP API** (`django-anymail`, porta 443) — escolhido porque o free tier do Render bloqueia outbound SMTP desde set/2025. Ver [`DEPLOY.md`](./DEPLOY.md).
 
+**`apps/comunicados`**
+- `Comunicado` — aviso institucional enviado por email aos responsáveis (reunião de pais, feriado, campanha). Título + mensagem + `destino` (`escola` = todos os responsáveis de alunos ativos / `turmas` = só as turmas selecionadas, via M2M) + `status` (`rascunho` → `enviando` → `enviado`/`falhou`). Auditado (simple-history, incluindo a M2M).
+- **Dois passos, de propósito**: salvar cria/edita **rascunho e nunca envia**; o disparo é a action explícita `POST /comunicados/{id}/enviar/`. Depois do disparo o comunicado fica imutável (editar/excluir devolve 400) — é o registro do que chegou à caixa de entrada dos pais. Email não tem "desfazer".
+- `ComunicadoDestinatario` — uma linha por aluno alcançado, com snapshot do email/nome no momento do disparo e o resultado (`pendente`/`enviado`/`falhou`/`sem_email`) + mensagem de erro do provedor. Criada **antes** do envio, pra que um crash no meio do lote deixe rastro. Responde "o responsável do João recebeu?" e expõe quem está sem email cadastrado.
+- **Privacidade (LGPD)**: cada responsável recebe uma mensagem individual. Um `To`/`CC` coletivo vazaria a lista de emails de todos os pais da escola para todos os pais da escola.
+- **Deduplicação por endereço normalizado** (lowercase + strip): irmãos matriculados na mesma escola compartilham o email do responsável e receberiam o aviso duas vezes. As duas linhas de log continuam existindo e recebem o mesmo resultado.
+- **Conexão única** (`get_connection`) para o lote inteiro, em vez de um handshake por mensagem.
+- **Trava anti-duplo-clique**: a transição `rascunho → enviando` é um `UPDATE` condicional com rowcount checado. Dois cliques simultâneos: só o primeiro dispara, o segundo recebe **409**.
+- Tolerância a falha: a recusa de um destinatário não aborta o lote (fica registrada na linha dele); falha ao **abrir** a conexão — cenário real do free tier do Brevo, 300 emails/dia — marca todas as linhas com o motivo do provedor e o comunicado vira `falhou`. `falhou` é reservado pro disparo que não entregou nada: "enviado com 3 falhas de 142" continua `enviado`.
+- Permissão: **leitura** para nível-diretor + professor/inspetor (o corpo docente acompanha o que foi comunicado); **escrita e envio** só para nível-diretor. Guard de IDOR no payload `escola`.
+- `filter_queryset` é aplicado só no `list`: o `get_object()` do DRF também o chama, e isso fazia `GET /comunicados/{id}/destinatarios/?status=sem_email` devolver 400 (o filtro da viewset comparava um status de *destinatário* com os status de *comunicado*).
+- Envio em **thread daemon** (via `transaction.on_commit`, pra thread não correr com o commit da request); síncrono em `TESTING`. Mesmo provedor das ocorrências (Brevo via HTTP API).
+
 **`apps/presenca`**
 - `RegistroPresenca` — chamada de uma turma num dia; única por `(escola, turma, data)`; `professor` opcional.
 - `ItemPresenca` — status individual por aluno (`P`/`A`/`J`/`R`: presente, ausente, justificado, retardatário). `CASCADE` no `registro` (único cascade do projeto).
@@ -234,6 +247,12 @@ GET|PUT|PATCH|DELETE /api/v1/lecionamentos/{id}/
 
 GET|POST        /api/v1/ocorrencias/
 GET|PUT|PATCH|DELETE /api/v1/ocorrencias/{id}/
+
+GET|POST        /api/v1/comunicados/                      (salvar NÃO envia: cria rascunho)
+GET|PUT|PATCH|DELETE /api/v1/comunicados/{id}/            (só enquanto rascunho)
+POST            /api/v1/comunicados/{id}/enviar/          (dispara os emails; 409 se já disparado)
+GET             /api/v1/comunicados/{id}/previa/          (alcance sem enviar nada)
+GET             /api/v1/comunicados/{id}/destinatarios/   (log de entrega; ?status=falhou)
 
 GET|POST        /api/v1/planos-ensino/
 GET|PUT|PATCH|DELETE /api/v1/planos-ensino/{id}/
@@ -282,6 +301,8 @@ Single-Page Application em React 19 + TypeScript que consome a API REST do backe
 | `/ocorrencias` | Lista ordenada por status (abertas → arquivadas) + data desc; filtro por status |
 | `/ocorrencias/:id` | Detalhe com botões rápidos de mudança de status; editar/excluir num dropdown discreto |
 | `/presenca` | Lista de chamadas por turma e data |
+| `/comunicados` | Lista de comunicados (rascunhos primeiro, depois falhas, enviados por último); filtro por status; botão "Enviar" nas linhas em rascunho |
+| `/comunicados/:id` | Detalhe com a mensagem, autoria e o log de entrega por aluno (enviados / falhas / sem email), filtrável |
 | `/presenca/:id` | Tela da chamada com resumo P/A/J/R e edição inline por aluno (optimistic update) |
 | `/tarefas` | Lista de tarefas com busca |
 | `/tarefas/:id` | Detalhe com resumo de entregas e marcação por aluno |
