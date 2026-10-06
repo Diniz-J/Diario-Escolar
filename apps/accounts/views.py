@@ -10,8 +10,10 @@ from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
+from apps.common.authentication import StaffRefreshToken
 from apps.common.permissions import (
     PERFIS_PRIVILEGIADOS,
     IsAdminOrDiretor,
@@ -172,6 +174,17 @@ class UsuarioTokenObtainPairView(TokenObtainPairView):
     serializer_class = UsuarioTokenObtainPairSerializer
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "login"
+
+
+class StaffTokenRefreshSerializer(TokenRefreshSerializer):
+    token_class = StaffRefreshToken
+
+
+class StaffTokenRefreshView(TokenRefreshView):
+    """`POST /auth/token/refresh/` — igual ao do SimpleJWT, mas recusa o
+    refresh do portal do responsável (ver `StaffRefreshToken`)."""
+
+    serializer_class = StaffTokenRefreshSerializer
 
 
 class PasswordResetRequestView(APIView):
