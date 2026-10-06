@@ -34,6 +34,7 @@ const NAV_ITEMS = [
   { to: "/professores", label: "Professores" },
   { to: "/planos-ensino", label: "Planos de ensino" },
   { to: "/ocorrencias", label: "Ocorrências" },
+  { to: "/comunicados", label: "Comunicados" },
   { to: "/presenca", label: "Presença" },
   { to: "/avaliacoes", label: "Avaliações" },
   { to: "/notas-finais", label: "Notas finais" },

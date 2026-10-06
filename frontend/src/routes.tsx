@@ -6,6 +6,8 @@ import { AlunosPage } from "@/pages/AlunosPage";
 import { AvaliacaoDetalhePage } from "@/pages/AvaliacaoDetalhePage";
 import { AvaliacoesPage } from "@/pages/AvaliacoesPage";
 import { BoletimPage } from "@/pages/BoletimPage";
+import { ComunicadoDetalhePage } from "@/pages/ComunicadoDetalhePage";
+import { ComunicadosPage } from "@/pages/ComunicadosPage";
 import { ContaSenhaPage } from "@/pages/ContaSenhaPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { DiarioAulaPage } from "@/pages/DiarioAulaPage";
@@ -56,6 +58,11 @@ export function AppRoutes() {
           <Route
             path="/planos-ensino/:id"
             element={<PlanoEnsinoDetalhePage />}
+          />
+          <Route path="/comunicados" element={<ComunicadosPage />} />
+          <Route
+            path="/comunicados/:id"
+            element={<ComunicadoDetalhePage />}
           />
           <Route path="/ocorrencias" element={<OcorrenciasPage />} />
           <Route

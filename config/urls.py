@@ -77,6 +77,7 @@ api_v1_patterns = [
     path("", include("apps.accounts.urls")),
     path("", include("apps.escola.urls")),
     path("", include("apps.ocorrencias.urls")),
+    path("", include("apps.comunicados.urls")),
     path("", include("apps.presenca.urls")),
     path("", include("apps.boletins.urls")),
     path("", include("apps.planos_ensino.urls")),

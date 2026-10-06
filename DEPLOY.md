@@ -173,6 +173,33 @@ Se um dia for pra plano pago do Render (`Starter`+, $7/mês), as portas
 Mailgun, etc., via SMTP — mas o caminho via anymail HTTP API continua
 funcionando do mesmo jeito, então não há urgência em mudar.
 
+## Comunicados: retomar lote interrompido
+
+Os comunicados (avisos aos responsáveis) são enviados em lote por uma
+**thread daemon**, e thread daemon morre junto com o processo. No Render,
+deploy e restart de container são rotina — então um lote grande pode ser
+cortado no meio: parte dos responsáveis recebe, o resto fica `pendente` e
+o comunicado fica parado em `enviando`.
+
+Para retomar (não reenvia para quem já recebeu — só pega as linhas
+`pendente`):
+
+```bash
+# no Shell do Render, ou local com DATABASE_URL apontando pra prod
+python manage.py comunicados_retomar            # parados há 15min+
+python manage.py comunicados_retomar --dry-run  # só lista
+python manage.py comunicados_retomar --id 42    # um específico
+```
+
+O disparo carimba sinal de vida a cada 25 emails, então um lote saudável
+nunca é confundido com um travado. Sem nada travado o comando não faz
+nada, o que o torna seguro de agendar: se houver um cron disponível, rodar
+a cada 10–15 minutos fecha o buraco automaticamente.
+
+Para saber quem recebeu, a página do comunicado tem o log de entrega por
+aluno (enviado / falhou / sem email cadastrado), com a mensagem de erro do
+provedor em cada falha — é ali que a cota estourada do Brevo aparece.
+
 ## Observabilidade (Sentry)
 
 Os logs do Render somem quando o serviço hiberna no free tier — então

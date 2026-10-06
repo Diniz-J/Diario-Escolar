@@ -81,6 +81,7 @@ LOCAL_APPS: list[str] = [
     "apps.accounts",
     "apps.escola",
     "apps.ocorrencias",
+    "apps.comunicados",
     "apps.presenca",
     "apps.tarefas",
     "apps.boletins",
@@ -241,7 +242,10 @@ CORS_ALLOWED_ORIGIN_REGEXES = config(
     "CORS_ALLOWED_ORIGIN_REGEXES", default="", cast=Csv()
 )
 
-# Email — usado pra notificar o responsável quando uma ocorrência é criada.
+# Email — notifica o responsável quando uma ocorrência é criada e envia os
+# comunicados da escola (app `comunicados`). O comunicado dispara um lote
+# (um email por responsável), então a cota do provedor importa: o free tier
+# do Brevo entrega 300/dia.
 #
 # Default = console backend (imprime o email no log; não envia de verdade),
 # pra dev funcionar sem credencial nenhuma.
