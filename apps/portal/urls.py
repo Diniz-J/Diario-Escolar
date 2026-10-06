@@ -7,6 +7,7 @@ from .leituras import (
     ComunicadosView,
     FilhoDetalheView,
     FilhosView,
+    MateriaisFilhoView,
     OcorrenciasFilhoView,
     PeriodosView,
 )
@@ -46,6 +47,11 @@ urlpatterns = [
         "alunos/<int:pk>/ocorrencias/",
         OcorrenciasFilhoView.as_view(),
         name="portal_aluno_ocorrencias",
+    ),
+    path(
+        "alunos/<int:pk>/materiais/",
+        MateriaisFilhoView.as_view(),
+        name="portal_aluno_materiais",
     ),
     path("periodos/", PeriodosView.as_view(), name="portal_periodos"),
     path("comunicados/", ComunicadosView.as_view(), name="portal_comunicados"),

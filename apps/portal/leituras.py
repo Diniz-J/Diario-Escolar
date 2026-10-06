@@ -18,12 +18,14 @@ from apps.boletins.services import montar_boletim
 from apps.common.pagination import PaginacaoCompulsoria
 from apps.comunicados.models import Comunicado, ComunicadoDestinatario
 from apps.escola.models import Aluno
+from apps.materiais.models import Material
 from apps.ocorrencias.models import Ocorrencia
 
 from .authentication import IsResponsavel, PortalJWTAuthentication
 from .serializers import (
     ComunicadoPortalSerializer,
     FilhoSerializer,
+    MaterialPortalSerializer,
     OcorrenciaPortalSerializer,
     PeriodoSerializer,
 )
@@ -159,6 +161,33 @@ class OcorrenciasFilhoView(_PortalMixin, generics.ListAPIView):
             Ocorrencia.objects.filter(aluno=aluno)
             .select_related("professor__usuario")
             .order_by("-data_ocorrencia", "-criado_em")
+        )
+
+
+class MateriaisFilhoView(_PortalMixin, generics.ListAPIView):
+    """`GET /portal/alunos/<id>/materiais/` — mural da turma atual do filho.
+
+    Só da turma do filho (`PORTAL.md`, fatia 5) e só materiais ativos.
+
+    Filho desativado recebe lista vazia, divergindo do resto do portal de
+    propósito: boletim, ocorrências e comunicados são histórico *dele* e
+    continuam visíveis; o mural é conteúdo corrente da turma, e o aluno
+    transferido seguiria vendo o que a turma que ele deixou recebe depois.
+    """
+
+    serializer_class = MaterialPortalSerializer
+    pagination_class = PaginacaoCompulsoria
+
+    def get_queryset(self):
+        aluno = filho_ou_404(self.request, self.kwargs["pk"])
+        if not aluno.ativo:
+            return Material.objects.none()
+        return (
+            Material.objects.filter(
+                turma_id=aluno.turma_id, escola_id=aluno.escola_id, ativo=True
+            )
+            .select_related("disciplina", "professor__usuario")
+            .order_by("-publicado_em", "-pk")
         )
 
 
