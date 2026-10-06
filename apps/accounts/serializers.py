@@ -3,6 +3,8 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+from apps.common.permissions import PERFIS_PRIVILEGIADOS, eh_admin_global
+
 from .models import Usuario
 
 
@@ -82,10 +84,90 @@ class UsuarioSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id"]
 
+    # Campos que só o admin global pode gravar numa atualização. `password`
+    # e `perfil` são os vetores de takeover/escalada; `escola` move o
+    # usuário de tenant; `is_active` permite trancar a conta de outro
+    # (inclusive a do admin).
+    _CAMPOS_SO_ADMIN = ("perfil", "password", "escola", "is_active")
+
     def validate_password(self, value: str) -> str:
         """Aplica os validadores configurados em AUTH_PASSWORD_VALIDATORS."""
         validate_password(value)
         return value
+
+    def validate(self, attrs: dict) -> dict:
+        """Bloqueia escalada de privilégio por quem não é admin global.
+
+        O ViewSet é liberado pra `IsAdminOrDiretor`, que inclui
+        `secretaria` e `coordenador`. Sem estas regras, qualquer conta de
+        nível-diretor conseguia:
+
+        - `PATCH {"perfil": "admin"}` em si mesma e virar admin global
+          (bypass em todas as permission classes);
+        - `PATCH {"password": ...}` em qualquer conta, inclusive a do
+          admin, tomando a conta sem passar por email nem token;
+        - criar uma conta `admin` nova pela porta de trás;
+        - mover um usuário pra outra escola.
+
+        Regra: `perfil`, `password`, `escola` e `is_active` são de admin
+        global. Não-admin continua **criando** usuário (o cadastro de
+        professor depende disso), mas só com perfil sem privilégio e na
+        própria escola.
+
+        Pra redefinir a senha de um terceiro, a direção tem o caminho
+        correto: a action `enviar-reset-senha`, que manda o link pro email
+        do próprio alvo — quem dispara nunca vê nem define a senha.
+        """
+        request = self.context.get("request")
+        if request is None or not request.user.is_authenticated:
+            return attrs
+        if eh_admin_global(request.user):
+            return attrs
+
+        usuario = request.user
+
+        if self.instance is not None:
+            proibidos = sorted(
+                campo for campo in self._CAMPOS_SO_ADMIN if campo in attrs
+            )
+            if proibidos:
+                raise serializers.ValidationError(
+                    {
+                        campo: (
+                            "Apenas um administrador pode alterar este campo."
+                        )
+                        for campo in proibidos
+                    }
+                )
+            return attrs
+
+        # Criação.
+        perfil = attrs.get("perfil")
+        if perfil in PERFIS_PRIVILEGIADOS:
+            raise serializers.ValidationError(
+                {
+                    "perfil": (
+                        "Apenas um administrador pode criar usuário com "
+                        "este perfil."
+                    )
+                }
+            )
+
+        escola = attrs.get("escola")
+        if not usuario.escola_id:
+            raise serializers.ValidationError(
+                {
+                    "escola": (
+                        "Seu usuário não está vinculado a uma escola, então "
+                        "não é possível criar usuários."
+                    )
+                }
+            )
+        if escola is not None and escola.id != usuario.escola_id:
+            raise serializers.ValidationError(
+                {"escola": "Você só pode criar usuários na sua própria escola."}
+            )
+        return attrs
 
     def create(self, validated_data: dict) -> Usuario:
         password = validated_data.pop("password", None)
