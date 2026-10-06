@@ -35,6 +35,8 @@ const NAV_ITEMS = [
   { to: "/planos-ensino", label: "Planos de ensino" },
   { to: "/ocorrencias", label: "Ocorrências" },
   { to: "/comunicados", label: "Comunicados" },
+  // Todo perfil do staff: professor publica o próprio, direção modera.
+  { to: "/mural", label: "Mural" },
   { to: "/presenca", label: "Presença" },
   { to: "/avaliacoes", label: "Avaliações" },
   { to: "/notas-finais", label: "Notas finais" },

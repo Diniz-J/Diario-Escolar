@@ -290,7 +290,16 @@ um seria um lote da cota compartilhada com os comunicados.
 
 A tela do **professor** pra publicar não estava em nenhuma fatia — as seis
 originais cobrem só o portal dos pais. Virou a fatia 5b, antes ou junto da
-6. Até lá o mural se alimenta pela API e pelo admin.
+6.
+
+Como ficou (fatia 5b): `MuralPage` em `/mural`, item "Mural" no menu pra
+todo o staff. O professor escolhe "turma — disciplina" entre os **próprios
+lecionamentos ativos** (nem vê turma que não leciona) e publica em nome
+próprio; a direção escolhe o professor e depois um lecionamento dele, e
+modera (despublica). Na edição só título, descrição e link mudam — trocar
+turma/disciplina/professor é despublicar e publicar outro. Lista paginada
+(`?page=`), filtro por turma (e professor, pra direção) e "Mostrar
+despublicados". Link abre em aba nova com `rel="noopener noreferrer"`.
 
 ## 6. Pendências conhecidas
 

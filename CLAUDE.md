@@ -112,7 +112,9 @@ fatia 6** (o link cai numa tela que ainda não existe).
 `Lecionamento` ativo obrigatório, professor só vê/edita os próprios e não
 publica em nome de outro (403), direção vê a escola toda. `DELETE` = soft
 delete (`ativo=False`). O portal lê em `/portal/alunos/<id>/materiais/`
-(só a turma atual do filho; filho desativado vê lista vazia).
+(só a turma atual do filho; filho desativado vê lista vazia). Tela do
+staff: `MuralPage` em `/mural` (fatia 5b) — professor publica só nos
+próprios lecionamentos ativos, direção escolhe o professor e modera.
 
 **`tarefas/`** — esqueleto vazio (só `__init__.py`/`apps.py`/`migrations`). Feature **removida** do produto; frontend não tem `TarefasPage` nem feature `tarefas/`. Diretório mantido pra não quebrar migrations históricas.
 
