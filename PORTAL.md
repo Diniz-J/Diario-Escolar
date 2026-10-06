@@ -204,6 +204,20 @@ nível-diretor, com rate limit desde o primeiro commit — a lição da PR #105
 cota ao mesmo tempo. Login do portal também tem rate limit, por
 brute-force.
 
+Como ficou (fatia 3): um modelo só, `ConviteResponsavel`, com
+`finalidade` — **convite** (primeira ativação, disparado pela escola, 7
+dias) e **redefinição** ("esqueci a senha", pedido pelo responsável, 1
+hora). Os dois links caem na mesma tela (`/portal/definir-senha?token=`).
+Link novo invalida os pendentes; email que não saiu invalida o próprio
+link, senão o lote nunca mais tentaria aquele responsável. Convite só vale
+pra conta **sem** senha: quem já ativou usa o "esqueci". O "esqueci" envia
+fora da request (thread), pra o tempo de resposta não revelar quais emails
+têm conta.
+
+Trocar a senha derruba as sessões abertas: o token carrega uma impressão
+do hash da senha (`senha_ver`), conferida na autenticação e no refresh.
+Sem isso, uma sessão roubada sobreviveria ao reset até o refresh expirar.
+
 ### 4.5. Frontend
 
 Como portal e administração dividem a mesma origem:
@@ -226,6 +240,12 @@ deployada.** É ali que o login externo abre. A fatia 1 é só modelo,
 migration e admin — não expõe endpoint nem cria caminho de autenticação,
 então pode ser construída e mergeada antes, em paralelo à revisão da
 #105.
+
+**Portão: nenhum convite em produção antes da fatia 6.** O link do email
+aponta pra `/portal/definir-senha`, tela que só nasce na fatia 6 — antes
+disso o responsável cairia num 404, e o convite (7 dias) venceria sem uso.
+A fatia 3 pode ser mergeada e deployada; o que espera é rodar o
+`portal_convidar_responsaveis` e o botão de convite.
 
 | # | Fatia | Verificação |
 |---|---|---|

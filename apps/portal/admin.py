@@ -7,7 +7,7 @@ from django.contrib import admin
 from django.db.models import Count
 from simple_history.admin import SimpleHistoryAdmin
 
-from .models import Responsavel, ResponsavelAluno
+from .models import ConviteResponsavel, Responsavel, ResponsavelAluno
 
 
 class ResponsavelAlunoInline(admin.TabularInline):
@@ -51,3 +51,23 @@ class ResponsavelAlunoAdmin(SimpleHistoryAdmin):
     list_display = ("responsavel", "aluno", "criado_em")
     search_fields = ("responsavel__nome", "responsavel__email", "aluno__nome_completo")
     autocomplete_fields = ("responsavel", "aluno")
+
+
+@admin.register(ConviteResponsavel)
+class ConviteResponsavelAdmin(admin.ModelAdmin):
+    """Só leitura: é como a secretaria confere se o convite saiu e se foi usado.
+
+    Criar ou editar por aqui furaria o fluxo — o token cru só existe no
+    email, e o hash sozinho não serve pra nada.
+    """
+
+    list_display = ("responsavel", "finalidade", "criado_em", "expira_em", "usado_em", "enviado_por")
+    list_filter = ("finalidade",)
+    search_fields = ("responsavel__nome", "responsavel__email")
+    list_select_related = ("responsavel", "enviado_por")
+
+    def has_add_permission(self, request) -> bool:
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        return False
