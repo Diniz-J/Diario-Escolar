@@ -4,14 +4,19 @@ import logging
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from apps.common.permissions import IsAdminOrDiretor
+from apps.common.permissions import (
+    PERFIS_PRIVILEGIADOS,
+    IsAdminOrDiretor,
+    eh_admin_global,
+)
 
 from .models import PasswordResetToken, Usuario
 from .serializers import (
@@ -25,12 +30,85 @@ from .services import enviar_link_redefinicao
 logger = logging.getLogger(__name__)
 
 
+class ResetSenhaThrottle(UserRateThrottle):
+    """Rate limit da action de reset disparado pela direção.
+
+    Escopo próprio (`reset_senha` em `DEFAULT_THROTTLE_RATES`) e chaveado
+    por usuário — quem dispara está sempre autenticado. Ver o comentário
+    em `config/settings.py` pro racional do limite.
+    """
+
+    scope = "reset_senha"
+
+
 class UsuarioViewSet(viewsets.ModelViewSet):
-    """CRUD de usuários do sistema. Restrito a perfis admin e diretor."""
+    """CRUD de usuários do sistema. Restrito a perfis admin e diretor.
+
+    Escopo e escalada (ver também `UsuarioSerializer.validate`):
+
+    - `get_queryset` filtra pela escola do usuário logado. Antes era
+      `Usuario.objects.all()` sem escopo, então uma secretaria da Escola A
+      lia e editava usuários da Escola B.
+    - Conta com perfil privilegiado (admin/diretor/secretaria/coordenador)
+      só é alterada pelo admin global — ou pelo próprio dono. Sem isto, a
+      secretaria trocava o email do admin e disparava
+      `enviar-reset-senha` pra receber o link na própria caixa: takeover
+      sem nunca tocar no campo `password`.
+    """
 
     queryset = Usuario.objects.all().order_by("id")
     serializer_class = UsuarioSerializer
     permission_classes = [IsAdminOrDiretor]
+
+    def get_queryset(self):
+        """Restringe à escola do usuário logado; admin global vê tudo.
+
+        Usuário não-admin sem escola vinculada recebe queryset vazio — o
+        mesmo princípio do `EscopoEscolaMixin`: na dúvida, não vazar.
+        Isto também cobre o caso em que autor e alvo têm `escola_id` nulo,
+        que uma comparação `!=` deixaria passar.
+        """
+        qs = super().get_queryset()
+        usuario = self.request.user
+        if not usuario.is_authenticated:
+            return qs.none()
+        if eh_admin_global(usuario):
+            return qs
+        if not usuario.escola_id:
+            return qs.none()
+        return qs.filter(escola_id=usuario.escola_id)
+
+    def get_throttles(self):
+        """Aplica o rate limit só na action de reset.
+
+        Passar `throttle_classes` como kwarg do `@action` **não funciona**:
+        o DRF não propaga isso pelos `initkwargs` e a view cai no throttle
+        default. Resolver aqui é explícito e testável.
+        """
+        if self.action == "enviar_reset_senha":
+            return [ResetSenhaThrottle()]
+        return super().get_throttles()
+
+    def _checar_alvo_privilegiado(self, alvo) -> None:
+        """Barra não-admin de mexer em conta privilegiada que não é a sua."""
+        usuario = self.request.user
+        if eh_admin_global(usuario):
+            return
+        if alvo.pk == usuario.pk:
+            return
+        if alvo.perfil in PERFIS_PRIVILEGIADOS:
+            raise PermissionDenied(
+                "Apenas um administrador pode operar sobre contas de "
+                "administração."
+            )
+
+    def perform_update(self, serializer) -> None:
+        self._checar_alvo_privilegiado(serializer.instance)
+        serializer.save()
+
+    def perform_destroy(self, instance) -> None:
+        self._checar_alvo_privilegiado(instance)
+        instance.delete()
 
     @action(detail=True, methods=["post"], url_path="enviar-reset-senha")
     def enviar_reset_senha(self, request, pk=None):
@@ -46,16 +124,11 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         já que o ViewSet hoje não filtra `get_queryset` por escola.
         """
         usuario = self.get_object()
-
-        eh_admin_global = (
-            request.user.is_superuser
-            or request.user.perfil == Usuario.Perfil.ADMIN
-        )
-        if not eh_admin_global and request.user.escola_id != usuario.escola_id:
-            return Response(
-                {"detail": "Não encontrado."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        # O escopo por escola agora vem do `get_queryset` (cross-escola já
+        # devolve 404 aqui), então só resta barrar alvo privilegiado: sem
+        # isto, a secretaria dispararia o link de redefinição da conta do
+        # admin — e bastaria ter trocado o email dele antes.
+        self._checar_alvo_privilegiado(usuario)
 
         if not usuario.email:
             return Response(

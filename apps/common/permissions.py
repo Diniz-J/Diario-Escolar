@@ -26,16 +26,34 @@ _PERFIL_INSPETOR = "inspetor"
 # existem distintos no banco (`Usuario.Perfil`).
 
 
-def _tem_bypass(usuario) -> bool:
+# Perfis que têm poder de escrita no sistema (criam cadastros, gerenciam
+# usuários). Promover alguém a qualquer um deles — ou mexer numa conta que
+# já tem um deles — é escalada de privilégio, então essas operações são
+# reservadas ao admin global. Ver `apps.accounts.serializers.UsuarioSerializer`
+# e `apps.accounts.views.UsuarioViewSet`.
+PERFIS_PRIVILEGIADOS = frozenset(
+    {_PERFIL_ADMIN, _PERFIL_DIRETOR, _PERFIL_SECRETARIA, _PERFIL_COORDENADOR}
+)
+
+
+def eh_admin_global(usuario) -> bool:
     """Retorna True se o usuário é admin global (perfil admin ou superuser).
 
     Usa `getattr` para tolerar objetos sem `is_superuser` (ex.: AnonymousUser
     chamado fora do fluxo padrão de `has_permission`, que já checa
     `is_authenticated` antes).
+
+    Público porque a app `accounts` precisa da mesma noção de "admin global"
+    pra decidir quem pode mexer em perfil/senha de terceiros — duplicar a
+    regra fragmentaria a fonte da verdade do que conta como bypass.
     """
     if getattr(usuario, "is_superuser", False):
         return True
     return getattr(usuario, "perfil", None) == _PERFIL_ADMIN
+
+
+# Alias interno histórico — as permission classes abaixo seguem usando.
+_tem_bypass = eh_admin_global
 
 
 class _BasePerfilPermission(BasePermission):

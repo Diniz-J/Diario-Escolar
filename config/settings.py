@@ -215,6 +215,24 @@ REST_FRAMEWORK = {
         # Anti-brute-force no login: 5 tentativas por minuto por IP.
         # Desligado sob testes (rate None) — ver TESTING acima.
         "login": None if TESTING else "5/min",
+        # Reset de senha disparado pela direção
+        # (`POST /usuarios/<id>/enviar-reset-senha/`). Por usuário, não por
+        # IP. O fluxo público reusa o bucket do login; esta action não tinha
+        # limite nenhum, e cada chamada manda um email: um laço aqui faria
+        # email bombing no alvo e esgotaria a cota do provedor (Brevo free
+        # = 300/dia), que é **compartilhada com os comunicados** aos
+        # responsáveis — eles parariam de sair pelo resto do dia, com a
+        # falha aparecendo no log de entrega como erro genérico de
+        # provedor, difícil de ligar à causa.
+        #
+        # 10/hora é folgado pro uso real (professor esqueceu a senha: um ou
+        # dois por dia) e limita uma conta abusiva a 240/dia.
+        #
+        # Nota: o throttle usa o cache default (LocMem, por processo).
+        # Como `GUNICORN_WORKERS` é 1, hoje isso é exato; se subir o número
+        # de workers, o limite efetivo multiplica — aí vale um cache
+        # compartilhado (Redis). Mesma observação vale pro bucket `login`.
+        "reset_senha": None if TESTING else "10/hour",
     },
     # Paginação **opt-in**: só ativa quando o cliente envia `?page=N` ou
     # `?page_size=N`. Sem isso, retorna array cru. Ver `apps/common/pagination.py`.
