@@ -213,6 +213,36 @@ export type OcorrenciaInput = Omit<
   "id" | "escola" | "status_display" | "criado_em" | "atualizado_em"
 > & { escola?: number };
 
+// Mural de materiais (app `materiais`) — o professor publica pra turma e
+// o responsável lê no portal. Só texto + link (http/https), sem upload.
+export interface Material {
+  id: number;
+  escola: number;
+  turma: number;
+  disciplina: number;
+  professor: number;
+  professor_nome: string;
+  titulo: string;
+  descricao: string;
+  link: string;
+  publicado_em: string;
+  // false = despublicado (soft delete): sumiu do portal, fica no histórico.
+  ativo: boolean;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+// `escola` opcional — backend auto-preenche pelo JWT.
+export type MaterialInput = {
+  escola?: number;
+  turma: number;
+  disciplina: number;
+  professor: number;
+  titulo: string;
+  descricao?: string;
+  link?: string;
+};
+
 // Diário de aula (app `aulas`).
 export type RegistroAulaStatus = "rascunho" | "lancado" | "conferido";
 

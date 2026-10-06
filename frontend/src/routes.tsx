@@ -15,6 +15,7 @@ import { DisciplinasPage } from "@/pages/DisciplinasPage";
 import { EsqueciSenhaPage } from "@/pages/EsqueciSenhaPage";
 import { ImportPage } from "@/pages/ImportPage";
 import { LoginPage } from "@/pages/LoginPage";
+import { MuralPage } from "@/pages/MuralPage";
 import { NotasFinaisPage } from "@/pages/NotasFinaisPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { RedefinirSenhaPage } from "@/pages/RedefinirSenhaPage";
@@ -60,6 +61,7 @@ export function AppRoutes() {
             element={<PlanoEnsinoDetalhePage />}
           />
           <Route path="/comunicados" element={<ComunicadosPage />} />
+          <Route path="/mural" element={<MuralPage />} />
           <Route
             path="/comunicados/:id"
             element={<ComunicadoDetalhePage />}
