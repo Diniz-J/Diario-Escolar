@@ -27,6 +27,7 @@ import { ProfessorFormDialog } from "@/features/professores/ProfessorFormDialog"
 import { useProfessoresPaginated } from "@/features/professores/hooks";
 import { usePermissoes } from "@/features/auth/usePermissoes";
 import { useTurmas } from "@/features/turmas/hooks";
+import { useEnviarResetSenha } from "@/features/usuarios/hooks";
 import type { Professor } from "@/types/api";
 
 // CRUD de Professores. Lista com nome, turmas e disciplinas (badges
@@ -48,6 +49,7 @@ export function ProfessoresPage() {
   // professor no front — evita N+1 (um GET por professor).
   const lecionamentosQuery = useLecionamentos();
   const { podeModificarCadastros } = usePermissoes();
+  const enviarResetSenha = useEnviarResetSenha();
 
   const [busca, setBusca] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -267,6 +269,17 @@ export function ProfessoresPage() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => setEditando(p)}>
                             Editar
+                          </DropdownMenuItem>
+                          {/* Reset de senha via email — dispara o mesmo
+                              fluxo do "Esqueci senha" pro Usuario do
+                              professor. Útil quando o professor perdeu
+                              acesso e a direção quer destravar sem
+                              compartilhar senha. */}
+                          <DropdownMenuItem
+                            onClick={() => enviarResetSenha.mutate(p.usuario)}
+                            disabled={enviarResetSenha.isPending}
+                          >
+                            Enviar link de reset de senha
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => setDesativando(p)}

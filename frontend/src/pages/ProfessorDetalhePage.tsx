@@ -44,6 +44,7 @@ import { STATUS_BADGE, STATUS_LABEL } from "@/features/ocorrencias/constants";
 import { useOcorrencias } from "@/features/ocorrencias/hooks";
 import { useProfessor } from "@/features/professores/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
+import { useEnviarResetSenha } from "@/features/usuarios/hooks";
 import type { Lecionamento, RegistroAula, RegistroAulaStatus } from "@/types/api";
 
 // Ficha 360º do professor (visão da direção). Tabs:
@@ -137,6 +138,7 @@ export function ProfessorDetalhePage() {
   }
 
   const { podeModificarCadastros } = usePermissoes();
+  const enviarResetSenha = useEnviarResetSenha();
 
   const professorQuery = useProfessor(professorId);
   const turmasQuery = useTurmas();
@@ -191,18 +193,37 @@ export function ProfessorDetalhePage() {
         </h1>
         <div className="h-px w-10 bg-ferrugem" />
 
-        {/* Pendência de visto — só pra direção, e só quando há o que conferir. */}
-        {idValido && podeModificarCadastros && pendentes > 0 && (
-          <button
-            type="button"
-            onClick={() => selecionarTab("diario")}
-            className="inline-flex items-center gap-2 rounded-full bg-ferrugem/10 px-3 py-1 text-xs font-medium text-ferrugem"
-          >
-            {pendentes}{" "}
-            {pendentes === 1
-              ? "aula aguardando seu visto"
-              : "aulas aguardando seu visto"}
-          </button>
+        {idValido && podeModificarCadastros && (
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            {/* Pendência de visto — só quando há o que conferir. */}
+            {pendentes > 0 && (
+              <button
+                type="button"
+                onClick={() => selecionarTab("diario")}
+                className="inline-flex items-center gap-2 rounded-full bg-ferrugem/10 px-3 py-1 text-xs font-medium text-ferrugem"
+              >
+                {pendentes}{" "}
+                {pendentes === 1
+                  ? "aula aguardando seu visto"
+                  : "aulas aguardando seu visto"}
+              </button>
+            )}
+            {/* Envia link de reset de senha pro Usuario do professor.
+                Mesmo fluxo do "Esqueci senha" — usado pra destravar
+                acesso sem compartilhar senha. */}
+            {professorQuery.data?.usuario && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  enviarResetSenha.mutate(professorQuery.data!.usuario)
+                }
+                disabled={enviarResetSenha.isPending}
+              >
+                Enviar link de reset de senha
+              </Button>
+            )}
+          </div>
         )}
       </header>
 

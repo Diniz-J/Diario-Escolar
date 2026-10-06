@@ -2,6 +2,7 @@
 import logging
 
 from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -30,6 +31,58 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     queryset = Usuario.objects.all().order_by("id")
     serializer_class = UsuarioSerializer
     permission_classes = [IsAdminOrDiretor]
+
+    @action(detail=True, methods=["post"], url_path="enviar-reset-senha")
+    def enviar_reset_senha(self, request, pk=None):
+        """`POST /usuarios/<id>/enviar-reset-senha/` — admin/diretor/secretaria/coordenador.
+
+        Dispara um link de redefinição de senha pro email do usuário alvo.
+        Reusa toda a plumbing do "Esqueci senha" (`PasswordResetToken.gerar`
+        + `enviar_link_redefinicao`); a única diferença é o gatilho ser de
+        um usuário de nível diretor, não do próprio dono da conta.
+
+        Guard de escola: admin/superuser passa qualquer escola; o resto
+        só dispara reset pra alguém da mesma escola. Protege contra IDOR,
+        já que o ViewSet hoje não filtra `get_queryset` por escola.
+        """
+        usuario = self.get_object()
+
+        eh_admin_global = (
+            request.user.is_superuser
+            or request.user.perfil == Usuario.Perfil.ADMIN
+        )
+        if not eh_admin_global and request.user.escola_id != usuario.escola_id:
+            return Response(
+                {"detail": "Não encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not usuario.email:
+            return Response(
+                {
+                    "detail": (
+                        "Este usuário não tem email cadastrado. Defina "
+                        "um email no perfil antes de enviar o link de "
+                        "redefinição."
+                    )
+                },
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        _token_obj, token_cru = PasswordResetToken.gerar(usuario)
+        enviar_link_redefinicao(usuario, token_cru)
+        logger.info(
+            "Reset de senha disparado por %s para %s",
+            request.user.username,
+            usuario.username,
+        )
+        return Response(
+            {
+                "detail": f"Link de redefinição enviado para {usuario.email}.",
+                "email": usuario.email,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class UsuarioTokenObtainPairView(TokenObtainPairView):
