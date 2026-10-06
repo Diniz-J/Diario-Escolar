@@ -123,10 +123,9 @@ class FilhoDetalheView(_PortalMixin, generics.RetrieveAPIView):
 class BoletimFilhoView(_PortalMixin, APIView):
     """`GET /portal/alunos/<id>/boletim/?periodo=<id>` — sem período, anual.
 
-    O período tem que ser da escola do filho. O helper do staff
-    (`resolver_janela_por_periodo`) busca por id sem escopo, então aqui a
-    busca é própria: período de outra escola dá 404 em vez de vazar nome e
-    datas.
+    O período tem que ser da escola do filho: período de outra escola (ou
+    id não numérico) dá 404. Diferente do staff, que cai no boletim anual
+    — no portal o 404 é a convenção pra qualquer id que não é do usuário.
     """
 
     def get(self, request, pk):

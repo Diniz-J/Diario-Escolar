@@ -9,6 +9,7 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import Usuario
+from apps.boletins.services import resolver_janela_por_periodo
 from apps.avaliacao.models import (
     Avaliacao,
     NotaAvaliacao,
@@ -81,6 +82,38 @@ class BoletimEndpointTests(TestCase):
         self._auth(self.diretor)
         resp = self.client.get(self._url(self.aluno_outra_escola.id))
         self.assertEqual(resp.status_code, 403)
+
+    def test_periodo_de_outra_escola_nao_vaza_nem_filtra(self):
+        """Regressão: `?periodo=` buscava o período por id sem escopo — o
+        boletim de um aluno da Escola A devolvia nome e datas de um período
+        da Escola B e era calculado na janela dele. Agora cai no anual,
+        igual a período inexistente."""
+        periodo_b = PeriodoAvaliativo.objects.create(
+            escola=self.outra_escola, nome="Bimestre Sigiloso B", ordem=1,
+            ano_letivo=2026, data_inicio=date(2026, 10, 1),
+            data_fim=date(2026, 12, 15),
+        )
+        self._auth(self.diretor)
+        resp = self.client.get(self._url(self.aluno.id), {"periodo": periodo_b.id})
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(resp.data["periodo"]["id"])
+        self.assertIsNone(resp.data["periodo"]["data_inicio"])
+        self.assertNotIn("Sigiloso", resp.content.decode())
+        self.assertEqual(
+            resolver_janela_por_periodo(periodo_b.id, self.escola.id),
+            (None, None, None),
+        )
+
+    def test_periodo_da_propria_escola_continua_valendo(self):
+        periodo = PeriodoAvaliativo.objects.create(
+            escola=self.escola, nome="1º Bim", ordem=1, ano_letivo=2026,
+            data_inicio=date(2026, 2, 1), data_fim=date(2026, 4, 30),
+        )
+        self._auth(self.diretor)
+        resp = self.client.get(self._url(self.aluno.id), {"periodo": periodo.id})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["periodo"]["id"], periodo.id)
+        self.assertEqual(resp.data["periodo"]["data_inicio"], "2026-02-01")
 
     def test_admin_acessa_qualquer_aluno(self):
         self._auth(self.admin)
