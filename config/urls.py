@@ -25,7 +25,6 @@ from apps.accounts.views import (
     UsuarioTokenObtainPairView,
 )
 from apps.common.health import health, ping
-from apps.portal.views import ConvidarResponsavelView
 from apps.common.sentry_tunnel import SentrySmokeTestView, sentry_tunnel
 
 api_v1_patterns = [
@@ -78,13 +77,9 @@ api_v1_patterns = [
     # Portal do responsável: autenticação e tokens próprios, isolados do
     # staff. Ver PORTAL.md e apps/portal/urls.py.
     path("portal/", include("apps.portal.urls")),
-    # Convite do portal: endpoint do STAFF (autenticação padrão), por isso
-    # fora do prefixo `portal/`.
-    path(
-        "responsaveis/<int:pk>/convidar/",
-        ConvidarResponsavelView.as_view(),
-        name="responsavel_convidar",
-    ),
+    # Responsáveis vistos pelo STAFF (listagem + convite): autenticação
+    # padrão, por isso fora do prefixo `portal/`. Ver apps/portal/urls_staff.py.
+    path("", include("apps.portal.urls_staff")),
     path("", include("apps.accounts.urls")),
     path("", include("apps.escola.urls")),
     path("", include("apps.ocorrencias.urls")),

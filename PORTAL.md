@@ -258,7 +258,8 @@ então pode ser construída e mergeada antes, em paralelo à revisão da
 aponta pra `/portal/definir-senha`, tela que só nasce na fatia 6 — antes
 disso o responsável cairia num 404, e o convite (7 dias) venceria sem uso.
 A fatia 3 pode ser mergeada e deployada; o que espera é rodar o
-`portal_convidar_responsaveis` e o botão de convite.
+`portal_convidar_responsaveis` e o botão de convite. **Portão vencido com a
+fatia 6 em produção** — fica como registro do motivo.
 
 | # | Fatia | Status | Verificação |
 |---|---|---|---|
@@ -269,12 +270,16 @@ A fatia 3 pode ser mergeada e deployada; o que espera é rodar o
 | 5 | `Material` + CRUD do professor + leitura no portal | ✅ #110 | Professor não publica em turma que não leciona; responsável só vê a turma do filho |
 | 5b | Tela do professor pro mural (staff) | ✅ #111 | Professor só vê turma/disciplina que leciona no formulário; build limpo |
 | 6 | Frontend do portal sob `/portal` | ✅ | Chunk do portal sem string de tela do staff (e vice-versa); `/portal` manda pro login do portal e `/dashboard` pro do staff, verificado em navegador; storage em `portal_*` |
-| 6b | Tela "Responsáveis" no staff + botão Convidar | **pendente** | Só nível-diretor convida; status da conta visível; build limpo |
+| 6b | Tela "Responsáveis" no staff + botão Convidar | ✅ | Professor recebe 403 na listagem; situação derivada confere nos cinco casos; contagem de queries não cresce com as linhas; build limpo |
 
-**Onde paramos (out/2026):** o backend do portal está completo e em
-produção (fatias 1–5), e o mural do staff também (5b). **Falta todo o lado
-do pai** — a fatia 6 — e a tela de convite do staff (6b). Enquanto a 6 não
-entra, o portão acima continua valendo: nenhum convite em produção.
+**Onde paramos (out/2026):** as oito fatias estão entregues — backend do
+portal (1–5), mural do staff (5b), lado do pai (6) e tela de convite (6b).
+
+Com a 6 em produção, **o portão do convite caiu**: o link do email tem tela
+pra abrir. O primeiro convite real deve ser pra si mesmo, pra ter conta de
+teste antes de mandar pra uma família (ver "Teste manual no preview"). O
+onboarding em massa segue pelo `portal_convidar_responsaveis`, por causa da
+cota de 300 emails/dia do Brevo, compartilhada com os comunicados.
 
 ### Fatia 6 — entregue (out/2026)
 
@@ -335,16 +340,39 @@ responsável com o próprio email), copiar o token do email (o link aponta
 pro domínio de produção) e abrir `/portal/definir-senha?token=...` no
 preview. Um convite, pra si mesmo — não fura o espírito do portão.
 
-### Fatia 6b — tela "Responsáveis" no staff
+### Fatia 6b — tela "Responsáveis" no staff — entregue (out/2026)
 
 O `PORTAL.md` decidiu "convite individual na UI", mas nenhuma fatia tinha
-tela de responsáveis no staff — mesma lacuna que virou a 5b. Escopo:
-listagem das contas da escola com status (sem convite / convidado / ativo),
-vínculos com os alunos e o botão **Convidar** (usa o
-`/responsaveis/<id>/convidar/` da fatia 3, que já tem rate limit). Precisa
-de endpoint de listagem de responsáveis no staff, que ainda não existe. Até
-a 6b, o onboarding depois da fatia 6 sai pelo comando de lote
-`portal_convidar_responsaveis`.
+tela de responsáveis no staff — mesma lacuna que virou a 5b.
+
+**Backend** (`apps/portal/views_staff.py`, separado de `views.py` porque lá
+moram as views do portal, com autenticação própria):
+`GET /responsaveis/` e `/responsaveis/<id>/`, somente leitura,
+`IsAdminOrDiretor` — quem pode convidar é quem pode ver a lista — e
+escopado por escola. Paginado. Busca por nome, email **e nome do aluno**: a
+secretaria procura "o pai do João", não o nome do responsável, que às vezes
+nem está preenchido. O `convidar` da fatia 3 veio pro mesmo
+`urls_staff.py`, com o nome de rota intacto.
+
+**Situação da conta**: derivada de senha utilizável + convite pendente, não
+é campo. São **cinco** valores, não os três que o escopo original previa.
+As duas acrescentadas existem porque mostrar o contrário seria mentira:
+`convite_expirado` (o convite vale 7 dias; exibir "convidado" faria a
+secretaria esperar por nada) e `inativo` (conta desativada — convidar não é
+o próximo passo, e tem precedência sobre as outras). Resolvida com
+`Exists`/`Subquery`: por linha seriam duas queries extras, 40 numa tela de
+20. Há teste travando que a contagem de queries não cresce com as linhas.
+
+**Tela** (`/responsaveis`, item de menu só pra nível-diretor): tabela com
+responsável, alunos vinculados, situação com badge, último acesso e o botão
+Convidar — que só aparece nas situações em que o backend aceita, porque
+mostrá-lo nas outras seria prometer o que não acontece. O diálogo de
+confirmação avisa que **reenviar invalida o link pendente anterior**
+(`ConviteResponsavel.gerar` expira os pendentes); sem isso a secretaria
+reenviaria "pra garantir" e derrubaria o link que o pai ia usar.
+
+O comando de lote `portal_convidar_responsaveis` segue valendo pro
+onboarding inicial, por causa da cota do provedor.
 
 ---
 

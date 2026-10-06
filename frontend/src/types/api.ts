@@ -632,3 +632,38 @@ export interface ComunicadoDestinatario {
   erro: string;
   enviado_em: string | null;
 }
+
+// Responsáveis vistos pelo staff (fatia 6b do PORTAL.md) — somente
+// leitura. A conta nasce da semeadura ou do admin; a tela existe pra ver o
+// estado do acesso e convidar.
+//
+// `situacao` é derivada no backend (senha utilizável + convite pendente),
+// não é campo. `inativo` tem precedência: conta desativada não deve ser
+// convidada.
+export type ResponsavelSituacao =
+  | "inativo"
+  | "ativo"
+  | "convidado"
+  | "convite_expirado"
+  | "sem_convite";
+
+export interface ResponsavelAlunoResumo {
+  id: number;
+  nome_completo: string;
+  turma: string | null;
+  ativo: boolean;
+}
+
+export interface ResponsavelStaff {
+  id: number;
+  nome: string;
+  email: string;
+  ativo: boolean;
+  situacao: ResponsavelSituacao;
+  situacao_display: string;
+  // Só preenchido quando há convite pendente.
+  convite_expira_em: string | null;
+  ultimo_acesso: string | null;
+  alunos: ResponsavelAlunoResumo[];
+  criado_em: string;
+}

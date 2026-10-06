@@ -108,8 +108,8 @@ mobile-first em `src/portal/`. Backend entregue até a fatia 5:
 autenticação isolada (`/api/v1/portal/auth/`, tokens com `tipo=responsavel`
 e `responsavel_id` — o staff recusa), convite e senha (`ConviteResponsavel`,
 comando `portal_convidar_responsaveis`) e leituras em `leituras.py`, todas a
-partir dos vínculos (`filhos_do`). **Nenhum convite em produção antes da
-fatia 6** (o link cai numa tela que ainda não existe).
+partir dos vínculos (`filhos_do`). Com a fatia 6 no ar, o portão
+"nenhum convite em produção" caiu — o link do email tem tela pra abrir.
 
 **`materiais/`** — mural do professor pra turma (fatia 5 do `PORTAL.md`).
 `Material` = turma + disciplina + professor + título + descrição + link
@@ -377,12 +377,21 @@ Fatias (um PR cada): 1) modelo e vínculo · 2) auth isolado · 3) convite e
 senha · 4) leituras · 5) mural · 5b) tela do mural no staff · 6) frontend
 do portal · 6b) tela "Responsáveis" + botão Convidar no staff.
 
-**Status (out/2026):** 1–5b entregues (#106–#111) — backend do portal
-completo em produção, mural do staff no ar. **Pendentes: 6 (todo o lado do
-pai) e 6b.** Plano aprovado da 6, escopo da 6b e achados do staff que
-saíram dos CRs estão no `PORTAL.md`, seções 5 e 6 (os de segurança, no
-`CLAUDE.local.md`).
-**Nenhum convite em produção antes da fatia 6.**
+**6b entregue**: `GET /responsaveis/` em `apps/portal/views_staff.py`
+(somente leitura, `IsAdminOrDiretor`, escopado por escola, paginado, busca
+incluindo nome do aluno) + tela `/responsaveis` com badge de situação e
+botão Convidar. A `situacao` é derivada (`Exists`/`Subquery`, sem N+1) e tem
+cinco valores: os três previstos mais `convite_expirado` e `inativo`, porque
+exibir "convidado" pra convite vencido faria a secretaria esperar por nada.
+O `convidar` da fatia 3 migrou pra `urls_staff.py` com o nome de rota
+intacto.
+
+**Status (out/2026):** todas as oito fatias entregues — backend do portal
+(#106–#110), mural do staff (#111), lado do pai (#116) e tela
+"Responsáveis" (6b). Decisões, invariantes de segurança e achados dos CRs
+estão no `PORTAL.md` (os de segurança, no `CLAUDE.local.md`). Com a fatia 6
+deployada o portão do convite caiu; o primeiro convite real deve ser pra si
+mesmo, como conta de teste, antes de ir pra uma família.
 
 **Fatia 1 entregue**: app `portal` com `Responsavel` (`AbstractBaseUser`,
 não `AUTH_USER_MODEL`; email normalizado no `save`, unique por
