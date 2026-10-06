@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from apps.accounts.models import Usuario
 from apps.comunicados.models import Comunicado, ComunicadoDestinatario
-from apps.comunicados.services import enviar_comunicado
+from apps.comunicados.services import _disparar, enviar_comunicado
 from apps.escola.models import Aluno, Escola, Turma
 
 
@@ -380,3 +380,144 @@ class ComunicadoCaminhoAssincronoTests(_ComunicadoFalhaSetup):
         self.assertEqual(comunicado.total_enviados, 0)
         self.assertFalse(comunicado.editavel)
         self.assertEqual(len(mail.outbox), 0)
+
+
+class ComunicadoClaimPorGrupoTests(_ComunicadoFalhaSetup):
+    """O claim por grupo é a garantia real contra duplo envio em massa.
+
+    `_disparar` monta os grupos uma vez em memória e depois itera. Sem
+    lock, a thread original e o `comunicados_retomar` podem iterar
+    conjuntos sobrepostos — e o resultado seria exatamente o duplo envio
+    que a feature inteira existe pra evitar. O heartbeat tornava isso
+    improvável; o claim torna impossível.
+    """
+
+    def _preparar_lote(self):
+        """Deixa o comunicado em `enviando` com o público materializado."""
+        from apps.comunicados.services import _materializar_destinatarios
+
+        comunicado = self._comunicado()
+        Comunicado.objects.filter(pk=comunicado.pk).update(
+            status=Comunicado.Status.ENVIANDO
+        )
+        comunicado.refresh_from_db()
+        _materializar_destinatarios(comunicado)
+        return comunicado
+
+    def test_dois_executores_simultaneos_nao_duplicam_email(self):
+        """Simula a thread original e a retomada rodando ao mesmo tempo.
+
+        O segundo `_disparar` roda de dentro do primeiro (no meio do
+        envio), que é o pior caso: ambos já têm o snapshot dos grupos em
+        memória.
+        """
+        self._aluno("Ana", "ana@example.com")
+        self._aluno("Bruno", "bruno@example.com")
+        comunicado = self._preparar_lote()
+
+        original = mail.EmailMultiAlternatives.send
+        reentrou = []
+
+        def send_reentrante(self_msg, *args, **kwargs):
+            resultado = original(self_msg, *args, **kwargs)
+            # No primeiro envio, dispara um executor concorrente.
+            if not reentrou:
+                reentrou.append(True)
+                _disparar(comunicado.pk, comunicado.escola_id)
+            return resultado
+
+        with patch.object(
+            mail.EmailMultiAlternatives, "send", send_reentrante
+        ):
+            _disparar(comunicado.pk, comunicado.escola_id)
+
+        self.assertTrue(reentrou, "o executor concorrente não rodou")
+        # Dois responsáveis, dois emails — nunca quatro.
+        destinos = sorted(m.to[0] for m in mail.outbox)
+        self.assertEqual(destinos, ["ana@example.com", "bruno@example.com"])
+        self.assertEqual(len(mail.outbox), 2)
+
+        comunicado.refresh_from_db()
+        self.assertEqual(comunicado.total_enviados, 2)
+        self.assertEqual(comunicado.total_falhas, 0)
+
+    def test_grupo_ja_reivindicado_e_pulado(self):
+        """Linha fora de `pendente` não é reenviada."""
+        self._aluno("Ana", "ana@example.com")
+        comunicado = self._preparar_lote()
+        # Outro executor reivindicou e ainda não confirmou.
+        comunicado.destinatarios.update(
+            status=ComunicadoDestinatario.Status.ENVIANDO
+        )
+
+        _disparar(comunicado.pk, comunicado.escola_id)
+
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_linha_indeterminada_nao_e_reenviada_nem_vira_falha(self):
+        """Processo morto entre o claim e a confirmação.
+
+        Não sabemos se o email saiu. Para comunicado em massa, duplicar é
+        pior que faltar — então a linha fica visível como não confirmada e
+        nenhuma retomada a reenvia.
+        """
+        self._aluno("Ana", "ana@example.com")
+        self._aluno("Bruno", "bruno@example.com")
+        comunicado = self._preparar_lote()
+
+        ana = comunicado.destinatarios.get(aluno__nome_completo="Ana")
+        comunicado.destinatarios.filter(pk=ana.pk).update(
+            status=ComunicadoDestinatario.Status.ENVIANDO
+        )
+
+        call_command(
+            "comunicados_retomar", "--id", str(comunicado.pk), stdout=StringIO()
+        )
+
+        # Só o Bruno (que estava `pendente`) recebeu.
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["bruno@example.com"])
+
+        ana.refresh_from_db()
+        self.assertEqual(ana.status, ComunicadoDestinatario.Status.ENVIANDO)
+
+    def test_lote_todo_indeterminado_nao_e_marcado_como_falha(self):
+        """`falhou` significa 'não entregou nada' — aqui pode ter entregado."""
+        self._aluno("Ana", "ana@example.com")
+        comunicado = self._preparar_lote()
+        comunicado.destinatarios.update(
+            status=ComunicadoDestinatario.Status.ENVIANDO
+        )
+
+        _disparar(comunicado.pk, comunicado.escola_id)
+
+        comunicado.refresh_from_db()
+        self.assertEqual(comunicado.total_enviados, 0)
+        self.assertNotEqual(
+            comunicado.status,
+            Comunicado.Status.FALHOU,
+            "lote indeterminado não pode ser reportado como falha total",
+        )
+
+    def test_claim_parcial_devolve_as_linhas_e_pula(self):
+        """Guarda de invariante: grupo reivindicado só em parte não é enviado."""
+        from apps.comunicados.services import _reivindicar
+
+        self._aluno("Irmão 1", "familia@example.com")
+        self._aluno("Irmão 2", "familia@example.com")
+        comunicado = self._preparar_lote()
+
+        linhas = list(comunicado.destinatarios.values_list("id", flat=True))
+        # Uma das duas já foi levada por outro executor.
+        ComunicadoDestinatario.objects.filter(id=linhas[0]).update(
+            status=ComunicadoDestinatario.Status.ENVIADO
+        )
+
+        self.assertFalse(
+            _reivindicar(linhas, "familia@example.com", comunicado.pk)
+        )
+        # A que foi pega no claim parcial volta pra `pendente`.
+        devolvida = ComunicadoDestinatario.objects.get(id=linhas[1])
+        self.assertEqual(
+            devolvida.status, ComunicadoDestinatario.Status.PENDENTE
+        )

@@ -30,6 +30,18 @@ const COMUNICADOS_BASE_KEY = ["comunicados"] as const;
 // `enviando`, busca de novo neste intervalo; em estado final, desliga.
 const POLL_ENVIANDO_MS = 5_000;
 
+// Teto de re-buscas. Um comunicado travado em `enviando` (processo morto
+// no meio do lote) ficaria gerando request a cada 5s para sempre enquanto
+// alguém deixasse a aba aberta. Passado o teto, paramos: a essa altura
+// não é mais lentidão, é um lote que precisa de `comunicados_retomar`.
+const POLL_MAX_TENTATIVAS = 60; // 60 × 5s = 5 minutos
+
+function intervaloEnviando(enviando: boolean, atualizacoes: number) {
+  if (!enviando) return false as const;
+  if (atualizacoes >= POLL_MAX_TENTATIVAS) return false as const;
+  return POLL_ENVIANDO_MS;
+}
+
 export function useComunicadosPaginated(
   filter: ComunicadosFilter = {},
   pagination: { page: number; page_size?: number },
@@ -47,9 +59,11 @@ export function useComunicadosPaginated(
     // Idem no detalhe: se alguma linha da página está em `enviando`, os
     // contadores dela ainda vão mudar.
     refetchInterval: (query) =>
-      query.state.data?.results.some((c) => c.status === "enviando")
-        ? POLL_ENVIANDO_MS
-        : false,
+      intervaloEnviando(
+        query.state.data?.results.some((c) => c.status === "enviando") ??
+          false,
+        query.state.dataUpdateCount,
+      ),
   });
 }
 
@@ -63,7 +77,10 @@ export function useComunicado(id: number | undefined) {
     enabled: id != null && Number.isFinite(id),
     // Acompanha o lote até ele terminar; para de buscar em estado final.
     refetchInterval: (query) =>
-      query.state.data?.status === "enviando" ? POLL_ENVIANDO_MS : false,
+      intervaloEnviando(
+        query.state.data?.status === "enviando",
+        query.state.dataUpdateCount,
+      ),
   });
 }
 

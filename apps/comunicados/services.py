@@ -208,6 +208,61 @@ def _tocar(comunicado_id: int) -> None:
         )
 
 
+def _reivindicar(ids: list[int], email: str, comunicado_id: int) -> bool:
+    """Reivindica as linhas de um grupo antes de enviar. Lock por endereço.
+
+    Por que existe: `_disparar` monta `grupos` **uma vez, em memória**, e
+    depois itera esse dicionário. Sem um lock, a thread original e o
+    `comunicados_retomar` podem iterar conjuntos sobrepostos e enviar o
+    mesmo comunicado duas vezes pro mesmo responsável.
+
+    O heartbeat sozinho não resolvia isso, só tornava improvável — e a
+    margem era pequena demais: o anymail usa `requests_timeout` de 30s por
+    envio, então 25 emails (a cadência do heartbeat) podem levar 12,5min
+    no pior caso, contra um limite de 15min no comando. Dois minutos e
+    meio de folga pra decidir se vale reenviar email pra escola toda não é
+    garantia, é sorte. O claim elimina a classe de problema em vez de
+    calibrar contra ela: só um executor consegue o UPDATE.
+
+    Tudo-ou-nada: reivindicar parte de um grupo e enviar mandaria um email
+    pro endereço que outro executor também vai atender. Se o claim vier
+    parcial, devolve o que pegou e pula. Na prática é inalcançável — o
+    conjunto de linhas é fixo depois da materialização inicial (que só
+    roda a partir de `rascunho`), então dois executores formam grupos
+    idênticos — mas a guarda mantém a invariante explícita.
+    """
+    reivindicadas = ComunicadoDestinatario.objects.filter(
+        id__in=ids, status=ComunicadoDestinatario.Status.PENDENTE
+    ).update(
+        status=ComunicadoDestinatario.Status.ENVIANDO,
+        atualizado_em=timezone.now(),
+    )
+    if reivindicadas == len(ids):
+        return True
+
+    if reivindicadas:
+        logger.warning(
+            "Comunicado %s: claim parcial para %s (%s de %s) — devolvido.",
+            comunicado_id,
+            email,
+            reivindicadas,
+            len(ids),
+        )
+        ComunicadoDestinatario.objects.filter(
+            id__in=ids, status=ComunicadoDestinatario.Status.ENVIANDO
+        ).update(
+            status=ComunicadoDestinatario.Status.PENDENTE,
+            atualizado_em=timezone.now(),
+        )
+    else:
+        logger.info(
+            "Comunicado %s: %s já está sendo atendido por outro executor.",
+            comunicado_id,
+            email,
+        )
+    return False
+
+
 def _marcar(ids: list[int], status: str, erro: str = "") -> None:
     """Aplica o resultado do envio a todas as linhas de um grupo."""
     ComunicadoDestinatario.objects.filter(id__in=ids).update(
@@ -266,6 +321,9 @@ def _disparar(comunicado_id: int, escola_id: int) -> None:
             if conexao is not None:
                 try:
                     for email, grupo in grupos.items():
+                        if not _reivindicar(grupo["ids"], email, comunicado_id):
+                            continue
+
                         assunto, texto, html = montar_email_comunicado(
                             comunicado, grupo["nome"]
                         )
@@ -354,10 +412,17 @@ def _consolidar(comunicado: Comunicado) -> None:
     falhas = linhas.filter(status=Status.FALHOU).count()
     sem_email = linhas.filter(status=Status.SEM_EMAIL).count()
 
+    # Linhas que ficaram em `enviando` são indeterminadas: o processo
+    # morreu entre o claim e a confirmação, então o email pode ter saído.
+    indeterminados = linhas.filter(status=Status.ENVIANDO).count()
+
     com_email = total - sem_email
+    # `falhou` só quando o disparo comprovadamente não entregou nada. Com
+    # linhas indeterminadas não há essa certeza — chamar de falha diria à
+    # escola que ninguém recebeu, quando parte pode ter recebido.
     status_final = (
         Comunicado.Status.FALHOU
-        if com_email > 0 and enviados == 0
+        if com_email > 0 and enviados == 0 and indeterminados == 0
         else Comunicado.Status.ENVIADO
     )
 

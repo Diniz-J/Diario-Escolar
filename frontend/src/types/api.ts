@@ -580,6 +580,11 @@ export interface ComunicadoPrevia {
 
 export type ComunicadoDestinatarioStatus =
   | "pendente"
+  // Reivindicada por um executor que estava enviando. Uma linha que FICA
+  // assim é indeterminada: o processo morreu entre o claim e a
+  // confirmação, então não se sabe se o email saiu. Nunca é reenviada
+  // automaticamente (duplicar um aviso em massa é pior que faltar).
+  | "enviando"
   | "enviado"
   | "falhou"
   | "sem_email";

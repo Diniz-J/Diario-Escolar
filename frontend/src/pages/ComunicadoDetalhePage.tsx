@@ -50,6 +50,7 @@ const DEST_STATUS_OPTIONS: {
   { value: "enviado", label: "Enviados" },
   { value: "falhou", label: "Falhas" },
   { value: "sem_email", label: "Sem email" },
+  { value: "enviando", label: "Não confirmados" },
   { value: "pendente", label: "Pendentes" },
 ];
 
@@ -94,6 +95,19 @@ export function ComunicadoDetalhePage() {
       : {},
     { enabled: temLog, poll: enviando },
   );
+
+  // Linhas que não fecharam em enviado/falhou/sem_email: o processo morreu
+  // entre o claim e a confirmação. Derivado dos contadores existentes pra
+  // não precisar de mais um campo no model.
+  const indeterminados = comunicado
+    ? Math.max(
+        0,
+        comunicado.total_destinatarios -
+          comunicado.total_enviados -
+          comunicado.total_falhas -
+          comunicado.total_sem_email,
+      )
+    : 0;
 
   const turmasDoComunicado = useMemo(() => {
     if (!comunicado || comunicado.destino !== "turmas") return [];
@@ -316,6 +330,16 @@ export function ComunicadoDetalhePage() {
                 </p>
               </div>
             </div>
+
+            {!enviando && indeterminados > 0 && (
+              <p className="text-sm text-destructive">
+                {indeterminados}{" "}
+                {indeterminados === 1 ? "envio" : "envios"} sem confirmação —
+                o disparo foi interrompido antes de registrar o resultado.
+                Não reenviamos automaticamente para não arriscar mensagem
+                duplicada; a escola pode confirmar com esses responsáveis.
+              </p>
+            )}
 
             {comunicado.total_sem_email > 0 && (
               <p className="text-sm text-destructive">

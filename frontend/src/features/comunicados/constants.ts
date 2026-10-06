@@ -49,6 +49,7 @@ export const DEST_STATUS_LABEL: Record<
   string
 > = {
   pendente: "Pendente",
+  enviando: "Não confirmado",
   enviado: "Enviado",
   falhou: "Falhou",
   sem_email: "Sem email",
@@ -61,6 +62,8 @@ export const DEST_STATUS_BADGE: Record<
   string
 > = {
   pendente: "bg-[#FCE7BC] text-[#854D0E]",
+  // Indeterminado: nem sucesso nem falha — mostarda, igual ao "em curso".
+  enviando: "bg-[#FCE7BC] text-[#854D0E]",
   enviado: "text-olive bg-olive/10",
   falhou: "text-destructive bg-destructive/15",
   sem_email: "text-muted-foreground bg-muted",

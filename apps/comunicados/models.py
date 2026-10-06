@@ -141,6 +141,17 @@ class ComunicadoDestinatario(TimeStampedModel):
         # morrer no meio do disparo, as linhas que sobraram em `pendente`
         # mostram exatamente onde parou — em vez de desaparecerem.
         PENDENTE = "pendente", "Pendente"
+        # Reivindicada por um executor que está enviando agora. Serve de
+        # lock por grupo: dois executores (a thread original e o
+        # `comunicados_retomar`) nunca pegam o mesmo endereço, porque o
+        # claim é um UPDATE condicional em `pendente`.
+        #
+        # Uma linha que FICA neste estado significa "não sabemos se o
+        # email saiu" — o processo morreu entre o claim e a confirmação.
+        # Nunca é reenviada automaticamente: para um comunicado em massa,
+        # duplicar é pior que faltar. Aparece no log como não confirmada
+        # pra escola decidir o que fazer.
+        ENVIANDO = "enviando", "Envio não confirmado"
         ENVIADO = "enviado", "Enviado"
         FALHOU = "falhou", "Falhou"
         SEM_EMAIL = "sem_email", "Sem email cadastrado"
