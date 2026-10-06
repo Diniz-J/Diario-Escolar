@@ -223,9 +223,14 @@ export function MuralPage() {
         </p>
       ) : materiais.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          {mostrarDespublicados
-            ? "Nenhum material despublicado."
-            : "Nenhum material publicado ainda."}
+          {/* Sem cadastro de professor (ex.: inspetor) a lista é sempre
+              vazia — "nenhum publicado ainda" daria a entender que um dia
+              vai ter. Mesmo tom do aviso do Diário de Aula. */}
+          {!podePublicar && !professoresQuery.isLoading
+            ? "Esta área é de quem leciona — seu usuário não tem um cadastro de professor vinculado."
+            : mostrarDespublicados
+              ? "Nenhum material despublicado."
+              : "Nenhum material publicado ainda."}
         </p>
       ) : (
         <>
@@ -259,6 +264,11 @@ export function MuralPage() {
                             despublicado
                           </span>
                         )}
+                      </span>
+                      {/* Abaixo de md a coluna de turma some; sem isto o
+                          professor de várias turmas não sabe de qual é. */}
+                      <span className="block text-xs text-muted-foreground md:hidden">
+                        {nomeTurma(m.turma)} — {nomeDisciplina(m.disciplina)}
                       </span>
                       {linkSeguro(m.link) && (
                         <a
