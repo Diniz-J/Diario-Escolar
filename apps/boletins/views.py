@@ -67,11 +67,14 @@ def _render_pdf(html_str: str) -> bytes:
     return HTML(string=html_str).write_pdf()
 
 
-def _resolver_filtros(request) -> tuple[date | None, date | None, object]:
+def _resolver_filtros(
+    request, escola_id: int
+) -> tuple[date | None, date | None, object]:
     """Resolve janela de datas + período opcional a partir da query string.
 
     Precedência: `?periodo=<id>` ganha sobre `?data_inicio/data_fim`
     (atalho de UI). Sem nenhum dos dois → janela vazia (boletim anual).
+    `escola_id` é a do aluno: o período só vale se for dessa escola.
     """
     periodo_id_raw = request.query_params.get("periodo")
     try:
@@ -81,7 +84,7 @@ def _resolver_filtros(request) -> tuple[date | None, date | None, object]:
 
     if periodo_id:
         data_inicio, data_fim, periodo = resolver_janela_por_periodo(
-            periodo_id
+            periodo_id, escola_id
         )
         return data_inicio, data_fim, periodo
 
@@ -108,7 +111,7 @@ class BoletimAlunoView(APIView):
             pk=aluno_id,
         )
         _checar_acesso_aluno(request, aluno)
-        data_inicio, data_fim, periodo = _resolver_filtros(request)
+        data_inicio, data_fim, periodo = _resolver_filtros(request, aluno.escola_id)
         return Response(
             montar_boletim(aluno, data_inicio, data_fim, periodo=periodo)
         )
@@ -133,7 +136,7 @@ class BoletimAlunoPDFView(APIView):
             pk=aluno_id,
         )
         _checar_acesso_aluno(request, aluno)
-        data_inicio, data_fim, periodo = _resolver_filtros(request)
+        data_inicio, data_fim, periodo = _resolver_filtros(request, aluno.escola_id)
 
         contexto = montar_boletim(
             aluno, data_inicio, data_fim, periodo=periodo
@@ -184,7 +187,7 @@ class BoletimAlunoAvaliacoesView(APIView):
             pk=aluno_id,
         )
         _checar_acesso_aluno(request, aluno)
-        data_inicio, data_fim, periodo = _resolver_filtros(request)
+        data_inicio, data_fim, periodo = _resolver_filtros(request, aluno.escola_id)
 
         formato = (request.query_params.get("formato") or "csv").lower()
         if formato not in {"csv", "xlsx"}:

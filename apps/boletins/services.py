@@ -236,6 +236,7 @@ def calcular_notas_por_disciplina(
 
 def resolver_janela_por_periodo(
     periodo_id: int | None,
+    escola_id: int,
 ) -> tuple[date | None, date | None, PeriodoAvaliativo | None]:
     """Converte `periodo_id` em (data_inicio, data_fim, periodo_obj).
 
@@ -243,13 +244,19 @@ def resolver_janela_por_periodo(
     vez do cliente passar datas manuais, passa o id do período e o
     backend resolve.
 
+    Só aceita período da escola do aluno (`escola_id`). Período de outra
+    escola é tratado igual a período inexistente: `(None, None, None)`,
+    boletim anual. Assim a resposta não confirma que o id existe, nem
+    devolve nome e datas de um período alheio, nem calcula o boletim na
+    janela de outra escola.
+
     Retorna `(None, None, None)` se `periodo_id` é falsy (boletim anual
     / sem filtro).
     """
     if not periodo_id:
         return None, None, None
     try:
-        periodo = PeriodoAvaliativo.objects.get(pk=periodo_id)
+        periodo = PeriodoAvaliativo.objects.get(pk=periodo_id, escola_id=escola_id)
     except PeriodoAvaliativo.DoesNotExist:
         return None, None, None
     return periodo.data_inicio, periodo.data_fim, periodo
