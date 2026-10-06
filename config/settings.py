@@ -200,8 +200,11 @@ AUTH_USER_MODEL = "accounts.Usuario"
 
 # Django REST Framework
 REST_FRAMEWORK = {
+    # Staff recusa token do portal do responsável — ver
+    # `apps/common/authentication.py`. As views do portal declaram a
+    # própria autenticação.
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "apps.common.authentication.StaffJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
@@ -233,6 +236,10 @@ REST_FRAMEWORK = {
         # de workers, o limite efetivo multiplica — aí vale um cache
         # compartilhado (Redis). Mesma observação vale pro bucket `login`.
         "reset_senha": None if TESTING else "10/hour",
+        # Login do portal do responsável. Bucket próprio, separado do
+        # login do staff: brute force contra pais não pode bloquear a
+        # secretaria logando do mesmo IP (escola atrás de um NAT só).
+        "portal_login": None if TESTING else "5/min",
     },
     # Paginação **opt-in**: só ativa quando o cliente envia `?page=N` ou
     # `?page_size=N`. Sem isso, retorna array cru. Ver `apps/common/pagination.py`.

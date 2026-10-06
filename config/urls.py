@@ -15,13 +15,13 @@ Endpoints de domínio: ver os `urls.py` de cada app (`accounts`, `escola`,
 """
 from django.contrib import admin
 from django.urls import include, path
-from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.accounts.views import (
     LogoutView,
     PasswordChangeRequestView,
     PasswordResetConfirmView,
     PasswordResetRequestView,
+    StaffTokenRefreshView,
     UsuarioTokenObtainPairView,
 )
 from apps.common.health import health, ping
@@ -35,7 +35,7 @@ api_v1_patterns = [
     ),
     path(
         "auth/token/refresh/",
-        TokenRefreshView.as_view(),
+        StaffTokenRefreshView.as_view(),
         name="token_refresh",
     ),
     path(
@@ -74,6 +74,9 @@ api_v1_patterns = [
         SentrySmokeTestView.as_view(),
         name="sentry_smoke_test",
     ),
+    # Portal do responsável: autenticação e tokens próprios, isolados do
+    # staff. Ver PORTAL.md e apps/portal/urls.py.
+    path("portal/", include("apps.portal.urls")),
     path("", include("apps.accounts.urls")),
     path("", include("apps.escola.urls")),
     path("", include("apps.ocorrencias.urls")),

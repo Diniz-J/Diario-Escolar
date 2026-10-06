@@ -164,6 +164,23 @@ Portanto:
 - A autenticação do staff **recusa** token que tenha esse claim.
 - Os dois sentidos têm teste. É o primeiro teste da fatia 2, não o último.
 
+Como ficou (fatia 2): o claim é `tipo=responsavel` e o id vai em
+`responsavel_id`, **nunca** em `user_id` — segunda camada independente: se
+a checagem de tipo falhasse, o staff não acharia `user_id` e recusaria do
+mesmo jeito. Token com os dois ids é recusado nos dois lados. O staff usa
+`StaffJWTAuthentication` (`apps/common/authentication.py`) como
+autenticação padrão e um refresh que recusa o refresh do portal; o portal
+usa `PortalJWTAuthentication` (`apps/portal/authentication.py`). Os tokens
+do portal são montados sem `for_user()`, que ligaria o `OutstandingToken`
+da blacklist ao `Usuario` de mesmo pk.
+
+**Login por email e senha, sem escolher escola.** O email é único por
+escola, não global. O login procura as contas ativas com aquele email e
+entra na que tiver a senha certa; se mais de uma bater, recusa com 409 —
+responsável em várias escolas está fora da v1 (seção 6). Toda outra falha
+(email inexistente, conta inativa, conta sem senha, senha errada) responde
+o mesmo 401 genérico.
+
 ### 4.2. Autorização por vínculo, nunca por id de URL
 
 Toda leitura do portal é filtrada pelos vínculos do responsável
