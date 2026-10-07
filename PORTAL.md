@@ -116,7 +116,18 @@ disciplina, igual o `RegistroAula` do diário de classe já faz.
 O campo de texto continua existindo e **continua sendo o destino do email
 de comunicado e de ocorrência** na v1. Não troco o que funciona em produção
 no mesmo passo que crio o modelo novo. A duplicidade é consciente e
-temporária; convergir é fatia posterior.
+temporária; convergir é fatia posterior — desenhada em
+[`RESPONSAVEIS.md`](./RESPONSAVEIS.md).
+
+> **Convergido** (out/2026, [`RESPONSAVEIS.md`](./RESPONSAVEIS.md) fatias
+> 1–3). O destino do email passou a ser o vínculo: `apps/portal/destinatarios.py`
+> é a origem única e as duas apps de envio chamam de lá. O campo de texto
+> **não** foi removido — segue como entrada do cadastro, como base da
+> semeadura e como fallback para o aluno **sem nenhum vínculo** (a escola
+> que nunca semeou não pode emudecer em silêncio). O fallback dispara por
+> ausência de vínculo, nunca por ausência de destino elegível: aluno com
+> vínculo cuja conta está inativa ou recusou notificação fica sem destino,
+> sem recair no campo antigo.
 
 A escola não redigita nada: `manage.py portal_semear_responsaveis` converte
 os campos atuais do aluno em contas e vínculos, deduplicando por email
@@ -378,7 +389,9 @@ despublicados". Link abre em aba nova com `rel="noopener noreferrer"`.
 
 ## 6. Pendências conhecidas
 
-- Convergir `Aluno.email_responsavel` com `Responsavel.email` (seção 3).
+- ~~Convergir `Aluno.email_responsavel` com `Responsavel.email` (seção 3).~~
+  Entregue nas fatias 1–3 do [`RESPONSAVEIS.md`](./RESPONSAVEIS.md); falta
+  só a tela de vínculos (fatia 4), que depende da tela "Responsáveis".
 - **Nota aparece pro responsável assim que o professor lança.** O boletim
   do portal reaproveita o `montar_boletim` do staff, que não tem etapa de
   publicação: nota provisória ou digitada errada chega direto ao pai. Se
