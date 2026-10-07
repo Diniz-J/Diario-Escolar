@@ -52,16 +52,22 @@ export function ResponsaveisPage() {
   );
 
   // A busca é server-side (inclui nome de aluno, que não está na linha), e
-  // sai com atraso pra não disparar uma request por tecla.
+  // sai com atraso pra não disparar uma request por tecla. Filtro
+  // server-side mudou → volta pra página 1 (a atual pode não existir no
+  // novo subset). O reset fica no callback/handler, não num `useEffect`
+  // com `setState` (regra `react-hooks/set-state-in-effect`).
   useEffect(() => {
-    const t = setTimeout(() => setBuscaAplicada(busca.trim()), 350);
+    const t = setTimeout(() => {
+      setBuscaAplicada(busca.trim());
+      setPage(1);
+    }, 350);
     return () => clearTimeout(t);
   }, [busca]);
 
-  // Filtro server-side mudou: a página atual pode não existir no novo subset.
-  useEffect(() => {
+  function filtrarSituacao(valor: string) {
+    setFiltroSituacao(valor);
     setPage(1);
-  }, [filtroSituacao, buscaAplicada]);
+  }
 
   const query = useResponsaveisPaginated(
     {
@@ -76,6 +82,16 @@ export function ResponsaveisPage() {
   const linhas = query.data?.results ?? [];
   const totalCount = query.data?.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+
+  // Convidar muda a situação da linha. Com um filtro de situação ativo, a
+  // linha sai do subset; se era a única da página, ela deixa de existir e
+  // o backend responde 404 (paginação do DRF) — a tela mostraria erro sem
+  // os controles de página. Volta uma página antes do refetch.
+  function aposConvidar() {
+    if (filtroSituacao !== FILTRO_TODOS && linhas.length === 1 && page > 1) {
+      setPage((p) => p - 1);
+    }
+  }
 
   return (
     <div className="p-4 md:p-8 space-y-6">
@@ -93,6 +109,7 @@ export function ResponsaveisPage() {
       <ConvidarDialog
         responsavel={convidarAlvo}
         onOpenChange={(aberto) => !aberto && setConvidarAlvo(null)}
+        onConvidado={aposConvidar}
       />
 
       <div className="flex flex-wrap gap-3 items-end">
@@ -102,7 +119,7 @@ export function ResponsaveisPage() {
           onChange={(e) => setBusca(e.target.value)}
           className="max-w-xs"
         />
-        <Select value={filtroSituacao} onValueChange={setFiltroSituacao}>
+        <Select value={filtroSituacao} onValueChange={filtrarSituacao}>
           <SelectTrigger className="w-52">
             <SelectValue />
           </SelectTrigger>

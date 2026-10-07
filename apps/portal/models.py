@@ -227,9 +227,15 @@ class ConviteResponsavel(TimeStampedModel):
 
     @classmethod
     def gerar(cls, responsavel, finalidade, enviado_por=None):
-        """Cria o link e invalida os pendentes. Retorna (instance, token_cru)."""
+        """Cria o link. Retorna (instance, token_cru).
+
+        **Não** invalida os pendentes: quem faz isso é o `emitir_link`, e só
+        depois que o email sai. Invalidar antes fazia uma falha de envio
+        (provedor fora, cota estourada) matar o convite anterior, que ainda
+        valia — a conta passava pra "convite expirado" sem o pai ter
+        recebido nada novo.
+        """
         agora = timezone.now()
-        cls.pendentes(responsavel).update(expira_em=agora)
         token_cru = secrets.token_urlsafe(48)
         instance = cls.objects.create(
             responsavel=responsavel,
@@ -263,11 +269,6 @@ class ConviteResponsavel(TimeStampedModel):
         if not obj.responsavel.ativo:
             return None
         return obj
-
-    def invalidar(self) -> None:
-        """Expira o link sem marcar como usado (ex.: o email não saiu)."""
-        self.expira_em = timezone.now()
-        self.save(update_fields=["expira_em", "atualizado_em"])
 
     @staticmethod
     def _hash(token_cru: str) -> str:

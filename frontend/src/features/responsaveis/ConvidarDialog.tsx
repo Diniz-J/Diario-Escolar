@@ -15,19 +15,23 @@ import { useConvidarResponsavel } from "./hooks";
 interface ConvidarDialogProps {
   responsavel: ResponsavelStaff | null;
   onOpenChange: (open: boolean) => void;
+  // Chamado depois que o convite sai — a página usa pra não ficar numa
+  // página que deixou de existir no filtro atual.
+  onConvidado?: () => void;
 }
 
 /**
  * Confirmação do convite.
  *
  * Confirma porque manda email de verdade, e porque reenviar **invalida o
- * link pendente anterior** (`ConviteResponsavel.gerar` expira os
- * pendentes). Sem avisar, a secretaria reenviaria "pra garantir" e
+ * link pendente anterior** (o `emitir_link` expira os pendentes depois que
+ * o email novo sai). Sem avisar, a secretaria reenviaria "pra garantir" e
  * derrubaria o link que o pai estava a ponto de usar.
  */
 export function ConvidarDialog({
   responsavel,
   onOpenChange,
+  onConvidado,
 }: ConvidarDialogProps) {
   const convidar = useConvidarResponsavel();
   const jaConvidado = responsavel?.situacao === "convidado";
@@ -36,6 +40,7 @@ export function ConvidarDialog({
     if (!responsavel) return;
     try {
       await convidar.mutateAsync(responsavel.id);
+      onConvidado?.();
       onOpenChange(false);
     } catch (err) {
       // O toast de erro (incluindo 400 de conta já ativa e 502 de email que

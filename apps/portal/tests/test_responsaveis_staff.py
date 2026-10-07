@@ -6,6 +6,7 @@ o que importa aqui é: escopo por escola, permissão de nível-diretor, e a
 expirou faria a escola esperar por nada.
 """
 from datetime import timedelta
+from unittest import mock
 
 from django.urls import reverse
 from django.utils import timezone
@@ -17,6 +18,7 @@ from django.test import TestCase
 from apps.accounts.models import Usuario
 from apps.escola.models import Aluno, Escola, Turma
 from apps.portal.models import ConviteResponsavel, Responsavel, ResponsavelAluno
+from apps.portal.services import emitir_link
 
 SENHA = "SenhaForte!2026"
 
@@ -161,6 +163,18 @@ class SituacaoTests(_ListaSetup):
             expira_em=timezone.now() - timedelta(days=1)
         )
         self.assertEqual(self._situacao_de(r), "convite_expirado")
+
+    def test_convite_que_nao_saiu_continua_sem_convite(self):
+        """Email falhou (provedor fora, cota): a conta não pode virar
+        "convite expirado" — a secretaria entenderia que o pai ignorou."""
+        r = self._responsavel("Falhou", "f@a.com")
+        with mock.patch(
+            "django.core.mail.EmailMultiAlternatives.send",
+            side_effect=ConnectionError("provedor fora"),
+        ):
+            with self.assertRaises(ConnectionError):
+                emitir_link(r, ConviteResponsavel.Finalidade.CONVITE)
+        self.assertEqual(self._situacao_de(r), "sem_convite")
 
     def test_ativo_quando_definiu_senha(self):
         r = self._responsavel("Ativo", "at@a.com", com_senha=True)
