@@ -9,6 +9,7 @@ descobrir que uma das cópias ficou atrás.
 from __future__ import annotations
 
 import unicodedata
+from string import ascii_lowercase, digits
 
 
 def render_pdf(html_str: str) -> bytes:
@@ -41,12 +42,20 @@ def caminho_logo() -> str:
     return finders.find("branding/diario-diniz-badge-128.png") or ""
 
 
-def slug_arquivo(nome: str | None, *, fallback: str) -> str:
-    """Transforma um nome em stem ASCII pro `Content-Disposition`.
+# Tudo que não estiver aqui vira `_`. Lista de permissão e não de
+# proibição de propósito: tirar só acento deixava passar aspa, barra e
+# contrabarra, e o nome vai cru pra dentro de `filename="..."` — uma
+# turma chamada `Turma "X"` fechava as aspas do header no meio.
+_CARACTERES_DE_ARQUIVO = set(ascii_lowercase + digits + "_-")
 
-    Acento no nome do arquivo engasga em browser antigo e em proxy que
-    não fala RFC 5987, então "Ensino Médio A" sai como `ensino_medio_a`.
-    Nome vazio (ou que virou vazio ao tirar os não-ASCII) cai no
+
+def slug_arquivo(nome: str | None, *, fallback: str) -> str:
+    """Transforma um nome em stem ASCII seguro pro `Content-Disposition`.
+
+    Acento engasga em browser antigo e em proxy que não fala RFC 5987,
+    então "Ensino Médio A" sai como `ensino_medio_a`. Depois de tirar o
+    acento, sobra só o que é seguro num nome de arquivo e dentro de um
+    header entre aspas. Nome vazio, ou que ficou vazio no caminho, cai no
     `fallback`.
     """
     if not nome:
@@ -56,5 +65,11 @@ def slug_arquivo(nome: str | None, *, fallback: str) -> str:
         .encode("ascii", "ignore")
         .decode("ascii")
     )
-    slug = "_".join(ascii_puro.lower().split())
-    return slug or fallback
+    limpo = "".join(
+        caractere if caractere in _CARACTERES_DE_ARQUIVO else "_"
+        for caractere in "_".join(ascii_puro.lower().split())
+    )
+    # Colapsa as sequências que a troca acima gerou e tira as pontas.
+    while "__" in limpo:
+        limpo = limpo.replace("__", "_")
+    return limpo.strip("_") or fallback

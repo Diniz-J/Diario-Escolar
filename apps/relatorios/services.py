@@ -304,7 +304,12 @@ def contar_ocorrencias_por_status(ocorrencias) -> dict[str, int]:
 
     contagem = {status: 0 for status in Ocorrencia.Status.values}
     for ocorrencia in ocorrencias:
-        contagem[ocorrencia.status] += 1
+        # `.get()` e não `contagem[...] += 1`: nada no banco impede um
+        # status que saiu do enum (migração antiga, valor removido), e
+        # ali isso seria `KeyError` — um 500 no download por causa de uma
+        # linha velha. O template lê só os quatro status conhecidos, e o
+        # total continua contando todas as linhas.
+        contagem[ocorrencia.status] = contagem.get(ocorrencia.status, 0) + 1
     return contagem
 
 

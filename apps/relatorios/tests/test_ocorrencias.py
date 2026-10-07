@@ -187,6 +187,19 @@ class ExportarOcorrenciasTests(TestCase):
         self.assertIn("spreadsheetml", resp["Content-Type"])
         self.assertIn("ocorrencias.xlsx", resp["Content-Disposition"])
 
+    def test_status_fora_do_enum_nao_derruba_o_pdf(self):
+        """Nada no banco impede um status que saiu do enum.
+
+        Antes isto era `contagem[status] += 1`, ou seja, `KeyError` e um
+        500 no download por causa de uma linha velha.
+        """
+        from apps.relatorios.services import contar_ocorrencias_por_status
+
+        legado = Ocorrencia(status="suspensa")
+        contagem = contar_ocorrencias_por_status([legado, self.aberta])
+        self.assertEqual(contagem["aberta"], 1)
+        self.assertEqual(contagem["suspensa"], 1)
+
     @patch(
         "apps.ocorrencias.views._render_pdf", return_value=b"%PDF-1.4 fake"
     )
