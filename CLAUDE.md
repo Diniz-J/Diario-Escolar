@@ -141,6 +141,20 @@ dos 75% da LDB, e a mesma régua de presença do boletim (P/R/J contam; só A
 é falta), com teste comparando as duas pra não divergirem. Turma é
 obrigatória e de outra escola responde 404. Botão na `TurmaDetalhePage`.
 
+**Alunos (cadastral)** — action no `AlunoViewSet`
+(`GET /alunos/relatorio/?formato=pdf|csv|xlsx`), **deliberadamente
+separada do `export/`** do `ImportExportViewSetMixin`: aquele é o serviço
+de migração em massa (admin global + flag
+`Escola.importacao_em_lote_habilitada`), este é a lista que a secretaria
+tira da própria escola. A permissão sai do `WRITE_PERMISSION` do
+`ReadWritePermissionMixin` (admin/diretor; professor leva 403, porque a
+planilha traz nome e email de responsável) — como é consequência do mixin
+e não de uma declaração local, tem teste fixando os dois lados.
+`permission_classes` no `@action` seria ignorado em silêncio, já que o
+mixin sobrescreve `get_permissions`. PDF separado por turma, com teto
+`LIMITE_PDF_ALUNOS`. Botões na `AlunosPage` ("Relatório") e na
+`TurmaDetalhePage` ("Lista da turma").
+
 **Ocorrências** — a action mora no `OcorrenciaViewSet`
 (`GET /ocorrencias/exportar/?formato=pdf|csv|xlsx`), não aqui: é lá que
 `get_queryset` (escopo) e `filter_queryset` (`OcorrenciaFilter`) já
@@ -358,13 +372,13 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 ### FASE 3 — Produto Comercial — PARCIAL
 8. ✅ **Dashboard com métricas** (cards + filtro por turma). Falta: reincidência, presença média.
 9. ✅ **Filtro de período** em Ocorrências/Presença. Falta: múltiplos status.
-10. **Exportação de relatórios** — PDF/CSV/Excel. **PARCIAL**: frequência
-    por turma (botão na `TurmaDetalhePage`) e ocorrências filtradas (botão
-    na `OcorrenciasPage`) entregues — app `relatorios`. Pendente: listagem
-    cadastral de alunos, decidida como endpoint novo de leitura pra
-    direção, separado do `/alunos/export/`, que segue sendo o serviço de
-    migração em massa (admin-only + flag
-    `importacao_em_lote_habilitada`).
+10. ✅ **Exportação de relatórios** — PDF/CSV/Excel. Três relatórios na
+    app `relatorios`: frequência por turma (`TurmaDetalhePage`),
+    ocorrências filtradas (`OcorrenciasPage`) e cadastral de alunos
+    (`AlunosPage` e `TurmaDetalhePage`). Todos saem com o mesmo recorte
+    da tela que os abriu, os dois últimos como action do viewset que já
+    tem o filtro e o escopo. PDF via WeasyPrint com teto de linhas
+    (síncrono na request), CSV/XLSX via tablib sem teto.
 11. **Diário de classe (`RegistroAula`)** — **FUNCIONAL (5 fatias mergeadas)**. Pedido de cliente: professor lança o conteúdo programático ministrado por aula; direção dá o visto. Decisões travadas: grade de horário (`Lecionamento.dias_semana`) projeta slots, workflow de 3 estados (`rascunho`→`lancado`→`conferido`), conteúdo texto livre, conferência uma a uma (sem lote). Navegação da direção: aba Professores → clica no professor → **`ProfessorDetalhePage` (ficha 360º com tabs Diário/Lecionamentos/Ocorrências/Dados)** → lista cronológica das aulas → confere → **exporta PDF** (com filtros + espaço de assinatura). Pendência de conferência vira card no Dashboard. Fatiado em PRs — **todas mergeadas**: ① backend (#89) · ② PDF (#94) · ③ front diário do professor (#90) · ④ front ficha do professor (#91) · ⑤ card no dashboard (#93). Ficha ganhou também filtros (período+status), agrupamento por mês e contadores; perfil **`coordenador`** entrou como alias de diretor junto da ficha (#91).
 
    ✅ **Redesenho do PDF do diário — ENTREGUE (PR #97).** Layout reformulado em 4 eixos: status consolidado num badge único (sem repetição da nota "Conferido por X em Y"); cabeçalho/meta reorganizado em blocos; estrutura da lista trocada de tabela pra blocos por aula com conteúdo respirando; identidade visual alinhada (olive/ferrugem/sepia + serifa nos títulos + badges tintados: rascunho mostarda, lançado ferrugem, conferido olive). Tocado por um CC no Claude Desktop. ⚠️ WeasyPrint segue sem renderizar no Windows — iteração local exige container/preview.

@@ -306,3 +306,65 @@ def contar_ocorrencias_por_status(ocorrencias) -> dict[str, int]:
     for ocorrencia in ocorrencias:
         contagem[ocorrencia.status] += 1
     return contagem
+
+
+# Teto de linhas do PDF cadastral. Mesma razão do teto de ocorrências: o
+# recorte pode ser a escola inteira e o WeasyPrint é síncrono na request.
+# Uma escola de porte médio cabe; a rede inteira não, e o erro manda pro
+# CSV/XLSX.
+LIMITE_PDF_ALUNOS = 1500
+
+
+def linhas_alunos(alunos) -> tuple[list[str], list[list[Any]]]:
+    """Cabeçalho + linhas do relatório cadastral.
+
+    Traz o nome da turma, não o id: a planilha é lida fora do sistema.
+    Data vazia sai como string vazia em vez de "None" — a secretaria
+    imprime isso e entrega pra alguém preencher à mão.
+
+    Quem chama precisa ter feito `select_related("turma")`.
+    """
+    headers = [
+        "matricula",
+        "nome",
+        "data_nascimento",
+        "turma",
+        "situacao",
+        "responsavel",
+        "email_responsavel",
+    ]
+    linhas = [
+        [
+            aluno.matricula,
+            aluno.nome_completo,
+            aluno.data_nascimento.isoformat() if aluno.data_nascimento else "",
+            aluno.turma.nome,
+            "ativo" if aluno.ativo else "inativo",
+            aluno.nome_responsavel,
+            aluno.email_responsavel,
+        ]
+        for aluno in alunos
+    ]
+    return headers, linhas
+
+
+def agrupar_alunos_por_turma(alunos) -> list[dict[str, Any]]:
+    """Agrupa os alunos por turma, preservando a ordem recebida.
+
+    O cadastral impresso serve de lista de turma, então sai separado por
+    turma mesmo quando o recorte é a escola toda — uma lista corrida de
+    400 nomes não serve pra nada em cima de uma mesa.
+    """
+    grupos: dict[int, dict[str, Any]] = {}
+    for aluno in alunos:
+        grupo = grupos.setdefault(
+            aluno.turma_id,
+            {
+                "turma_nome": aluno.turma.nome,
+                "turno": aluno.turma.get_turno_display(),
+                "ano_letivo": aluno.turma.ano_letivo,
+                "alunos": [],
+            },
+        )
+        grupo["alunos"].append(aluno)
+    return list(grupos.values())

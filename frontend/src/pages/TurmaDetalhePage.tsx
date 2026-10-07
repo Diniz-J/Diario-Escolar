@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAlunos } from "@/features/alunos/hooks";
+import { ExportarAlunosDialog } from "@/features/relatorios/ExportarAlunosDialog";
 import { FrequenciaDialog } from "@/features/relatorios/FrequenciaDialog";
 import { useTurma } from "@/features/turmas/hooks";
 
@@ -32,6 +33,7 @@ export function TurmaDetalhePage() {
 
   const turmaQuery = useTurma(turmaId);
   const [frequenciaOpen, setFrequenciaOpen] = useState(false);
+  const [listaOpen, setListaOpen] = useState(false);
   // Lista só alunos ativos da turma — alunos inativos (soft delete)
   // ficam disponíveis pra pesquisa de histórico na página de Alunos
   // via toggle "Mostrar inativos", não aqui.
@@ -54,26 +56,38 @@ export function TurmaDetalhePage() {
             )}
           </h1>
           {turmaQuery.data && (
-            <Button
-              variant="outline"
-              onClick={() => setFrequenciaOpen(true)}
-              className="sm:mt-1 shrink-0"
-            >
-              Relatório de frequência
-            </Button>
+            <div className="flex gap-2 sm:mt-1 shrink-0">
+              <Button variant="outline" onClick={() => setListaOpen(true)}>
+                Lista da turma
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setFrequenciaOpen(true)}
+              >
+                Frequência
+              </Button>
+            </div>
           )}
         </div>
         <div className="h-px w-10 bg-ferrugem" />
       </header>
 
       {turmaQuery.data && (
-        <FrequenciaDialog
-          open={frequenciaOpen}
-          onOpenChange={setFrequenciaOpen}
-          turmaId={turmaQuery.data.id}
-          turmaNome={turmaQuery.data.nome}
-          anoLetivo={turmaQuery.data.ano_letivo}
-        />
+        <>
+          <FrequenciaDialog
+            open={frequenciaOpen}
+            onOpenChange={setFrequenciaOpen}
+            turmaId={turmaQuery.data.id}
+            turmaNome={turmaQuery.data.nome}
+            anoLetivo={turmaQuery.data.ano_letivo}
+          />
+          <ExportarAlunosDialog
+            open={listaOpen}
+            onOpenChange={setListaOpen}
+            filtros={{ turma: turmaQuery.data.id, ativo: true }}
+            recorte={`turma ${turmaQuery.data.nome} · alunos ativos`}
+          />
+        </>
       )}
 
       {turmaQuery.data && (

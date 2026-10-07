@@ -81,3 +81,36 @@ export function useExportarOcorrencias() {
     },
   });
 }
+
+export interface AlunosExportParams {
+  turma?: number;
+  ativo?: boolean;
+  formato: FormatoRelatorio;
+  nome?: string;
+}
+
+// Relatório cadastral de alunos. Endpoint separado do `/alunos/export/`,
+// que é o serviço de migração em massa (admin global + flag comercial):
+// este é a lista que a secretaria tira da própria escola, e sai com o
+// mesmo recorte da tela.
+export function useExportarAlunos() {
+  return useMutation({
+    mutationFn: async ({
+      nome,
+      formato,
+      ...filtros
+    }: AlunosExportParams): Promise<void> => {
+      await baixarArquivo(
+        "/alunos/relatorio/",
+        { ...filtros, formato },
+        `.${formato}`,
+        nome,
+      );
+    },
+    onError: (erro: Error) => {
+      // `baixarArquivo` desembrulha o detalhe do corpo em Blob — é por
+      // ali que vem o aviso de recorte grande demais pro PDF.
+      toast.error(erro.message || "Não foi possível exportar os alunos.");
+    },
+  });
+}

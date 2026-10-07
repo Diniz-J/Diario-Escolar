@@ -30,6 +30,7 @@ import {
   useUpdateAluno,
 } from "@/features/alunos/hooks";
 import { usePermissoes } from "@/features/auth/usePermissoes";
+import { ExportarAlunosDialog } from "@/features/relatorios/ExportarAlunosDialog";
 import { useTurmas } from "@/features/turmas/hooks";
 import type { Aluno } from "@/types/api";
 
@@ -56,6 +57,7 @@ export function AlunosPage() {
   const turmasQuery = useTurmas();
   const updateMutation = useUpdateAluno();
   const { podeModificarCadastros } = usePermissoes();
+  const [relatorioOpen, setRelatorioOpen] = useState(false);
   const baixarBoletimPDF = useBaixarBoletimPDF();
   const [busca, setBusca] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -122,10 +124,26 @@ export function AlunosPage() {
         <div className="flex items-center gap-2">
           <ExportarMenu entidade="alunos" />
           {podeModificarCadastros && (
+            <Button
+              variant="outline"
+              onClick={() => setRelatorioOpen(true)}
+            >
+              Relatório
+            </Button>
+          )}
+          {podeModificarCadastros && (
             <Button onClick={() => setFormOpen(true)}>Novo aluno</Button>
           )}
         </div>
       </header>
+
+      <ExportarAlunosDialog
+        open={relatorioOpen}
+        onOpenChange={setRelatorioOpen}
+        filtros={{ ativo: !mostrarInativos }}
+        recorte={mostrarInativos ? "alunos inativos" : "alunos ativos"}
+        busca={busca.trim() || undefined}
+      />
 
       <AlunoFormDialog
         open={dialogAberto}
