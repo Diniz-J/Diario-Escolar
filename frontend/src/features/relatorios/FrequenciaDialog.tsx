@@ -24,6 +24,7 @@ import {
   useBaixarRelatorioFrequencia,
   type FormatoRelatorio,
 } from "./hooks";
+import { SeletorFormato } from "./SeletorFormato";
 
 interface FrequenciaDialogProps {
   open: boolean;
@@ -37,12 +38,6 @@ interface FrequenciaDialogProps {
 // estas duas strings não colidem.
 const TUDO = "tudo";
 const PERSONALIZADO = "personalizado";
-
-const FORMATOS: { valor: FormatoRelatorio; label: string; nota: string }[] = [
-  { valor: "pdf", label: "PDF", nota: "pra imprimir e assinar" },
-  { valor: "xlsx", label: "Excel", nota: "pra continuar a conta" },
-  { valor: "csv", label: "CSV", nota: "pra outro sistema" },
-];
 
 // Escolhe recorte e formato do relatório de frequência da turma.
 //
@@ -159,32 +154,7 @@ export function FrequenciaDialog({
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
-              Formato
-            </Label>
-            <div className="grid grid-cols-3 gap-2">
-              {FORMATOS.map((opcao) => (
-                <button
-                  key={opcao.valor}
-                  type="button"
-                  onClick={() => setFormato(opcao.valor)}
-                  className={`rounded-md border px-2 py-2 text-left transition-colors ${
-                    formato === opcao.valor
-                      ? "border-ferrugem bg-ferrugem/10"
-                      : "border-border hover:bg-muted"
-                  }`}
-                >
-                  <span className="block text-sm font-medium text-tinta">
-                    {opcao.label}
-                  </span>
-                  <span className="block text-[10px] text-sepia/80">
-                    {opcao.nota}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
+          <SeletorFormato valor={formato} onChange={setFormato} />
 
           <DialogFooter>
             <Button

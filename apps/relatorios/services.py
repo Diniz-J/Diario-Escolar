@@ -208,3 +208,101 @@ def linhas_planas(relatorio: dict[str, Any]) -> tuple[list[str], list[list[Any]]
         for linha in relatorio["alunos"]
     ]
     return headers, linhas
+
+
+# Teto de linhas do PDF de ocorrências. O recorte da tela pode ser um ano
+# inteiro da escola; o WeasyPrint é síncrono na request e um PDF de dez
+# mil blocos derruba o worker no free tier. CSV e XLSX não têm teto — o
+# custo deles é linear e barato, e é pra onde o erro manda quem precisa
+# do recorte inteiro.
+LIMITE_PDF_OCORRENCIAS = 1000
+
+
+def _nome_do_professor(ocorrencia) -> str:
+    """Nome legível do professor, ou vazio quando a ocorrência não tem um.
+
+    `professor` é opcional no modelo (a direção registra sem vincular),
+    então não dá pra assumir que existe.
+    """
+    professor = ocorrencia.professor
+    if professor is None:
+        return ""
+    return professor.usuario.get_full_name() or professor.usuario.username
+
+
+def linhas_ocorrencias(ocorrencias) -> tuple[list[str], list[list[Any]]]:
+    """Cabeçalho + linhas do export plano de ocorrências.
+
+    Resolve nome de turma, aluno e professor em vez de devolver id: a
+    planilha é lida fora do sistema, onde `turma=7` não quer dizer nada.
+    Quem chama precisa ter feito `select_related` — ver a action
+    `exportar` do `OcorrenciaViewSet`.
+    """
+    headers = [
+        "data",
+        "turma",
+        "aluno",
+        "matricula",
+        "professor",
+        "status",
+        "descricao",
+    ]
+    linhas = [
+        [
+            ocorrencia.data_ocorrencia.isoformat(),
+            ocorrencia.turma.nome,
+            ocorrencia.aluno.nome_completo,
+            ocorrencia.aluno.matricula,
+            _nome_do_professor(ocorrencia),
+            ocorrencia.get_status_display(),
+            ocorrencia.descricao,
+        ]
+        for ocorrencia in ocorrencias
+    ]
+    return headers, linhas
+
+
+def agrupar_ocorrencias_por_aluno(ocorrencias) -> list[dict[str, Any]]:
+    """Agrupa as ocorrências por aluno, preservando a ordem recebida.
+
+    O PDF vai pra conselho de classe, e ali a pergunta é sempre "o que
+    houve com este aluno", não "o que houve nesta terça" — por isso
+    agrupa por aluno e não cronologicamente, ao contrário do diário de
+    aula. A ordem dos grupos segue a primeira aparição, então o recorte
+    ordenado por data mais recente coloca na frente quem teve o último
+    registro.
+
+    Em Python, sobre a lista já materializada: agrupar no banco custaria
+    outra query e o conjunto já está na memória pra render mesmo.
+    """
+    grupos: dict[int, dict[str, Any]] = {}
+    for ocorrencia in ocorrencias:
+        grupo = grupos.setdefault(
+            ocorrencia.aluno_id,
+            {
+                "aluno_nome": ocorrencia.aluno.nome_completo,
+                "matricula": ocorrencia.aluno.matricula,
+                "turma_nome": ocorrencia.turma.nome,
+                "ocorrencias": [],
+            },
+        )
+        grupo["ocorrencias"].append(
+            {
+                "data": ocorrencia.data_ocorrencia,
+                "status": ocorrencia.status,
+                "status_display": ocorrencia.get_status_display(),
+                "professor_nome": _nome_do_professor(ocorrencia),
+                "descricao": ocorrencia.descricao,
+            }
+        )
+    return list(grupos.values())
+
+
+def contar_ocorrencias_por_status(ocorrencias) -> dict[str, int]:
+    """Contadores por status do recorte, pra faixa de resumo do PDF."""
+    from apps.ocorrencias.models import Ocorrencia
+
+    contagem = {status: 0 for status in Ocorrencia.Status.values}
+    for ocorrencia in ocorrencias:
+        contagem[ocorrencia.status] += 1
+    return contagem

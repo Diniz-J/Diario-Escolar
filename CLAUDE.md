@@ -130,13 +130,28 @@ próprios lecionamentos ativos, direção escolhe o professor e modera.
 **`relatorios/`** — relatórios operacionais. **Sem modelo próprio**, mesmo
 molde de `boletins`: `services.py` agrega on-the-fly e cada relatório é uma
 APIView que serve quatro formatos no mesmo recorte
-(`?formato=json|pdf|csv|xlsx`). Entregue: **frequência por turma**
+(`?formato=json|pdf|csv|xlsx`). `exportacao.py` tem a mecânica comum
+(valida formato, monta planilha via tablib, devolve o download).
+
+**Frequência por turma**
 (`GET /relatorios/frequencia/?turma=&periodo=|data_inicio=&data_fim=`) —
 contadores por aluno em UMA query (agregado condicional anotado sobre o
 `Aluno`, com teste travando `assertNumQueries`), alerta de quem está abaixo
 dos 75% da LDB, e a mesma régua de presença do boletim (P/R/J contam; só A
 é falta), com teste comparando as duas pra não divergirem. Turma é
 obrigatória e de outra escola responde 404. Botão na `TurmaDetalhePage`.
+
+**Ocorrências** — a action mora no `OcorrenciaViewSet`
+(`GET /ocorrencias/exportar/?formato=pdf|csv|xlsx`), não aqui: é lá que
+`get_queryset` (escopo) e `filter_queryset` (`OcorrenciaFilter`) já
+existem, e reimplementá-los seria o jeito mais fácil de o arquivo
+divergir da tela. Só o agrupamento, as linhas e o template vivem em
+`relatorios`. PDF agrupado por aluno (a pergunta do conselho de classe é
+"o que houve com este aluno"), com teto de `LIMITE_PDF_OCORRENCIAS`
+linhas — o WeasyPrint é síncrono e um PDF de dez mil blocos derruba o
+worker; o erro manda pro CSV/XLSX, que não têm teto. O nome da turma no
+cabeçalho sai dos dados, não do `?turma=`: id de outra escola devolve
+recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 
 **`aulas/`** — diário de classe (conteúdo ministrado por aula). `RegistroAula` = turma + disciplina + professor + data + `conteudo` (texto livre) + `status` (`rascunho`→`lancado`→`conferido`) + `conferido_por`/`conferido_em` (visto da direção). Quarto conceito ao lado de `PlanoEnsino` (planejado no ano), `Tarefa` (atividade do aluno) e `RegistroPresenca` (quem veio) — registra "o que foi dado na aula do dia". Único por `(escola, turma, disciplina, data)`. **Auditado**. `clean()`/serializer: escola alinhada, **`Lecionamento` ativo obrigatório** pro trio, data não-futura, conteúdo exigido ao lançar. Viewset escopado (direção vê a escola toda; professor/inspetor só os próprios); `perform_create` bloqueia (403) lançar em nome de outro. Action `conferir` (só direção) move `lancado`→`conferido` e grava quem/quando — o serializer recusa `status=conferido` (sem auto-conferência); aula conferida trava edição. Action `agenda` (`?turma=&disciplina=&mes=YYYY-MM`) projeta os slots do mês a partir de `dias_semana` do `Lecionamento`, on-the-fly (sem tabela), via `services.py`. **Completo: backend #89; front — diário do professor #90, ficha do professor #91, PDF #94 + redesenho do PDF #97, card no dashboard #93.**
 
@@ -344,11 +359,12 @@ obrigatória e de outra escola responde 404. Botão na `TurmaDetalhePage`.
 8. ✅ **Dashboard com métricas** (cards + filtro por turma). Falta: reincidência, presença média.
 9. ✅ **Filtro de período** em Ocorrências/Presença. Falta: múltiplos status.
 10. **Exportação de relatórios** — PDF/CSV/Excel. **PARCIAL**: frequência
-    por turma entregue (app `relatorios`, botão na `TurmaDetalhePage`).
-    Pendentes: ocorrências filtradas e listagem cadastral de alunos — esta
-    última como endpoint novo de leitura pra direção, separado do
-    `/alunos/export/`, que segue sendo o serviço de migração em massa
-    (admin-only + flag `importacao_em_lote_habilitada`).
+    por turma (botão na `TurmaDetalhePage`) e ocorrências filtradas (botão
+    na `OcorrenciasPage`) entregues — app `relatorios`. Pendente: listagem
+    cadastral de alunos, decidida como endpoint novo de leitura pra
+    direção, separado do `/alunos/export/`, que segue sendo o serviço de
+    migração em massa (admin-only + flag
+    `importacao_em_lote_habilitada`).
 11. **Diário de classe (`RegistroAula`)** — **FUNCIONAL (5 fatias mergeadas)**. Pedido de cliente: professor lança o conteúdo programático ministrado por aula; direção dá o visto. Decisões travadas: grade de horário (`Lecionamento.dias_semana`) projeta slots, workflow de 3 estados (`rascunho`→`lancado`→`conferido`), conteúdo texto livre, conferência uma a uma (sem lote). Navegação da direção: aba Professores → clica no professor → **`ProfessorDetalhePage` (ficha 360º com tabs Diário/Lecionamentos/Ocorrências/Dados)** → lista cronológica das aulas → confere → **exporta PDF** (com filtros + espaço de assinatura). Pendência de conferência vira card no Dashboard. Fatiado em PRs — **todas mergeadas**: ① backend (#89) · ② PDF (#94) · ③ front diário do professor (#90) · ④ front ficha do professor (#91) · ⑤ card no dashboard (#93). Ficha ganhou também filtros (período+status), agrupamento por mês e contadores; perfil **`coordenador`** entrou como alias de diretor junto da ficha (#91).
 
    ✅ **Redesenho do PDF do diário — ENTREGUE (PR #97).** Layout reformulado em 4 eixos: status consolidado num badge único (sem repetição da nota "Conferido por X em Y"); cabeçalho/meta reorganizado em blocos; estrutura da lista trocada de tabela pra blocos por aula com conteúdo respirando; identidade visual alinhada (olive/ferrugem/sepia + serifa nos títulos + badges tintados: rascunho mostarda, lançado ferrugem, conferido olive). Tocado por um CC no Claude Desktop. ⚠️ WeasyPrint segue sem renderizar no Windows — iteração local exige container/preview.

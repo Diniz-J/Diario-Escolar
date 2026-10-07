@@ -40,3 +40,44 @@ export function useBaixarRelatorioFrequencia() {
       toast.error("Não foi possível gerar o relatório de frequência."),
   });
 }
+
+export interface OcorrenciasExportParams {
+  // Só os filtros server-side da listagem. A busca da tela de
+  // ocorrências é client-side (filtra nome de aluno e turma em JS) e
+  // não tem equivalente no backend — mandá-la aqui viraria busca em
+  // `descricao`, que é outra coisa.
+  status?: string;
+  data_inicio?: string;
+  data_fim?: string;
+  turma?: number;
+  aluno?: number;
+  formato: FormatoRelatorio;
+  nome?: string;
+}
+
+// Exporta o mesmo recorte da listagem de ocorrências. O endpoint é uma
+// action do próprio viewset, então os filtros valem lá exatamente como
+// na tela.
+export function useExportarOcorrencias() {
+  return useMutation({
+    mutationFn: async ({
+      nome,
+      formato,
+      ...filtros
+    }: OcorrenciasExportParams): Promise<void> => {
+      await baixarArquivo(
+        "/ocorrencias/exportar/",
+        { ...filtros, formato },
+        `.${formato}`,
+        nome,
+      );
+    },
+    onError: (erro: Error) => {
+      // O backend recusa PDF de recorte muito grande e explica o que
+      // fazer; `baixarArquivo` já desembrulha o detalhe do corpo em Blob.
+      toast.error(
+        erro.message || "Não foi possível exportar as ocorrências.",
+      );
+    },
+  });
+}

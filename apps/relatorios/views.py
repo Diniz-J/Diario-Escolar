@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from datetime import date
 
-from django.http import HttpResponse
 from django.template.loader import render_to_string
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, ValidationError
@@ -30,6 +29,12 @@ from apps.common.permissions import (
 )
 from apps.escola.models import Turma
 
+from .exportacao import (
+    FORMATOS_PLANILHA,
+    exportar_planilha,
+    resolver_formato,
+    resposta_download,
+)
 from .services import frequencia_por_turma, linhas_planas
 
 # Alias module-level: o render mora em `apps/common/pdf.py`, mas o nome
@@ -37,13 +42,6 @@ from .services import frequencia_por_turma, linhas_planas
 # `apps.relatorios.views._render_pdf`.
 _render_pdf = render_pdf
 
-FORMATOS_PLANILHA = {
-    "csv": "text/csv",
-    "xlsx": (
-        "application/vnd.openxmlformats-officedocument"
-        ".spreadsheetml.sheet"
-    ),
-}
 FORMATOS = ("json", "pdf", *FORMATOS_PLANILHA)
 
 
@@ -57,15 +55,6 @@ def _parse_date(valor: str | None, nome_param: str) -> date | None:
         raise ValidationError(
             {nome_param: "Formato inválido. Use YYYY-MM-DD."}
         ) from exc
-
-
-def _resolver_formato(request) -> str:
-    formato = (request.query_params.get("formato") or "json").lower()
-    if formato not in FORMATOS:
-        raise ValidationError(
-            {"formato": f"Use um de: {', '.join(FORMATOS)}."}
-        )
-    return formato
 
 
 def _resolver_turma(request) -> Turma:
@@ -114,37 +103,6 @@ def _resolver_janela(request, escola_id: int):
     )
 
 
-def _resposta_download(
-    conteudo: bytes, *, content_type: str, nome_arquivo: str
-) -> HttpResponse:
-    resposta = HttpResponse(conteudo, content_type=content_type)
-    resposta["Content-Disposition"] = (
-        f'attachment; filename="{nome_arquivo}"'
-    )
-    return resposta
-
-
-def _exportar_planilha(
-    relatorio: dict, *, formato: str, stem: str
-) -> HttpResponse:
-    # Import lazy: tablib é leve, mas segue o padrão do boletim.
-    import tablib  # noqa: WPS433
-
-    headers, linhas = linhas_planas(relatorio)
-    dataset = tablib.Dataset(headers=headers)
-    for linha in linhas:
-        dataset.append(linha)
-
-    conteudo = dataset.export(formato)
-    if isinstance(conteudo, str):
-        conteudo = conteudo.encode("utf-8")
-    return _resposta_download(
-        conteudo,
-        content_type=FORMATOS_PLANILHA[formato],
-        nome_arquivo=f"{stem}.{formato}",
-    )
-
-
 def _descrever_janela(relatorio: dict, periodo) -> str:
     """Rótulo legível do recorte, pro cabeçalho do PDF."""
     if periodo is not None:
@@ -182,7 +140,7 @@ class RelatorioFrequenciaView(APIView):
     ]
 
     def get(self, request):
-        formato = _resolver_formato(request)
+        formato = resolver_formato(request, FORMATOS, default="json")
         turma = _resolver_turma(request)
         data_inicio, data_fim, periodo = _resolver_janela(
             request, turma.escola_id
@@ -195,7 +153,10 @@ class RelatorioFrequenciaView(APIView):
         stem = f"frequencia_{slug_arquivo(turma.nome, fallback='turma')}"
 
         if formato in FORMATOS_PLANILHA:
-            return _exportar_planilha(relatorio, formato=formato, stem=stem)
+            headers, linhas = linhas_planas(relatorio)
+            return exportar_planilha(
+                headers, linhas, formato=formato, stem=stem
+            )
 
         contexto = {
             **relatorio,
@@ -207,7 +168,7 @@ class RelatorioFrequenciaView(APIView):
         html_str = render_to_string(
             "relatorio_frequencia_pdf.html", contexto
         )
-        return _resposta_download(
+        return resposta_download(
             _render_pdf(html_str),
             content_type="application/pdf",
             nome_arquivo=f"{stem}.pdf",

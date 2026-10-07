@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+{% comment %}
+Relatório de ocorrências, agrupado por aluno (vai pra conselho de classe,
+onde a pergunta é "o que houve com este aluno"). Descrição é prosa, então
+é bloco e não tabela — mesma escolha do diário de aula.
+
+`{% comment %}` e não `{# #}`: a segunda forma é de uma linha só, e um
+`{# #}` multilinha é impresso no PDF como texto.
+{% endcomment %}
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Relatório de Ocorrências</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 1.5cm 1.8cm;
+      @bottom-right {
+        content: "Página " counter(page) " de " counter(pages);
+        font-family: "DejaVu Sans", sans-serif;
+        font-size: 8pt;
+        color: #6b6859;
+      }
+    }
+    body {
+      font-family: "DejaVu Sans", sans-serif;
+      color: #2d2a24;
+      font-size: 9.5pt;
+      line-height: 1.5;
+    }
+    .marca { display: table; width: 100%; margin-bottom: 4pt; }
+    .marca .logo-cell {
+      display: table-cell; vertical-align: middle; width: 36pt;
+    }
+    .marca .logo-cell img {
+      width: 32pt; height: 32pt; border-radius: 6pt; display: block;
+    }
+    .marca .nome-cell {
+      display: table-cell; vertical-align: middle; padding-left: 8pt;
+      font-family: Georgia, "DejaVu Serif", serif; font-size: 13pt;
+      color: #3a4524; letter-spacing: -0.01em;
+    }
+    h1 {
+      font-family: Georgia, "DejaVu Serif", serif; font-size: 22pt;
+      font-weight: 500; letter-spacing: -0.01em; margin: 6pt 0 0 0;
+      color: #2d2a24;
+    }
+    .filete { height: 1px; width: 48pt; background: #b07d62; margin: 8pt 0 14pt 0; }
+    .meta-principal {
+      width: 100%; border-collapse: separate; border-spacing: 18pt 0;
+      margin-bottom: 8pt;
+    }
+    .meta-principal td { width: 50%; padding: 0; vertical-align: top; border: none; }
+    .meta-divisor { height: 1px; background: #ece9e0; margin: 8pt 0; }
+    .meta-aux {
+      width: 100%; border-collapse: separate; border-spacing: 18pt 0;
+      margin-bottom: 14pt;
+    }
+    .meta-aux td { width: 33%; padding: 0; vertical-align: top; border: none; }
+    .label {
+      font-size: 7pt; text-transform: uppercase; letter-spacing: 0.18em;
+      color: #6b6859; display: block; margin-bottom: 2pt;
+    }
+    .valor { color: #2d2a24; font-weight: 500; }
+    .valor-aux { color: #2d2a24; font-size: 8.5pt; }
+    /* Faixa de contagem por status. */
+    .contagem {
+      width: 100%; border-collapse: separate; border-spacing: 8pt 0;
+      margin-bottom: 18pt;
+    }
+    .contagem td {
+      width: 25%; background: #f6f4ed; padding: 7pt 9pt;
+      vertical-align: top; border: none;
+    }
+    .contagem .numero {
+      font-family: Georgia, "DejaVu Serif", serif; font-size: 15pt;
+      font-weight: 500; color: #3a4524; display: block; line-height: 1.1;
+    }
+    .contagem .numero-aberta { color: #8c4a2f; }
+    /* Bloco por aluno. */
+    .aluno-bloco { page-break-inside: avoid; margin-bottom: 14pt; }
+    .aluno-cabecalho {
+      border-top: 1px solid #ece9e0; padding-top: 8pt; margin-bottom: 4pt;
+    }
+    .aluno-nome {
+      font-family: Georgia, "DejaVu Serif", serif; font-size: 12pt;
+      font-weight: 500; color: #2d2a24;
+    }
+    .aluno-ctx { color: #5b6939; font-size: 8.5pt; padding-left: 8pt; }
+    .aluno-contagem {
+      font-size: 7pt; text-transform: uppercase; letter-spacing: 0.14em;
+      color: #6b6859; float: right;
+    }
+    /* Cada ocorrência dentro do bloco do aluno. */
+    .ocorrencia {
+      padding: 5pt 0 5pt 10pt; border-left: 2pt solid #ece9e0;
+      margin-top: 5pt;
+    }
+    .ocorrencia-topo { display: table; width: 100%; margin-bottom: 2pt; }
+    .ocorrencia-topo .esq { display: table-cell; vertical-align: middle; }
+    .ocorrencia-topo .dir {
+      display: table-cell; vertical-align: middle; text-align: right;
+    }
+    .ocorrencia-data { font-weight: 500; color: #2d2a24; }
+    .ocorrencia-prof { color: #6b6859; font-size: 8pt; padding-left: 8pt; }
+    .badge {
+      display: inline-block; font-size: 7pt; padding: 1pt 7pt;
+      border-radius: 999pt; text-transform: uppercase;
+      letter-spacing: 0.08em; font-weight: 500; white-space: nowrap;
+    }
+    .badge-aberta       { background: #e8d3c5; color: #7a3e1f; }
+    .badge-em_andamento { background: #ece2cc; color: #5e4a14; }
+    .badge-resolvida    { background: #d6dec6; color: #3a4524; }
+    .badge-arquivada    { background: #ebe8e0; color: #5a574d; }
+    .ocorrencia-descricao {
+      color: #2d2a24; font-size: 9pt; line-height: 1.55; margin-top: 3pt;
+    }
+    .vazio { color: #6b6859; font-style: italic; }
+    .assinaturas {
+      width: 100%; margin-top: 36pt; border-collapse: separate;
+      border-spacing: 24pt 0;
+    }
+    .assinaturas td { width: 50%; vertical-align: bottom; text-align: center; }
+    .linha-assinatura {
+      border-top: 1px solid #2d2a24; padding-top: 4pt; font-size: 8pt;
+      color: #6b6859;
+    }
+  </style>
+</head>
+<body>
+  <div class="marca">
+    {% if logo_path %}
+    <div class="logo-cell"><img src="file://{{ logo_path }}" alt=""></div>
+    {% endif %}
+    <div class="nome-cell">Diário Diniz</div>
+  </div>
+
+  <h1>Relatório de Ocorrências</h1>
+  <div class="filete"></div>
+
+  <table class="meta-principal">
+    <tr>
+      <td>
+        <span class="label">Recorte</span>
+        <span class="valor">{{ recorte }}</span>
+      </td>
+      <td>
+        <span class="label">Escola</span>
+        <span class="valor">{{ escola_nome|default:"—" }}</span>
+      </td>
+    </tr>
+  </table>
+
+  <div class="meta-divisor"></div>
+
+  <table class="meta-aux">
+    <tr>
+      <td>
+        <span class="label">Ocorrências</span>
+        <span class="valor-aux">{{ total }}</span>
+      </td>
+      <td>
+        <span class="label">Alunos envolvidos</span>
+        <span class="valor-aux">{{ grupos|length }}</span>
+      </td>
+      <td>
+        <span class="label">Emitido em</span>
+        <span class="valor-aux">{{ gerado_em|date:"d/m/Y H:i" }}</span>
+      </td>
+    </tr>
+  </table>
+
+  <table class="contagem">
+    <tr>
+      <td>
+        <span class="numero numero-aberta">{{ contagem.aberta }}</span>
+        <span class="label">Abertas</span>
+      </td>
+      <td>
+        <span class="numero">{{ contagem.em_andamento }}</span>
+        <span class="label">Em andamento</span>
+      </td>
+      <td>
+        <span class="numero">{{ contagem.resolvida }}</span>
+        <span class="label">Resolvidas</span>
+      </td>
+      <td>
+        <span class="numero">{{ contagem.arquivada }}</span>
+        <span class="label">Arquivadas</span>
+      </td>
+    </tr>
+  </table>
+
+  {% for grupo in grupos %}
+  <div class="aluno-bloco">
+    <div class="aluno-cabecalho">
+      <span class="aluno-contagem">
+        {{ grupo.ocorrencias|length }}
+        {% if grupo.ocorrencias|length == 1 %}registro{% else %}registros{% endif %}
+      </span>
+      <span class="aluno-nome">{{ grupo.aluno_nome }}</span>
+      <span class="aluno-ctx">
+        {{ grupo.turma_nome }} · matrícula {{ grupo.matricula }}
+      </span>
+    </div>
+    {% for ocorrencia in grupo.ocorrencias %}
+    <div class="ocorrencia">
+      <div class="ocorrencia-topo">
+        <div class="esq">
+          <span class="ocorrencia-data">{{ ocorrencia.data|date:"d/m/Y" }}</span>
+          {% if ocorrencia.professor_nome %}
+          <span class="ocorrencia-prof">{{ ocorrencia.professor_nome }}</span>
+          {% endif %}
+        </div>
+        <div class="dir">
+          <span class="badge badge-{{ ocorrencia.status }}">
+            {{ ocorrencia.status_display }}
+          </span>
+        </div>
+      </div>
+      <div class="ocorrencia-descricao">{{ ocorrencia.descricao }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% empty %}
+  <p class="vazio">Nenhuma ocorrência no recorte selecionado.</p>
+  {% endfor %}
+
+  <table class="assinaturas">
+    <tr>
+      <td><div class="linha-assinatura">Responsável pelo registro</div></td>
+      <td><div class="linha-assinatura">Direção / Coordenação</div></td>
+    </tr>
+  </table>
+</body>
+</html>
