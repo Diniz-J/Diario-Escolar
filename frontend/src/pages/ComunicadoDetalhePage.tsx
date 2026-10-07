@@ -323,7 +323,7 @@ export function ComunicadoDetalhePage() {
               </div>
               <div>
                 <div className="text-[11px] uppercase tracking-[0.18em] text-sepia">
-                  Alunos alcançados
+                  Destinatários
                 </div>
                 <p className="text-2xl font-heading">
                   {comunicado.total_destinatarios}
