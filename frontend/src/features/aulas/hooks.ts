@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
+import { baixarArquivo } from "@/lib/download";
 import type {
   AgendaSlot,
   RegistroAula,
@@ -147,32 +148,6 @@ export function useDeleteRegistroAula() {
   });
 }
 
-// Download via axios+Blob preservando o Bearer (window.location perderia
-// auth). Mesmo padrão de features/boletins/hooks.ts; `nomeCustomizado`
-// (sem extensão) sobrescreve o nome sugerido pelo backend.
-async function baixarBlob(
-  url: string,
-  params: Record<string, unknown>,
-  extensao: string,
-  nomeCustomizado?: string,
-) {
-  const resp = await api.get(url, { params, responseType: "blob" });
-  const disp = resp.headers["content-disposition"] as string | undefined;
-  const matchNome = disp?.match(/filename="?([^"]+)"?/);
-  const nomeDoBackend = matchNome ? matchNome[1] : "download";
-  const nomeFinal = nomeCustomizado
-    ? `${nomeCustomizado}${extensao}`
-    : nomeDoBackend;
-  const blobUrl = URL.createObjectURL(resp.data as Blob);
-  const a = document.createElement("a");
-  a.href = blobUrl;
-  a.download = nomeFinal;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
-}
-
 interface DiarioPdfParams {
   professor: number;
   status?: string;
@@ -189,7 +164,7 @@ interface DiarioPdfParams {
 export function useBaixarDiarioPDF() {
   return useMutation({
     mutationFn: async ({ nome, ...filtros }: DiarioPdfParams): Promise<void> => {
-      await baixarBlob("/registros-aula/pdf/", filtros, ".pdf", nome);
+      await baixarArquivo("/registros-aula/pdf/", filtros, ".pdf", nome);
     },
     onError: () => toast.error("Não foi possível gerar o PDF do diário."),
   });

@@ -127,6 +127,17 @@ próprios lecionamentos ativos, direção escolhe o professor e modera.
 
 **`boletins/`** — **sem modelo próprio**. `services.py` agrega on-the-fly; `BoletimAlunoView` (APIView) expõe `GET /boletins/aluno/<id>/`. Justificado (J) conta como presença efetiva na frequência.
 
+**`relatorios/`** — relatórios operacionais. **Sem modelo próprio**, mesmo
+molde de `boletins`: `services.py` agrega on-the-fly e cada relatório é uma
+APIView que serve quatro formatos no mesmo recorte
+(`?formato=json|pdf|csv|xlsx`). Entregue: **frequência por turma**
+(`GET /relatorios/frequencia/?turma=&periodo=|data_inicio=&data_fim=`) —
+contadores por aluno em UMA query (agregado condicional anotado sobre o
+`Aluno`, com teste travando `assertNumQueries`), alerta de quem está abaixo
+dos 75% da LDB, e a mesma régua de presença do boletim (P/R/J contam; só A
+é falta), com teste comparando as duas pra não divergirem. Turma é
+obrigatória e de outra escola responde 404. Botão na `TurmaDetalhePage`.
+
 **`aulas/`** — diário de classe (conteúdo ministrado por aula). `RegistroAula` = turma + disciplina + professor + data + `conteudo` (texto livre) + `status` (`rascunho`→`lancado`→`conferido`) + `conferido_por`/`conferido_em` (visto da direção). Quarto conceito ao lado de `PlanoEnsino` (planejado no ano), `Tarefa` (atividade do aluno) e `RegistroPresenca` (quem veio) — registra "o que foi dado na aula do dia". Único por `(escola, turma, disciplina, data)`. **Auditado**. `clean()`/serializer: escola alinhada, **`Lecionamento` ativo obrigatório** pro trio, data não-futura, conteúdo exigido ao lançar. Viewset escopado (direção vê a escola toda; professor/inspetor só os próprios); `perform_create` bloqueia (403) lançar em nome de outro. Action `conferir` (só direção) move `lancado`→`conferido` e grava quem/quando — o serializer recusa `status=conferido` (sem auto-conferência); aula conferida trava edição. Action `agenda` (`?turma=&disciplina=&mes=YYYY-MM`) projeta os slots do mês a partir de `dias_semana` do `Lecionamento`, on-the-fly (sem tabela), via `services.py`. **Completo: backend #89; front — diário do professor #90, ficha do professor #91, PDF #94 + redesenho do PDF #97, card no dashboard #93.**
 
 ### Frontend — `frontend/src/`
@@ -135,6 +146,7 @@ próprios lecionamentos ativos, direção escolhe o professor e modera.
 - **`features/auth/`** — `AuthProvider`, `useAuth`, `usePermissoes` (regra de UI por perfil; `podeModificarCadastros` = admin/diretor), tokenStorage em localStorage, decode JWT. `user.escola_id` é o sinal usado pelos FormDialogs pra decidir se renderiza o select de escola.
 - **`lib/api.ts`** — axios único. Request interceptor injeta Bearer. Response interceptor: 401 → refresh → refaz request (promise compartilhada contra thundering herd).
 - **`lib/queryClient.ts`** — staleTime 30s, retry off pra 401/403.
+- **`lib/download.ts`** — `baixarArquivo()`: download autenticado via Blob (`window.location` perderia o Bearer). Usado por boletim, diário e relatórios; antes era copy-paste em dois `hooks.ts`. Equivalente no backend: `apps/common/pdf.py` (`render_pdf`, `caminho_logo`, `slug_arquivo`), que as três views de PDF compartilham.
 - **`components/AppLayout.tsx`** — shell: sidebar fixa olive-dark em ≥768px, drawer (`Sheet`) com hamburguer em <768px. Logo "Diário Diniz" em Fraunces no topo + perfil em mono uppercase + nav com barra ferrugem no ativo + rodapé com filete ferrugem + logout + versão.
 - **`components/ui/`** — shadcn (editável). `Sheet` e `Switch` foram adicionados manualmente (CLI travava em prompt).
 - **`index.css`** — paleta de marca em CSS variables no `:root` (`--olive`, `--olive-dark`, `--linho`, `--paper`, `--ferrugem`, `--tinta`, `--sepia`, `--creme`) + mapeamento dos tokens shadcn (`--background`, `--primary`, etc.) pra paleta. Light mode permanente (sem `.dark` block). `color-scheme: light` + meta tag desabilitam force-dark dos browsers.
@@ -331,7 +343,12 @@ próprios lecionamentos ativos, direção escolhe o professor e modera.
 ### FASE 3 — Produto Comercial — PARCIAL
 8. ✅ **Dashboard com métricas** (cards + filtro por turma). Falta: reincidência, presença média.
 9. ✅ **Filtro de período** em Ocorrências/Presença. Falta: múltiplos status.
-10. **Exportação de relatórios** — PDF/CSV/Excel. PENDENTE.
+10. **Exportação de relatórios** — PDF/CSV/Excel. **PARCIAL**: frequência
+    por turma entregue (app `relatorios`, botão na `TurmaDetalhePage`).
+    Pendentes: ocorrências filtradas e listagem cadastral de alunos — esta
+    última como endpoint novo de leitura pra direção, separado do
+    `/alunos/export/`, que segue sendo o serviço de migração em massa
+    (admin-only + flag `importacao_em_lote_habilitada`).
 11. **Diário de classe (`RegistroAula`)** — **FUNCIONAL (5 fatias mergeadas)**. Pedido de cliente: professor lança o conteúdo programático ministrado por aula; direção dá o visto. Decisões travadas: grade de horário (`Lecionamento.dias_semana`) projeta slots, workflow de 3 estados (`rascunho`→`lancado`→`conferido`), conteúdo texto livre, conferência uma a uma (sem lote). Navegação da direção: aba Professores → clica no professor → **`ProfessorDetalhePage` (ficha 360º com tabs Diário/Lecionamentos/Ocorrências/Dados)** → lista cronológica das aulas → confere → **exporta PDF** (com filtros + espaço de assinatura). Pendência de conferência vira card no Dashboard. Fatiado em PRs — **todas mergeadas**: ① backend (#89) · ② PDF (#94) · ③ front diário do professor (#90) · ④ front ficha do professor (#91) · ⑤ card no dashboard (#93). Ficha ganhou também filtros (período+status), agrupamento por mês e contadores; perfil **`coordenador`** entrou como alias de diretor junto da ficha (#91).
 
    ✅ **Redesenho do PDF do diário — ENTREGUE (PR #97).** Layout reformulado em 4 eixos: status consolidado num badge único (sem repetição da nota "Conferido por X em Y"); cabeçalho/meta reorganizado em blocos; estrutura da lista trocada de tabela pra blocos por aula com conteúdo respirando; identidade visual alinhada (olive/ferrugem/sepia + serifa nos títulos + badges tintados: rascunho mostarda, lançado ferrugem, conferido olive). Tocado por um CC no Claude Desktop. ⚠️ WeasyPrint segue sem renderizar no Windows — iteração local exige container/preview.

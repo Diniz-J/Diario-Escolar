@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+{% comment %}
+Relatório de frequência da turma. Tabela (dado numérico, ao contrário do
+diário de aula, que é prosa em blocos). Paleta olive/ferrugem do DESIGN.md.
+`{% comment %}` e não `{# #}`: a segunda forma é de uma linha só, e um
+`{# #}` multilinha é impresso no PDF como texto.
+{% endcomment %}
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Relatório de Frequência — {{ turma.nome }}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 1.5cm 1.8cm;
+      @bottom-right {
+        content: "Página " counter(page) " de " counter(pages);
+        font-family: "DejaVu Sans", sans-serif;
+        font-size: 8pt;
+        color: #6b6859;
+      }
+    }
+    body {
+      font-family: "DejaVu Sans", sans-serif;
+      color: #2d2a24;
+      font-size: 9.5pt;
+      line-height: 1.5;
+    }
+    .marca { display: table; width: 100%; margin-bottom: 4pt; }
+    .marca .logo-cell {
+      display: table-cell; vertical-align: middle; width: 36pt;
+    }
+    .marca .logo-cell img {
+      width: 32pt; height: 32pt; border-radius: 6pt; display: block;
+    }
+    .marca .nome-cell {
+      display: table-cell; vertical-align: middle; padding-left: 8pt;
+      font-family: Georgia, "DejaVu Serif", serif; font-size: 13pt;
+      color: #3a4524; letter-spacing: -0.01em;
+    }
+    h1 {
+      font-family: Georgia, "DejaVu Serif", serif; font-size: 22pt;
+      font-weight: 500; letter-spacing: -0.01em; margin: 6pt 0 0 0;
+      color: #2d2a24;
+    }
+    .filete { height: 1px; width: 48pt; background: #b07d62; margin: 8pt 0 14pt 0; }
+    .meta-principal {
+      width: 100%; border-collapse: separate; border-spacing: 18pt 0;
+      margin-bottom: 8pt;
+    }
+    .meta-principal td { width: 50%; padding: 0; vertical-align: top; border: none; }
+    .meta-divisor { height: 1px; background: #ece9e0; margin: 8pt 0; }
+    .meta-aux {
+      width: 100%; border-collapse: separate; border-spacing: 18pt 0;
+      margin-bottom: 14pt;
+    }
+    .meta-aux td { width: 33%; padding: 0; vertical-align: top; border: none; }
+    .label {
+      font-size: 7pt; text-transform: uppercase; letter-spacing: 0.18em;
+      color: #6b6859; display: block; margin-bottom: 2pt;
+    }
+    .valor { color: #2d2a24; font-weight: 500; }
+    .valor-aux { color: #2d2a24; font-size: 8.5pt; }
+    /* Faixa de resumo: os três números que a direção lê primeiro. */
+    .resumo {
+      width: 100%; border-collapse: separate; border-spacing: 10pt 0;
+      margin-bottom: 16pt;
+    }
+    .resumo td {
+      width: 33%; background: #f6f4ed; padding: 8pt 10pt;
+      vertical-align: top; border: none;
+    }
+    .resumo .numero {
+      font-family: Georgia, "DejaVu Serif", serif; font-size: 18pt;
+      font-weight: 500; color: #3a4524; display: block; line-height: 1.1;
+    }
+    .resumo .numero-alerta { color: #8c4a2f; }
+    /* Tabela de alunos. */
+    table.alunos {
+      width: 100%; border-collapse: collapse; margin-top: 4pt;
+    }
+    table.alunos thead { display: table-header-group; }
+    table.alunos th {
+      font-size: 7pt; text-transform: uppercase; letter-spacing: 0.14em;
+      color: #6b6859; font-weight: 500; text-align: left;
+      padding: 0 4pt 5pt 0; border-bottom: 1px solid #ece9e0;
+    }
+    table.alunos td {
+      padding: 5pt 4pt; border-bottom: 1px solid #f2efe7;
+      vertical-align: top;
+    }
+    table.alunos tr { page-break-inside: avoid; }
+    .num { text-align: right; white-space: nowrap; }
+    .matricula {
+      font-size: 8pt; color: #6b6859; white-space: nowrap;
+    }
+    .nome { color: #2d2a24; }
+    .marca-inativo {
+      font-size: 7pt; color: #6b6859; text-transform: uppercase;
+      letter-spacing: 0.1em; padding-left: 4pt;
+    }
+    .pct { font-weight: 500; white-space: nowrap; }
+    .pct-abaixo {
+      background: #e8d3c5; color: #7a3e1f; padding: 1pt 6pt;
+      border-radius: 999pt; font-weight: 500;
+    }
+    .pct-sem-dado { color: #6b6859; font-weight: 400; }
+    .nota-rodape {
+      color: #6b6859; font-size: 7.5pt; margin-top: 12pt;
+      font-style: italic;
+    }
+    .vazio { color: #6b6859; font-style: italic; }
+    .assinaturas {
+      width: 100%; margin-top: 36pt; border-collapse: separate;
+      border-spacing: 24pt 0;
+    }
+    .assinaturas td { width: 50%; vertical-align: bottom; text-align: center; }
+    .linha-assinatura {
+      border-top: 1px solid #2d2a24; padding-top: 4pt; font-size: 8pt;
+      color: #6b6859;
+    }
+  </style>
+</head>
+<body>
+  <div class="marca">
+    {% if logo_path %}
+    <div class="logo-cell"><img src="file://{{ logo_path }}" alt=""></div>
+    {% endif %}
+    <div class="nome-cell">Diário Diniz</div>
+  </div>
+
+  <h1>Relatório de Frequência</h1>
+  <div class="filete"></div>
+
+  <table class="meta-principal">
+    <tr>
+      <td>
+        <span class="label">Turma</span>
+        <span class="valor">
+          {{ turma.nome }} · {{ turma.turno }} · {{ turma.ano_letivo }}
+        </span>
+      </td>
+      <td>
+        <span class="label">Escola</span>
+        <span class="valor">{{ escola_nome|default:"—" }}</span>
+      </td>
+    </tr>
+  </table>
+
+  <div class="meta-divisor"></div>
+
+  <table class="meta-aux">
+    <tr>
+      <td>
+        <span class="label">Recorte</span>
+        <span class="valor-aux">{{ recorte }}</span>
+      </td>
+      <td>
+        <span class="label">Chamadas no período</span>
+        <span class="valor-aux">{{ total_chamadas }}</span>
+      </td>
+      <td>
+        <span class="label">Emitido em</span>
+        <span class="valor-aux">{{ gerado_em|date:"d/m/Y H:i" }}</span>
+      </td>
+    </tr>
+  </table>
+
+  <table class="resumo">
+    <tr>
+      <td>
+        <span class="numero">{{ resumo.total_alunos }}</span>
+        <span class="label">Alunos no relatório</span>
+      </td>
+      <td>
+        <span class="numero">{{ resumo.percentual_turma }}%</span>
+        <span class="label">Frequência da turma</span>
+      </td>
+      <td>
+        <span class="numero {% if resumo.abaixo_do_limite %}numero-alerta{% endif %}">
+          {{ resumo.abaixo_do_limite }}
+        </span>
+        <span class="label">Abaixo de {{ limite_frequencia }}%</span>
+      </td>
+    </tr>
+  </table>
+
+  {% if alunos %}
+  <table class="alunos">
+    <thead>
+      <tr>
+        <th>Matrícula</th>
+        <th>Aluno</th>
+        <th class="num">Chamadas</th>
+        <th class="num">Presenças</th>
+        <th class="num">Faltas</th>
+        <th class="num">Justif.</th>
+        <th class="num">Freq.</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for linha in alunos %}
+      <tr>
+        <td class="matricula">{{ linha.matricula }}</td>
+        <td class="nome">
+          {{ linha.nome_completo }}
+          {% if not linha.ativo %}<span class="marca-inativo">[ inativo ]</span>{% endif %}
+        </td>
+        <td class="num">{{ linha.total }}</td>
+        <td class="num">{{ linha.presencas_efetivas }}</td>
+        <td class="num">{{ linha.ausentes }}</td>
+        <td class="num">{{ linha.justificados }}</td>
+        <td class="num pct">
+          {% if linha.total == 0 %}
+          <span class="pct-sem-dado">—</span>
+          {% elif linha.abaixo_do_limite %}
+          <span class="pct-abaixo">{{ linha.percentual_presenca }}%</span>
+          {% else %}
+          {{ linha.percentual_presenca }}%
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <p class="nota-rodape">
+    Presenças incluem comparecimento, retardatário e falta justificada —
+    só a falta sem justificativa reduz a frequência. Aluno sem chamada no
+    recorte aparece com "—".
+  </p>
+  {% else %}
+  <p class="vazio">Nenhum aluno no recorte selecionado.</p>
+  {% endif %}
+
+  <table class="assinaturas">
+    <tr>
+      <td><div class="linha-assinatura">Secretaria</div></td>
+      <td><div class="linha-assinatura">Direção / Coordenação</div></td>
+    </tr>
+  </table>
+</body>
+</html>
