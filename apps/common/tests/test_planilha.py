@@ -35,6 +35,22 @@ class NeutralizarFormulaTests(SimpleTestCase):
         for texto in ("Ana", "2026-03-10", "75.00", "", "O'Brien"):
             self.assertEqual(neutralizar_formula(texto), texto)
 
+    def test_xlsx_so_prefixa_o_igual(self):
+        """No XLSX só `=` vira fórmula (openpyxl); prefixar o resto deixava
+        o apóstrofo visível na célula."""
+        self.assertEqual(neutralizar_formula(PAYLOAD, "xlsx"), f"'{PAYLOAD}")
+        for texto in ("- chegou atrasado", "+55 21 99999", "@turma"):
+            self.assertEqual(neutralizar_formula(texto, "xlsx"), texto)
+
+    def test_remove_caracteres_de_controle_invalidos(self):
+        """O openpyxl recusa `\\x0c` e afins com um erro que derrubava o
+        export XLSX inteiro. Tab, LF e CR ficam."""
+        self.assertEqual(
+            neutralizar_formula("quebra\x0cde\x00página", "xlsx"),
+            "quebradepágina",
+        )
+        self.assertEqual(neutralizar_formula("linha\ncom\ttab"), "linha\ncom\ttab")
+
     def test_numero_e_none_passam_intactos(self):
         """Só `str` é tocado — coluna numérica não vira texto."""
         self.assertEqual(neutralizar_formula(40), 40)

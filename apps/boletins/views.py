@@ -205,7 +205,7 @@ class BoletimAlunoAvaliacoesView(APIView):
             # `titulo` é texto livre do professor e a escola abre este
             # arquivo no Excel — ver `apps/common/planilha.py`.
             dataset.append(
-                [neutralizar_formula(linha[h]) for h in headers]
+                [neutralizar_formula(linha[h], formato) for h in headers]
             )
 
         conteudo = dataset.export(formato)

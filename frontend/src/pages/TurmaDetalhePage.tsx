@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAlunos } from "@/features/alunos/hooks";
+import { usePermissoes } from "@/features/auth/usePermissoes";
 import { ExportarAlunosDialog } from "@/features/relatorios/ExportarAlunosDialog";
 import { FrequenciaDialog } from "@/features/relatorios/FrequenciaDialog";
 import { useTurma } from "@/features/turmas/hooks";
@@ -32,6 +33,7 @@ export function TurmaDetalhePage() {
   const turmaId = params.id ? parseInt(params.id, 10) : undefined;
 
   const turmaQuery = useTurma(turmaId);
+  const { podeModificarCadastros } = usePermissoes();
   const [frequenciaOpen, setFrequenciaOpen] = useState(false);
   const [listaOpen, setListaOpen] = useState(false);
   // Lista só alunos ativos da turma — alunos inativos (soft delete)
@@ -57,9 +59,14 @@ export function TurmaDetalhePage() {
           </h1>
           {turmaQuery.data && (
             <div className="flex gap-2 sm:mt-1 shrink-0">
-              <Button variant="outline" onClick={() => setListaOpen(true)}>
-                Lista da turma
-              </Button>
+              {/* `/alunos/relatorio/` é de nível diretor no backend (403 pra
+                  professor/inspetor) — mesmo gate da `AlunosPage`. A
+                  frequência é lida também pelo corpo docente. */}
+              {podeModificarCadastros && (
+                <Button variant="outline" onClick={() => setListaOpen(true)}>
+                  Lista da turma
+                </Button>
+              )}
               <Button
                 variant="outline"
                 onClick={() => setFrequenciaOpen(true)}

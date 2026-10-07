@@ -16,7 +16,7 @@ from typing import Any
 
 from django.db.models import Count, Q
 
-from apps.escola.models import Turma
+from apps.escola.models import Aluno, Turma
 from apps.presenca.models import ItemPresenca, RegistroPresenca
 
 # Mínimo legal de frequência (LDB, art. 24, VI). Fica aqui, e não no
@@ -80,29 +80,47 @@ def frequencia_por_turma(
     `calcular_frequencia` aluno por aluno: numa turma de 35 isso seria
     35 queries, e o relatório existe justamente pra turma inteira.
 
-    Quem entra na lista: todo aluno **ativo** da turma, mais o inativo
-    que tem chamada na janela. O inativo que já saiu antes do recorte
-    não aparece — mas o que estudou parte do período aparece, com a
-    marca de inativo, porque omiti-lo faria as faltas dele
-    desaparecerem do relatório e o total mentir.
+    **Só contam as chamadas DESTA turma.** O relatório é por turma, não
+    por aluno (o boletim é que é por aluno): o aluno remanejado da A pra
+    B no meio do ano aparece no relatório da A com as chamadas da A e no
+    da B com as da B — nunca com as da outra. Contar todas as presenças
+    do aluno fazia o remanejado levar as faltas da turma antiga pra nova
+    (e o total dele passar o `total_chamadas` da turma), e a promoção de
+    ano que só troca a turma arrastava o ano anterior inteiro.
+
+    Quem entra na lista: todo aluno **ativo** que está na turma hoje, mais
+    quem tem chamada **nesta turma** na janela — o inativo que estudou
+    parte do período e o remanejado que já saiu. Omiti-los faria as
+    faltas deles desaparecerem do relatório e o total mentir.
     """
-    janela_aluno = _filtro_janela(data_inicio, data_fim, prefixo="presencas__registro")
+    janela = _filtro_janela(data_inicio, data_fim, prefixo="presencas__registro")
+    # Todo `Count` filtra pela turma do REGISTRO, não pela turma atual do
+    # aluno (`presencas__registro__turma`).
+    nesta_turma = Q(presencas__registro__turma=turma) & janela
 
     def _contar(status: str | None = None) -> Count:
-        filtro = janela_aluno
+        filtro = nesta_turma
         if status:
             filtro = filtro & Q(presencas__status=status)
         return Count("presencas", filter=filtro)
 
+    # `pk__in` com subquery (e não um JOIN no filtro) pra a lista não
+    # multiplicar as linhas que os `Count` abaixo agregam.
+    com_chamada_aqui = ItemPresenca.objects.filter(
+        registro__turma=turma
+    ).filter(_filtro_janela(data_inicio, data_fim, prefixo="registro"))
     alunos_qs = (
-        turma.alunos.annotate(
+        Aluno.objects.filter(
+            Q(turma=turma, ativo=True)
+            | Q(pk__in=com_chamada_aqui.values("aluno_id"))
+        )
+        .annotate(
             total=_contar(),
             presentes=_contar(ItemPresenca.Status.PRESENTE),
             ausentes=_contar(ItemPresenca.Status.AUSENTE),
             justificados=_contar(ItemPresenca.Status.JUSTIFICADO),
             retardatarios=_contar(ItemPresenca.Status.RETARDATARIO),
         )
-        .filter(Q(ativo=True) | Q(total__gt=0))
         .order_by("nome_completo", "pk")
     )
 

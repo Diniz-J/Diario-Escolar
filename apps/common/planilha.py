@@ -7,6 +7,7 @@ de domínio.
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 # Caracteres que fazem Excel e LibreOffice tratarem a célula como
@@ -14,12 +15,24 @@ from typing import Any
 # descartam antes de olhar o primeiro caractere de verdade.
 INICIO_DE_FORMULA = ("=", "+", "-", "@", "\t", "\r")
 
-# Marcador que neutraliza a célula. O Excel lê o apóstrofo como "isto é
-# texto" e não o exibe.
+# No XLSX quem decide é o openpyxl, não a heurística do Excel: só string
+# iniciada em `=` vira fórmula (`data_type == "f"`). `+`, `-` e `@` ficam
+# texto. Prefixar esses também deixava o apóstrofo **visível** na célula
+# (o openpyxl grava `'- chegou atrasado` literal) sem proteger nada.
+INICIO_DE_FORMULA_XLSX = ("=",)
+
+# Marcador que neutraliza a célula. Fica visível no conteúdo — é o custo
+# da defesa, por isso no XLSX só entra quando o openpyxl geraria fórmula.
 MARCADOR = "'"
 
+# Caracteres de controle que o openpyxl recusa com `IllegalCharacterError`
+# — que não herda de `ValueError`, então o tablib não captura e o export
+# XLSX inteiro dava 500. Aparecem em texto colado de PDF/Word (ex.: `\x0c`).
+# Tab, LF e CR não estão aqui: são válidos e fazem parte do texto.
+CONTROLE_INVALIDO = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
-def neutralizar_formula(valor: Any) -> Any:
+
+def neutralizar_formula(valor: Any, formato: str = "csv") -> Any:
     """Impede que uma célula de texto seja executada como fórmula.
 
     O conteúdo exportado é escrito por gente: descrição de ocorrência e
@@ -30,12 +43,20 @@ def neutralizar_formula(valor: Any) -> Any:
     montado com dados da planilha — e `=HYPERLINK` não dispara nem o
     aviso de DDE.
 
-    A defesa padrão (OWASP) é prefixar com apóstrofo. Vale pro XLSX
-    também: o openpyxl converte string iniciada em `=` em fórmula.
+    A defesa padrão (OWASP) é prefixar com apóstrofo. No CSV vale pros
+    seis inícios de `INICIO_DE_FORMULA`; no XLSX (`formato="xlsx"`) só pro
+    `=`, que é o único que o openpyxl converte em fórmula.
+
+    Também remove os caracteres de controle que o openpyxl recusa
+    (`CONTROLE_INVALIDO`), em qualquer formato.
 
     Número e data não são afetados: só `str` passa por aqui.
     """
-    if isinstance(valor, str) and valor.startswith(INICIO_DE_FORMULA):
+    if not isinstance(valor, str):
+        return valor
+    valor = CONTROLE_INVALIDO.sub("", valor)
+    gatilhos = INICIO_DE_FORMULA_XLSX if formato == "xlsx" else INICIO_DE_FORMULA
+    if valor.startswith(gatilhos):
         return f"{MARCADOR}{valor}"
     return valor
 
@@ -61,7 +82,7 @@ def desneutralizar_formula(valor: Any) -> Any:
     return valor
 
 
-def neutralizar_dataset(dataset):
+def neutralizar_dataset(dataset, formato: str = "csv"):
     """Aplica `neutralizar_formula` em todas as células de um `Dataset`.
 
     O `tablib.Dataset` não deixa reescrever célula a célula, então o
@@ -70,7 +91,7 @@ def neutralizar_dataset(dataset):
     de linhas pra tratar antes.
     """
     linhas = [
-        [neutralizar_formula(celula) for celula in linha]
+        [neutralizar_formula(celula, formato) for celula in linha]
         for linha in dataset
     ]
     del dataset[0 : len(dataset)]

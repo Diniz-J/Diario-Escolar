@@ -36,8 +36,12 @@ export function useBaixarRelatorioFrequencia() {
         nome,
       );
     },
-    onError: () =>
-      toast.error("Não foi possível gerar o relatório de frequência."),
+    // Mesmo padrão dos outros dois hooks: `baixarArquivo` desembrulha o
+    // detalhe do corpo em Blob (404 de turma, 400 de período ou datas).
+    onError: (erro: Error) =>
+      toast.error(
+        erro.message || "Não foi possível gerar o relatório de frequência.",
+      ),
   });
 }
 

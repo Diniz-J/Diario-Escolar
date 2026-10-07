@@ -95,7 +95,10 @@ class FrequenciaServiceTests(TestCase):
 
         Se alguém mudar o cálculo num dos dois lados, este teste acusa —
         é o motivo de o relatório não ter copiado a conta e seguido a
-        vida.
+        vida. Vale pro aluno que só passou por esta turma: o boletim é por
+        aluno (todas as turmas) e o relatório é por turma, então com
+        remanejamento os dois divergem de propósito — ver
+        `test_remanejado_conta_so_as_chamadas_de_cada_turma`.
         """
         for dia, status in enumerate(
             [
@@ -211,6 +214,46 @@ class FrequenciaServiceTests(TestCase):
         }
         self.assertIn(saiu_depois.matricula, matriculas)
         self.assertNotIn(saiu_antes.matricula, matriculas)
+
+    def test_remanejado_conta_so_as_chamadas_de_cada_turma(self):
+        """Regressão: o `Count` não filtrava pela turma do registro.
+
+        Ana faltou duas vezes no 1º A e depois foi remanejada pro 2º A,
+        onde teve uma presença. No 2º A ela aparecia com 3 chamadas (mais
+        que o próprio 2º A teve) e sumia do relatório do 1º A, levando as
+        faltas junto.
+        """
+        turma_b = Turma.objects.create(
+            escola=self.escola, nome="2º A",
+            turno=Turma.Turno.MATUTINO, ano_letivo=2026,
+        )
+        for dia in (2, 3):
+            _registrar(self.turma, date(2026, 3, dia), {self.ana: ItemPresenca.Status.AUSENTE})
+        Aluno.objects.filter(pk=self.ana.pk).update(turma=turma_b)
+        _registrar(turma_b, date(2026, 3, 9), {self.ana: ItemPresenca.Status.PRESENTE})
+
+        na_antiga = self._linha_de(frequencia_por_turma(self.turma), "A1")
+        self.assertEqual(na_antiga["total"], 2)
+        self.assertEqual(na_antiga["ausentes"], 2)
+
+        relatorio_nova = frequencia_por_turma(turma_b)
+        na_nova = self._linha_de(relatorio_nova, "A1")
+        self.assertEqual(na_nova["total"], 1)
+        self.assertEqual(na_nova["ausentes"], 0)
+        self.assertLessEqual(na_nova["total"], relatorio_nova["total_chamadas"])
+
+    def test_virada_de_ano_nao_arrasta_o_ano_anterior(self):
+        """A escola que promove só trocando a turma do aluno: sem recorte
+        de datas, o relatório da turma nova não pode trazer o ano velho."""
+        turma_2027 = Turma.objects.create(
+            escola=self.escola, nome="2º A",
+            turno=Turma.Turno.MATUTINO, ano_letivo=2027,
+        )
+        _registrar(self.turma, date(2026, 11, 3), {self.ana: ItemPresenca.Status.AUSENTE})
+        Aluno.objects.filter(pk=self.ana.pk).update(turma=turma_2027)
+
+        linha = self._linha_de(frequencia_por_turma(turma_2027), "A1")
+        self.assertEqual(linha["total"], 0)
 
     def test_percentual_da_turma_e_sobre_o_total_nao_media_de_medias(self):
         """Aluno que entrou no meio do período não distorce o número."""
@@ -382,6 +425,23 @@ class FrequenciaEndpointTests(TestCase):
         )
         self.assertEqual(resp.status_code, 400)
         self.assertIn("data_inicio", resp.data)
+
+    def test_intervalo_invertido_400(self):
+        """Antes saía um relatório válido com tudo zerado, sem aviso."""
+        self._auth(self.diretor)
+        resp = self.client.get(
+            self.url,
+            {"turma": self.turma.id, "data_inicio": "2026-04-01", "data_fim": "2026-03-01"},
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("data_fim", resp.data)
+
+    def test_periodo_nao_numerico_400(self):
+        """Antes era ignorado e o relatório saía de todo o período."""
+        self._auth(self.diretor)
+        resp = self.client.get(self.url, {"turma": self.turma.id, "periodo": "abc"})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("periodo", resp.data)
 
     def test_csv_tem_cabecalho_e_uma_linha_por_aluno(self):
         self._auth(self.diretor)

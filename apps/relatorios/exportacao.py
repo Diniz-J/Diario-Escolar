@@ -60,17 +60,24 @@ def exportar_planilha(
     Toda célula passa por `neutralizar_formula` (`apps/common/planilha.py`)
     — é o ponto único por onde os três relatórios saem, então a defesa
     fica aqui e não em cada `linhas_*` de `services.py`.
+
+    O CSV sai no jeito que o Excel em português abre com dois cliques:
+    separador `;` (o Excel pt-BR usa vírgula como decimal e `;` como
+    separador de lista — com `,` tudo caía numa coluna só) e UTF-8 com BOM
+    (sem ele o Excel lê como ANSI e "João" vira "JoÃ£o"). Estes arquivos
+    não voltam pro import, então não há round-trip a preservar.
     """
     # Import lazy: mesmo padrão do boletim.
     import tablib  # noqa: WPS433
 
     dataset = tablib.Dataset(headers=headers)
     for linha in linhas:
-        dataset.append([neutralizar_formula(celula) for celula in linha])
+        dataset.append([neutralizar_formula(celula, formato) for celula in linha])
 
-    conteudo = dataset.export(formato)
-    if isinstance(conteudo, str):
-        conteudo = conteudo.encode("utf-8")
+    if formato == "csv":
+        conteudo = dataset.export("csv", delimiter=";").encode("utf-8-sig")
+    else:
+        conteudo = dataset.export(formato)
     return resposta_download(
         conteudo,
         content_type=FORMATOS_PLANILHA[formato],

@@ -241,7 +241,7 @@ def executar_export(
     # Nome de aluno e de responsável podem ter vindo de uma importação
     # de terceiro, e esta planilha é aberta no Excel. A contraparte está
     # em `_carregar_dataset`, pra reimportar sem acumular o apóstrofo.
-    neutralizar_dataset(dataset)
+    neutralizar_dataset(dataset, formato)
     conteudo = dataset.export(formato)
 
     if isinstance(conteudo, str):

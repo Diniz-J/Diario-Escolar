@@ -91,16 +91,22 @@ def _resolver_janela(request, escola_id: int):
     try:
         periodo_id = int(periodo_id_raw) if periodo_id_raw else None
     except ValueError:
-        periodo_id = None
+        # Antes era ignorado em silêncio e virava janela aberta: o
+        # relatório saía "de todo o período" sem a secretaria saber que o
+        # filtro não pegou.
+        raise ValidationError({"periodo": "Período inválido."})
 
     if periodo_id:
         return resolver_janela_por_periodo(periodo_id, escola_id)
 
-    return (
-        _parse_date(request.query_params.get("data_inicio"), "data_inicio"),
-        _parse_date(request.query_params.get("data_fim"), "data_fim"),
-        None,
-    )
+    data_inicio = _parse_date(request.query_params.get("data_inicio"), "data_inicio")
+    data_fim = _parse_date(request.query_params.get("data_fim"), "data_fim")
+    if data_inicio and data_fim and data_inicio > data_fim:
+        # Intervalo invertido devolvia um relatório válido com tudo zerado.
+        raise ValidationError(
+            {"data_fim": "A data final não pode ser anterior à inicial."}
+        )
+    return data_inicio, data_fim, None
 
 
 def _descrever_janela(relatorio: dict, periodo) -> str:
