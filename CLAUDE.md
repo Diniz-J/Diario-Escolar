@@ -348,7 +348,17 @@ próprios lecionamentos ativos, direção escolhe o professor e modera.
    ✅ **Smoke test do Sentry CONFIRMADO em prod** (era pendência da FASE 2): o 404 do endpoint de PDF (antes do #94 deployar) caiu no painel — prova que `SENTRY_DSN` está setado no Render e que a captura de 4xx (#92) está ativa.
 
 ### FASE 4 — Comunicação Institucional — FUNCIONAL EM PROD
-11. ✅ **Email ao responsável na ocorrência (entrega real em prod)** — campos `nome/email_responsavel` no Aluno; envio em thread daemon (fire-and-forget) com `EMAIL_TIMEOUT=10s`, protegido por try/except. Backend de email = **Brevo via HTTP API** (`django-anymail`) — Resend e Gmail SMTP foram tentados e falharam pelo bloqueio de SMTP outbound do Render free (set/2025). Sender verificado: ver `CLAUDE.local.md` (repo público — email fora daqui). 300 emails/dia free. PRs #43 (campos), #44 (off-thread fix), #48 (Brevo). **Validado em 2026-05-30 com entrega externa.** **Múltiplos responsáveis e `recebe_notificacao` entregues** (fatias 1–2 do `RESPONSAVEIS.md`): o destino agora é o vínculo, com fallback pro campo antigo só quando o aluno não tem vínculo nenhum. Falta: telefone (outro canal, outro provedor) e a tela de vínculos (fatia 4, depende do PR #117).
+11. ✅ **Email ao responsável na ocorrência (entrega real em prod)** — campos `nome/email_responsavel` no Aluno; envio em thread daemon (fire-and-forget) com `EMAIL_TIMEOUT=10s`, protegido por try/except. Backend de email = **Brevo via HTTP API** (`django-anymail`) — Resend e Gmail SMTP foram tentados e falharam pelo bloqueio de SMTP outbound do Render free (set/2025). Sender verificado: ver `CLAUDE.local.md` (repo público — email fora daqui). 300 emails/dia free. PRs #43 (campos), #44 (off-thread fix), #48 (Brevo). **Validado em 2026-05-30 com entrega externa.** **Múltiplos responsáveis e `recebe_notificacao` entregues** (fatias 1–3 do `RESPONSAVEIS.md`, PRs #120–#122): o destino agora é o vínculo, com fallback pro campo antigo só quando o aluno não tem vínculo nenhum. Falta: telefone (outro canal, outro provedor) e a tela de vínculos (fatia 4, depende do PR #117).
+
+    **O desenho completo está em [`RESPONSAVEIS.md`](./RESPONSAVEIS.md)**
+    (out/2026). É a convergência que o `PORTAL.md` adiou: o email saía pelo
+    campo de texto `Aluno.email_responsavel` enquanto o portal lia os
+    vínculos `ResponsavelAluno`, então quem estava vinculado só pelo M2M
+    **via no portal e não recebia email**. Quatro fatias; 1–3 entregues, a
+    última (tela de vínculos) depende do PR #117. A armadilha central está
+    registrada lá e vale pra qualquer mexida futura no envio: o fallback pro
+    campo antigo dispara por **ausência de vínculo**, nunca por ausência de
+    destino — senão o opt-out vira nada.
 12. **Email assíncrono dedicado** — fila (Celery/Dramatiq/RQ) com retry + histórico, quando o volume crescer. Hoje é thread daemon best-effort. PENDENTE.
 13. **Timeline do aluno** — centraliza ocorrências, presença, advertências. Pode reaproveitar a API HistoricalRecords pra mostrar mudanças no histórico. PENDENTE.
 
