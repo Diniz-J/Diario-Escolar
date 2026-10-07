@@ -79,7 +79,12 @@ def comunicados_do(responsavel) -> QuerySet:
 
 
 def alunos_por_comunicado(responsavel, comunicado_ids) -> dict[int, list[dict]]:
-    """Filhos do responsável alcançados por cada comunicado — uma query só."""
+    """Filhos do responsável alcançados por cada comunicado — uma query só.
+
+    `distinct()` é obrigatório: o log tem uma linha por **responsável**
+    alcançado, então um filho com mãe e pai vinculados tem duas linhas no
+    mesmo comunicado e apareceria duas vezes na lista do portal.
+    """
     linhas = (
         ComunicadoDestinatario.objects.filter(
             comunicado_id__in=comunicado_ids,
@@ -87,6 +92,7 @@ def alunos_por_comunicado(responsavel, comunicado_ids) -> dict[int, list[dict]]:
         )
         .order_by("aluno__nome_completo")
         .values("comunicado_id", "aluno_id", "aluno__nome_completo")
+        .distinct()
     )
     resultado: dict[int, list[dict]] = {}
     for linha in linhas:

@@ -217,6 +217,31 @@ class ComunicadosTests(_LeiturasSetup):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["alunos"], [{"id": self.filho.pk, "nome_completo": "Ana Filha"}])
 
+    def test_filho_com_dois_responsaveis_aparece_uma_vez(self):
+        """O log tem uma linha por responsável — a lista não pode duplicar.
+
+        Com mãe e pai vinculados, o comunicado gera duas linhas pro mesmo
+        filho; sem `distinct()` em `alunos_por_comunicado` o portal da Ana
+        mostraria "Ana Filha" duas vezes no mesmo aviso.
+        """
+        outro = Responsavel.objects.create(
+            escola=self.escola, nome="Pai da Ana", email="pai.ana@example.com"
+        )
+        ResponsavelAluno.objects.create(responsavel=outro, aluno=self.filho)
+        ComunicadoDestinatario.objects.create(
+            comunicado=self.c_escola,
+            aluno=self.filho,
+            responsavel=outro,
+            status=ComunicadoDestinatario.Status.ENVIADO,
+        )
+
+        resp = self._get("portal_comunicado", self.c_escola.pk)
+
+        self.assertEqual(
+            resp.data["alunos"],
+            [{"id": self.filho.pk, "nome_completo": "Ana Filha"}],
+        )
+
     def test_detalhe_nao_enderecado_da_404(self):
         for c in (self.c_turma2, self.c_rascunho, self.c_falhou, self.c_outra_escola):
             with self.subTest(c.titulo):
