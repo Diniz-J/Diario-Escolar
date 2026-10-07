@@ -17,7 +17,9 @@ from apps.portal.destinatarios import (
 from apps.portal.models import Responsavel, ResponsavelAluno
 
 
-class DestinatariosTests(TestCase):
+class _DestinatariosSetup(TestCase):
+    """Fixtures compartilhadas. Sem teste próprio (ver `_PortalSetup`)."""
+
     @classmethod
     def setUpTestData(cls) -> None:
         cls.escola = Escola.objects.create(nome="Escola A")
@@ -38,15 +40,23 @@ class DestinatariosTests(TestCase):
             email_responsavel=email,
         )
 
-    def _responsavel(self, nome, email, ativo=True):
+    def _responsavel(self, nome, email, ativo=True, recebe_notificacao=True):
         return Responsavel.objects.create(
-            escola=self.escola, nome=nome, email=email, ativo=ativo
+            escola=self.escola,
+            nome=nome,
+            email=email,
+            ativo=ativo,
+            recebe_notificacao=recebe_notificacao,
         )
 
     def _vincular(self, responsavel, aluno):
         return ResponsavelAluno.objects.create(
             responsavel=responsavel, aluno=aluno
         )
+
+
+class DestinatariosTests(_DestinatariosSetup):
+    """Vínculo, fallback e lote."""
 
     def test_aluno_sem_vinculo_cai_no_campo_do_aluno(self):
         """Escola que nunca rodou a semeadura não pode ficar muda."""
@@ -182,3 +192,47 @@ class DestinatariosTests(TestCase):
         mapa = destinatarios_por_aluno([aluno])
 
         self.assertEqual(mapa, {aluno.id: []})
+
+
+class OptOutTests(_DestinatariosSetup):
+    """`recebe_notificacao` — silêncio sem perder o acesso ao portal."""
+
+    def test_opt_out_exclui_do_envio(self):
+        aluno = self._aluno("Igor")
+        recusou = self._responsavel(
+            "Recusou", "recusou@example.com", recebe_notificacao=False
+        )
+        self._vincular(recusou, aluno)
+
+        self.assertEqual(destinatarios_do_aluno(aluno), [])
+
+    def test_opt_out_nao_cai_no_campo_do_aluno(self):
+        """A armadilha central: fallback aqui transformaria o opt-out em nada."""
+        aluno = self._aluno(
+            "Joana", email="recusou@example.com", responsavel="Recusou"
+        )
+        recusou = self._responsavel(
+            "Recusou", "recusou@example.com", recebe_notificacao=False
+        )
+        self._vincular(recusou, aluno)
+
+        self.assertEqual(destinatarios_do_aluno(aluno), [])
+
+    def test_opt_out_de_um_nao_silencia_o_outro(self):
+        aluno = self._aluno("Lia")
+        recusou = self._responsavel(
+            "Recusou", "recusou@example.com", recebe_notificacao=False
+        )
+        aceita = self._responsavel("Aceita", "aceita@example.com")
+        self._vincular(recusou, aluno)
+        self._vincular(aceita, aluno)
+
+        destinos = destinatarios_do_aluno(aluno)
+
+        self.assertEqual([d.email for d in destinos], ["aceita@example.com"])
+
+    def test_notificacao_nasce_ligada(self):
+        """Default `True`: nenhuma escola fica muda por causa da migration."""
+        responsavel = self._responsavel("Nova", "nova@example.com")
+
+        self.assertTrue(responsavel.recebe_notificacao)
