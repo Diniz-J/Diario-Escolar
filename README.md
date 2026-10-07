@@ -191,9 +191,9 @@ Cada app de domínio segue o mesmo layout (`models.py`, `serializers.py`, `views
 **`apps/comunicados`**
 - `Comunicado` — aviso institucional enviado por email aos responsáveis (reunião de pais, feriado, campanha). Título + mensagem + `destino` (`escola` = todos os responsáveis de alunos ativos / `turmas` = só as turmas selecionadas, via M2M) + `status` (`rascunho` → `enviando` → `enviado`/`falhou`). Auditado (simple-history, incluindo a M2M).
 - **Dois passos, de propósito**: salvar cria/edita **rascunho e nunca envia**; o disparo é a action explícita `POST /comunicados/{id}/enviar/`. Depois do disparo o comunicado fica imutável (editar/excluir devolve 400) — é o registro do que chegou à caixa de entrada dos pais. Email não tem "desfazer".
-- `ComunicadoDestinatario` — uma linha por aluno alcançado, com snapshot do email/nome no momento do disparo e o resultado (`pendente`/`enviado`/`falhou`/`sem_email`) + mensagem de erro do provedor. Criada **antes** do envio, pra que um crash no meio do lote deixe rastro. Responde "o responsável do João recebeu?" e expõe quem está sem email cadastrado.
+- `ComunicadoDestinatario` — uma linha por **(aluno, responsável)** alcançado, com snapshot do email/nome no momento do disparo e o resultado (`pendente`/`enviado`/`falhou`/`sem_email`) + mensagem de erro do provedor. Criada **antes** do envio, pra que um crash no meio do lote deixe rastro. Responde "o responsável do João recebeu?" — e com mãe e pai vinculados responde pelos dois separadamente ("a mãe recebeu, o pai falhou"). Aluno sem destino nenhum gera uma única linha `sem_email`. A FK do responsável é nullable: linha de comunicado disparado antes dos vínculos existirem, ou vinda do fallback, fica com `NULL` e segue legível pelo snapshot. O unique é `(comunicado, aluno, responsavel)` com `nulls_distinct=False` — sem isso duas linhas com `NULL` passariam e a idempotência da materialização quebraria justo no caminho do fallback.
 - **Privacidade (LGPD)**: cada responsável recebe uma mensagem individual. Um `To`/`CC` coletivo vazaria a lista de emails de todos os pais da escola para todos os pais da escola.
-- **Deduplicação por endereço normalizado** (lowercase + strip): irmãos matriculados na mesma escola compartilham o email do responsável e receberiam o aviso duas vezes. As duas linhas de log continuam existindo e recebem o mesmo resultado.
+- **Deduplicação por endereço normalizado** (lowercase + strip): irmãos matriculados na mesma escola compartilham o responsável e receberiam o aviso duas vezes. As duas linhas de log continuam existindo e recebem o mesmo resultado.
 - **Conexão única** (`get_connection`) para o lote inteiro, em vez de um handshake por mensagem.
 - **Trava anti-duplo-clique**: a transição `rascunho → enviando` é um `UPDATE` condicional com rowcount checado. Dois cliques simultâneos: só o primeiro dispara, o segundo recebe **409**.
 - Tolerância a falha: a recusa de um destinatário não aborta o lote (fica registrada na linha dele); falha ao **abrir** a conexão — cenário real do free tier do Brevo, 300 emails/dia — marca todas as linhas com o motivo do provedor e o comunicado vira `falhou`. `falhou` é reservado pro disparo que não entregou nada: "enviado com 3 falhas de 142" continua `enviado`.
@@ -299,7 +299,7 @@ Single-Page Application em React 19 + TypeScript que consome a API REST do backe
 | `/ocorrencias/:id` | Detalhe com botões rápidos de mudança de status; editar/excluir num dropdown discreto |
 | `/presenca` | Lista de chamadas por turma e data |
 | `/comunicados` | Lista de comunicados (rascunhos primeiro, depois falhas, enviados por último); filtro por status; botão "Enviar" nas linhas em rascunho |
-| `/comunicados/:id` | Detalhe com a mensagem, autoria e o log de entrega por aluno (enviados / falhas / sem email), filtrável |
+| `/comunicados/:id` | Detalhe com a mensagem, autoria e o log de entrega por responsável (enviados / falhas / sem email), filtrável |
 | `/presenca/:id` | Tela da chamada com resumo P/A/J/R e edição inline por aluno (optimistic update) |
 | `/boletim/:alunoId` | Boletim agregado do aluno (frequência + notas + ocorrências) com layout de impressão |
 
