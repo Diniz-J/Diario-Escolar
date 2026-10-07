@@ -8,13 +8,19 @@ quatro problemas que este módulo resolve explicitamente:
    individual. Jogar todos num To/CC vazaria a lista de emails de todos
    os pais da escola pra todos os pais da escola.
 2. **Deduplicação.** Irmãos matriculados na mesma escola compartilham o
-   email do responsável — sem dedup, o pai de dois filhos receberia o
-   mesmo aviso duas vezes.
+   responsável — sem dedup, o pai de dois filhos receberia o mesmo aviso
+   duas vezes.
 3. **Conexão.** Abrir uma conexão por mensagem multiplicaria o handshake
    por N. Usamos uma única conexão (`get_connection`) pro lote inteiro.
 4. **Rastreio.** Cada destinatário tem sua linha com o resultado, então
    uma falha parcial (cota do provedor estourada no meio do lote) fica
    visível em vez de virar um "enviado" mentiroso.
+
+Quem recebe vem de `apps.portal.destinatarios`: os vínculos
+`ResponsavelAluno`, com fallback pro campo de texto do aluno quando o
+aluno não tem vínculo nenhum. Um aluno com mãe e pai vinculados gera
+**duas** linhas de log, com dois resultados de entrega independentes. Ver
+`RESPONSAVEIS.md`.
 
 O disparo roda numa thread daemon pra não pendurar a resposta HTTP — o
 mesmo padrão de `apps.ocorrencias.services`, só que aqui a duração é
@@ -31,8 +37,8 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from apps.common.logging import escola_context
-from apps.common.texto import normalizar_email
 from apps.escola.models import Aluno
+from apps.portal.destinatarios import destinatarios_por_aluno
 
 from .models import Comunicado, ComunicadoDestinatario
 
@@ -58,29 +64,47 @@ def resolver_alunos(comunicado: Comunicado):
     return qs.order_by("nome_completo")
 
 
+def _alunos_para_envio(comunicado: Comunicado) -> list[Aluno]:
+    """Alunos alcançados, com os campos que a resolução de destino usa.
+
+    O `.only()` inclui `nome_responsavel`/`email_responsavel` porque é o
+    fallback de quem não tem vínculo: deixá-los de fora não economizaria
+    nada — viraria um SELECT por aluno no acesso diferido.
+    """
+    return list(
+        resolver_alunos(comunicado).only(
+            "id", "nome_completo", "nome_responsavel", "email_responsavel"
+        )
+    )
+
+
 def contar_previa(comunicado: Comunicado) -> dict[str, int]:
     """Conta o alcance do comunicado SEM enviar nada.
 
     Alimenta o diálogo de confirmação ("este comunicado vai para 142
     responsáveis") e o aviso de cadastro incompleto ("3 alunos sem email").
-    `total_emails` é a contagem depois da dedup — é o número de mensagens
-    que o provedor vai realmente receber, o que importa pra cota diária.
+
+    Com múltiplos responsáveis, `total_alunos` e `total_emails` deixam de
+    ter a relação que tinham: um aluno pode render duas mensagens, então
+    `total_emails` pode passar de `total_alunos`. Ele continua sendo o que
+    sempre foi e o que importa — o número de mensagens depois da dedup por
+    endereço, que é o que consome a cota diária do provedor.
+
+    `total_sem_email` conta **alunos** sem destino nenhum, que é a unidade
+    do aviso de cadastro incompleto ("3 alunos sem email de responsável").
     """
-    valores = resolver_alunos(comunicado).values_list(
-        "email_responsavel", flat=True
-    )
+    alunos = _alunos_para_envio(comunicado)
+    mapa = destinatarios_por_aluno(alunos)
     emails: set[str] = set()
-    total_alunos = 0
     total_sem_email = 0
-    for email_responsavel in valores:
-        total_alunos += 1
-        email = normalizar_email(email_responsavel)
-        if email:
-            emails.add(email)
-        else:
+    for aluno in alunos:
+        destinos = mapa[aluno.id]
+        if not destinos:
             total_sem_email += 1
+            continue
+        emails.update(destino.email for destino in destinos)
     return {
-        "total_alunos": total_alunos,
+        "total_alunos": len(alunos),
         "total_emails": len(emails),
         "total_sem_email": total_sem_email,
     }
@@ -120,36 +144,52 @@ def montar_email_comunicado(comunicado: Comunicado, nome_responsavel: str):
 
 
 def _materializar_destinatarios(comunicado: Comunicado) -> int:
-    """Cria uma linha de `ComunicadoDestinatario` por aluno alcançado.
+    """Cria uma linha de `ComunicadoDestinatario` por responsável alcançado.
+
+    Um aluno com mãe e pai vinculados gera duas linhas, cada uma com seu
+    próprio resultado de entrega ("a mãe recebeu, o pai falhou"). Aluno sem
+    destino nenhum gera **uma** linha `sem_email` — é a unidade em que a
+    secretaria lê o aviso de cadastro incompleto, e sem ela o aluno
+    desapareceria do log.
 
     Roda ANTES do envio: as linhas nascem `pendente` (ou `sem_email`) e
     são atualizadas conforme o provedor responde. Assim um crash no meio
     do lote deixa rastro em vez de apagar o público.
 
-    Idempotente via `ignore_conflicts`: o unique (comunicado, aluno)
-    absorve uma segunda materialização do mesmo comunicado sem estourar
-    IntegrityError.
+    Idempotente via `ignore_conflicts`: o unique
+    (comunicado, aluno, responsavel) absorve uma segunda materialização do
+    mesmo comunicado sem estourar IntegrityError. É por isso que esse
+    unique é `nulls_distinct=False` — ver o model.
 
     Retorna o total de linhas pretendidas (o público do comunicado).
     """
+    alunos = _alunos_para_envio(comunicado)
+    mapa = destinatarios_por_aluno(alunos)
     linhas = []
-    for aluno in resolver_alunos(comunicado).only(
-        "id", "nome_completo", "nome_responsavel", "email_responsavel"
-    ):
-        email = normalizar_email(aluno.email_responsavel)
-        linhas.append(
-            ComunicadoDestinatario(
-                comunicado=comunicado,
-                aluno=aluno,
-                email=email,
-                nome_responsavel=aluno.nome_responsavel,
-                status=(
-                    ComunicadoDestinatario.Status.PENDENTE
-                    if email
-                    else ComunicadoDestinatario.Status.SEM_EMAIL
-                ),
+    for aluno in alunos:
+        destinos = mapa[aluno.id]
+        if not destinos:
+            linhas.append(
+                ComunicadoDestinatario(
+                    comunicado=comunicado,
+                    aluno=aluno,
+                    email="",
+                    nome_responsavel=aluno.nome_responsavel,
+                    status=ComunicadoDestinatario.Status.SEM_EMAIL,
+                )
             )
-        )
+            continue
+        for destino in destinos:
+            linhas.append(
+                ComunicadoDestinatario(
+                    comunicado=comunicado,
+                    aluno=aluno,
+                    responsavel_id=destino.responsavel_id,
+                    email=destino.email,
+                    nome_responsavel=destino.nome,
+                    status=ComunicadoDestinatario.Status.PENDENTE,
+                )
+            )
     ComunicadoDestinatario.objects.bulk_create(linhas, ignore_conflicts=True)
     return len(linhas)
 
@@ -163,6 +203,11 @@ def _agrupar_por_email(comunicado: Comunicado) -> dict[str, dict]:
 
     O nome usado na saudação é o primeiro não-vazio do grupo: para irmãos
     é o mesmo responsável de qualquer forma.
+
+    Agrupar por endereço (e não por responsável) é o que mantém a dedup
+    funcionando entre irmãos e, de quebra, entre as duas origens possíveis
+    de um destino — vínculo e campo de texto do aluno — numa escola
+    semeada pela metade.
     """
     grupos: dict[str, dict] = {}
     pendentes = comunicado.destinatarios.filter(

@@ -104,6 +104,12 @@ export function EnviarComunicadoDialog({
                         mensagem.
                       </div>
                     )}
+                  {previa.total_emails > previa.total_alunos && (
+                    <div className="text-muted-foreground">
+                      Alunos com mais de um responsável geram uma mensagem
+                      para cada.
+                    </div>
+                  )}
                   {previa.total_sem_email > 0 && (
                     <div className="text-destructive">
                       {previa.total_sem_email}{" "}

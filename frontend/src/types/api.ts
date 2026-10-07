@@ -581,6 +581,8 @@ export interface Comunicado {
   criado_por_nome: string | null;
   enviado_por: number | null;
   enviado_por_nome: string | null;
+  // Linhas de log, não alunos: um aluno com mãe e pai vinculados conta
+  // duas (dois resultados de entrega independentes).
   total_destinatarios: number;
   total_enviados: number;
   total_falhas: number;
@@ -601,7 +603,8 @@ export type ComunicadoInput = {
 
 // Resposta de `GET /comunicados/{id}/previa/` — alcance sem enviar nada.
 // `total_emails` é a contagem depois da dedup de irmãos: é o número de
-// mensagens que o provedor vai realmente receber.
+// mensagens que o provedor vai realmente receber. Com múltiplos
+// responsáveis por aluno ele pode passar de `total_alunos`.
 export interface ComunicadoPrevia {
   total_alunos: number;
   total_emails: number;
