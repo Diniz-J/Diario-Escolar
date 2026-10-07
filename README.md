@@ -62,7 +62,8 @@ Diario-Escolar/
 │   ├── comunicados/        — Comunicado + ComunicadoDestinatario (avisos por email)
 │   ├── planos_ensino/       — PlanoEnsino
 │   ├── boletins/            — agregação on-the-fly (sem modelo; services.py)
-│   └── aulas/               — RegistroAula (diário de classe) + projeção de agenda
+│   ├── aulas/               — RegistroAula (diário de classe) + projeção de agenda
+│   └── relatorios/          — relatórios operacionais em PDF/CSV/XLSX (sem modelo)
 ├── frontend/                — app React (Vite + TypeScript)
 │   ├── src/
 │   │   ├── components/      — AppLayout (sidebar + drawer mobile), ProtectedRoute, ui/* (shadcn)
@@ -156,6 +157,8 @@ Cada app de domínio segue o mesmo layout (`models.py`, `serializers.py`, `views
 - `BaseModelEscopado` — base abstrata com FK `escola`.
 - `EscopoEscolaMixin` — filtra queryset pela escola do usuário.
 - `ReadWritePermissionMixin` — padroniza permissão por ação.
+- `pdf.py` — render WeasyPrint, caminho da logo e slug ASCII do nome de arquivo, compartilhados pelos três PDFs do projeto (boletim, diário de aula, relatórios).
+- `planilha.py` — **neutralização de fórmula** em CSV/XLSX. Excel e LibreOffice executam qualquer célula iniciada em `=`, `+`, `-` ou `@` ao abrir o arquivo, e o conteúdo exportado aqui é escrito por gente (descrição de ocorrência, título de avaliação, nome vindo de importação de terceiro). As células saem prefixadas com apóstrofo, que o Excel lê como "isto é texto" e não exibe. `desneutralizar_formula` é a contraparte, usada na leitura do import de migração, que é round-trip — sem ela o marcador seria gravado no banco na volta e cada ciclo acumularia mais um.
 - Validator de CNPJ com dígito verificador.
 
 **`apps/accounts`**
@@ -219,6 +222,13 @@ Cada app de domínio segue o mesmo layout (`models.py`, `serializers.py`, `views
 - Action `agenda` (`?turma=&disciplina=&mes=YYYY-MM`): projeta os slots do mês a partir de `dias_semana` do `Lecionamento`, on-the-fly via `services.py` (sem tabela). Navega mês a mês; ignora feriados na v1.
 - Front (diário do professor + ficha do professor com PDF + card no dashboard) em PRs subsequentes.
 
+**`apps/relatorios`**
+- Sem modelo próprio, mesmo molde do `boletins`: `services.py` agrega on-the-fly e `exportacao.py` concentra a mecânica comum (valida o formato, monta a planilha com tablib, neutraliza fórmula, devolve o download). Cada relatório serve seus formatos no mesmo recorte (`?formato=`) — uma rota por formato multiplicaria roteamento e filtro à toa.
+- **Frequência por turma** (`GET /relatorios/frequencia/`): percentual por aluno na janela, com alerta de quem está abaixo dos 75% da LDB. Os contadores saem como agregados condicionais anotados sobre o `Aluno` (um JOIN, `Count` com `filter` por status) em vez de uma consulta por aluno — numa turma de 35 isso seria 35 queries, e o relatório existe justamente pra turma inteira. Mesma régua de presença do boletim (P/R/J contam; só A é falta), com teste comparando as duas pra não divergirem.
+- **Ocorrências** (`GET /ocorrencias/exportar/`) e **cadastral de alunos** (`GET /alunos/relatorio/`) são actions do viewset que já tem o filtro e o escopo, então o arquivo sai com o mesmo recorte da tela; só o agrupamento, as linhas e o template moram aqui. O cadastral é **separado do `/alunos/export/`**: aquele é o serviço de migração em massa (admin global + flag `importacao_em_lote_habilitada`), este é a lista que a escola tira de si mesma (nível-diretor, sem flag).
+- Turma de outra escola responde 404, não 403 — a resposta não confirma que o id existe. O nome da turma no cabeçalho do PDF sai dos dados encontrados, nunca do `?turma=` recebido, senão um id alheio imprimiria o nome da turma de outra escola num relatório vazio.
+- Os PDFs têm teto de linhas: o recorte pode ser um ano letivo ou a escola inteira, o WeasyPrint é síncrono na request e um documento de dez mil blocos derruba o worker no free tier. O erro aponta qual filtro estreitar e manda pro CSV/XLSX, que não têm teto porque o custo é linear.
+
 ### Endpoints
 
 ```
@@ -271,6 +281,10 @@ GET|POST        /api/v1/registros-aula/                   (diário de classe)
 GET|PUT|PATCH|DELETE /api/v1/registros-aula/{id}/
 POST            /api/v1/registros-aula/{id}/conferir/     (visto da direção)
 GET             /api/v1/registros-aula/agenda/            (?turma=&disciplina=&mes=YYYY-MM)
+
+GET             /api/v1/relatorios/frequencia/            (?turma= obrigatório; ?formato=json|pdf|csv|xlsx)
+GET             /api/v1/ocorrencias/exportar/             (mesmo recorte da listagem; ?formato=pdf|csv|xlsx)
+GET             /api/v1/alunos/relatorio/                 (cadastral, nível-diretor; ?formato=pdf|csv|xlsx)
 ```
 
 > Todos os endpoints (exceto `/auth/token/` e `/auth/token/refresh/`) exigem `Authorization: Bearer <access_token>`. O queryset retornado é sempre escopado à escola do usuário autenticado.

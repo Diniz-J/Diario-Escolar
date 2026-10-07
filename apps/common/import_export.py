@@ -38,6 +38,8 @@ from import_export import resources
 from rest_framework import status
 from rest_framework.response import Response
 
+from apps.common.planilha import desneutralizar_dataset, neutralizar_dataset
+
 
 # Formatos suportados pelo export/import. Mapeia o nome amigável
 # (passado na query string) pra extensão + content-type.
@@ -236,6 +238,10 @@ def executar_export(
     config = FORMATOS[formato]
     resource = resource_class(contexto=contexto)
     dataset: tablib.Dataset = resource.export()
+    # Nome de aluno e de responsável podem ter vindo de uma importação
+    # de terceiro, e esta planilha é aberta no Excel. A contraparte está
+    # em `_carregar_dataset`, pra reimportar sem acumular o apóstrofo.
+    neutralizar_dataset(dataset)
     conteudo = dataset.export(formato)
 
     if isinstance(conteudo, str):
@@ -304,7 +310,10 @@ def _carregar_dataset(arquivo, nome: str) -> tablib.Dataset:
         dataset.load(conteudo_texto, format="csv")
     else:
         dataset.load(conteudo, format="xlsx")
-    return dataset
+    # Desfaz o apóstrofo que o export desta casa escreveu. Sem isto o
+    # round-trip (exportar, editar, reimportar) gravaria o marcador no
+    # banco e cada ciclo acumularia mais um.
+    return desneutralizar_dataset(dataset)
 
 
 def executar_import(
