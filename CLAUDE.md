@@ -82,7 +82,7 @@ gated por `VITE_SENTRY_DSN`).
 - `Professor` — OneToOne com `Usuario(perfil=professor)`; `ativo`; invariante `usuario.escola == professor.escola`. **Auditado**.
 - `Lecionamento` — vínculo granular **professor × turma × disciplina** (substituiu a antiga M2M `Professor.disciplinas`). `ano_letivo` derivado da turma. Unique `(professor, turma, disciplina)`. `clean()` valida escola alinhada nos três. `CASCADE` no professor, `PROTECT` em turma/disciplina. Tem `dias_semana` (`ArrayField` de inteiros, 0=segunda…6=domingo, alinhado a `date.weekday()`) — grade horária que serve de base pra projetar os slots do diário de aula (app `aulas`). **Auditado**.
 
-**`ocorrencias/`** — `Ocorrencia` (turma + aluno + professor opcional + descrição + data + status `aberta`/`em_andamento`/`resolvida`/`arquivada`). Invariantes em `clean()` + serializer. Permissão uniforme admin/diretor/professor. Guard de IDOR no payload `escola`. **Auditado**. **`services.py`**: `notificar_responsavel_ocorrencia` é disparado em `perform_create` e roda numa **thread daemon** (fire-and-forget — POST volta na hora, sem pendurar a resposta HTTP). Em `TESTING` o envio é síncrono pra manter `mail.outbox` determinístico. Aluno sem `email_responsavel` é pulado (log warning). Falha de envio é logada com stack trace, nunca propagada. Em produção o backend é `anymail.backends.brevo.EmailBackend` (HTTP API porta 443) — ver Infra.
+**`ocorrencias/`** — `Ocorrencia` (turma + aluno + professor opcional + descrição + data + status `aberta`/`em_andamento`/`resolvida`/`arquivada`). Invariantes em `clean()` + serializer. Permissão uniforme admin/diretor/professor. Guard de IDOR no payload `escola`. **Auditado**. **`services.py`**: `notificar_responsavel_ocorrencia` é disparado em `perform_create` e roda numa **thread daemon** (fire-and-forget — POST volta na hora, sem pendurar a resposta HTTP). Em `TESTING` o envio é síncrono pra manter `mail.outbox` determinístico. Destinatários vêm de `apps/portal/destinatarios.py` — um aluno com mãe e pai vinculados recebe **duas mensagens individuais**, cada uma saudada pelo nome do responsável, e a falha de uma não cala a outra. Aluno sem responsável com email é pulado (log warning). Falha de envio é logada com stack trace, nunca propagada. Em produção o backend é `anymail.backends.brevo.EmailBackend` (HTTP API porta 443) — ver Infra.
 
 **`presenca/`** — chamada.
 - `RegistroPresenca` — chamada de uma turma num dia; única por `(escola, turma, data)`. **Auditado**.
@@ -98,7 +98,11 @@ o `is_active` da base é irrelevante: quem manda é o campo `ativo`. Email
 normalizado no `save()` (lowercase+strip), unique por `(escola, email)`.
 `ResponsavelAluno` é o vínculo M2M (resolve "múltiplos responsáveis"),
 `PROTECT` nos dois lados, `clean()` exige escola igual, **auditado** — é o
-modelo que decide quem vê os dados de quem. Semeadura:
+modelo que decide quem vê os dados de quem. `destinatarios.py` é a
+**origem única de quem recebe email** (ocorrência e comunicado chamam de
+lá): resolve pelos vínculos, pula conta inativa, e só cai no
+`Aluno.email_responsavel` quando o aluno não tem vínculo **nenhum** — ver
+`RESPONSAVEIS.md` §4.1, é a armadilha central da frente. Semeadura:
 `manage.py portal_semear_responsaveis`. **Fatia 6 entregue**: frontend do
 portal sob `/portal`, em chunk próprio (`React.lazy` no `App.tsx` separa a
 árvore do staff da do portal), sessão independente em
