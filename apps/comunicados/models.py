@@ -15,10 +15,11 @@ Ciclo de vida (`status`):
 explícita e separada, e a partir dela o comunicado fica imutável — é
 registro histórico do que saiu para os pais.
 
-`ComunicadoDestinatario` materializa uma linha por aluno alcançado, com o
-resultado do envio daquele endereço. Serve pra responder a pergunta que a
-secretaria sempre faz ("o responsável do João recebeu?") e pra expor quem
-está sem email cadastrado.
+`ComunicadoDestinatario` materializa uma linha por **responsável
+alcançado** (um aluno com mãe e pai vinculados gera duas), com o resultado
+do envio daquele endereço. Serve pra responder a pergunta que a secretaria
+sempre faz ("o responsável do João recebeu?") e pra expor quem está sem
+email cadastrado.
 """
 from django.db import models
 from simple_history.models import HistoricalRecords
@@ -125,12 +126,19 @@ class Comunicado(BaseModelEscopado):
 
 
 class ComunicadoDestinatario(TimeStampedModel):
-    """Resultado do envio de um comunicado para o responsável de um aluno.
+    """Resultado do envio de um comunicado para um responsável de um aluno.
 
-    Uma linha por aluno alcançado (não por endereço): irmãos na mesma
-    escola compartilham o email do responsável, e o envio deduplica por
+    Uma linha por **(aluno, responsável)**, não por endereço: irmãos na
+    mesma escola compartilham o responsável, e o envio deduplica por
     endereço — mas as duas linhas existem e recebem o mesmo resultado, pra
     que a busca por aluno responda "o responsável do João recebeu?".
+
+    O par com o responsável, e não só com o aluno, é o que permite dois
+    resultados de entrega para o mesmo aluno ("a mãe recebeu, o pai
+    falhou"). Linhas de comunicados disparados antes dos vínculos existirem
+    ficam com `responsavel=NULL` — é também o estado das que saem pelo
+    fallback do campo de texto do aluno (ver `RESPONSAVEIS.md` §4.1), e o
+    snapshot de `email`/`nome_responsavel` é o que as mantém legíveis.
 
     Não herda `BaseModelEscopado`: a escola vem por `comunicado.escola`, e
     duplicar a FK aqui abriria espaço pra divergência.
@@ -162,9 +170,22 @@ class ComunicadoDestinatario(TimeStampedModel):
     aluno = models.ForeignKey(
         Aluno, on_delete=models.PROTECT, related_name="comunicados_recebidos"
     )
-    # Snapshot do email/nome no momento do disparo. Se o cadastro do aluno
-    # mudar depois, o log continua mostrando pra onde a mensagem foi de
-    # fato — auditoria tem que ser imutável.
+    # Nulo em dois casos: linha antiga (disparada quando o conceito não
+    # existia) e linha vinda do fallback pelo campo de texto do aluno.
+    #
+    # `PROTECT` como o resto das FKs de tenant — e com a mesma consequência
+    # desejada: responsável que já recebeu comunicado não se apaga, se
+    # desativa (`ativo=False`).
+    responsavel = models.ForeignKey(
+        "portal.Responsavel",
+        on_delete=models.PROTECT,
+        related_name="comunicados_recebidos",
+        null=True,
+        blank=True,
+    )
+    # Snapshot do email/nome no momento do disparo. Se o cadastro mudar
+    # depois, o log continua mostrando pra onde a mensagem foi de fato —
+    # auditoria tem que ser imutável.
     email = models.EmailField(blank=True)
     nome_responsavel = models.CharField(max_length=200, blank=True)
 
@@ -181,9 +202,15 @@ class ComunicadoDestinatario(TimeStampedModel):
         verbose_name_plural = "destinatários de comunicado"
         ordering = ["aluno__nome_completo"]
         constraints = [
+            # `nulls_distinct=False` (Postgres 15+) é essencial: sem isso
+            # duas linhas `(comunicado, aluno, NULL)` passariam, e a
+            # idempotência da materialização — que depende de
+            # `ignore_conflicts` — se perderia justamente no caminho do
+            # fallback, duplicando email pra escola que não tem vínculo.
             models.UniqueConstraint(
-                fields=["comunicado", "aluno"],
-                name="comunicado_dest_unique_comunicado_aluno",
+                fields=["comunicado", "aluno", "responsavel"],
+                name="comunicado_dest_unique_com_aluno_resp",
+                nulls_distinct=False,
             ),
         ]
         indexes = [
@@ -195,4 +222,7 @@ class ComunicadoDestinatario(TimeStampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.aluno} → {self.email or '(sem email)'} ({self.get_status_display()})"
+        return (
+            f"{self.aluno} → {self.email or '(sem email)'} "
+            f"({self.get_status_display()})"
+        )
