@@ -100,9 +100,12 @@ normalizado no `save()` (lowercase+strip), unique por `(escola, email)`.
 `PROTECT` nos dois lados, `clean()` exige escola igual, **auditado** — é o
 modelo que decide quem vê os dados de quem. `destinatarios.py` é a
 **origem única de quem recebe email** (ocorrência e comunicado chamam de
-lá): resolve pelos vínculos, pula conta inativa, e só cai no
-`Aluno.email_responsavel` quando o aluno não tem vínculo **nenhum** — ver
-`RESPONSAVEIS.md` §4.1, é a armadilha central da frente. Semeadura:
+lá): resolve pelos vínculos, pula conta inativa ou com
+`recebe_notificacao=False`, e só cai no `Aluno.email_responsavel` quando o
+aluno não tem vínculo **nenhum** — ver `RESPONSAVEIS.md` §4.1, é a
+armadilha central da frente. `recebe_notificacao` é opt-out de email e é
+**separado de `ativo`** de propósito: quem pede silêncio continua
+consultando o boletim no portal. Semeadura:
 `manage.py portal_semear_responsaveis`. **Fatia 6 entregue**: frontend do
 portal sob `/portal`, em chunk próprio (`React.lazy` no `App.tsx` separa a
 árvore do staff da do portal), sessão independente em
@@ -345,7 +348,7 @@ próprios lecionamentos ativos, direção escolhe o professor e modera.
    ✅ **Smoke test do Sentry CONFIRMADO em prod** (era pendência da FASE 2): o 404 do endpoint de PDF (antes do #94 deployar) caiu no painel — prova que `SENTRY_DSN` está setado no Render e que a captura de 4xx (#92) está ativa.
 
 ### FASE 4 — Comunicação Institucional — FUNCIONAL EM PROD
-11. ✅ **Email ao responsável na ocorrência (entrega real em prod)** — campos `nome/email_responsavel` no Aluno; envio em thread daemon (fire-and-forget) com `EMAIL_TIMEOUT=10s`, protegido por try/except. Backend de email = **Brevo via HTTP API** (`django-anymail`) — Resend e Gmail SMTP foram tentados e falharam pelo bloqueio de SMTP outbound do Render free (set/2025). Sender verificado: ver `CLAUDE.local.md` (repo público — email fora daqui). 300 emails/dia free. PRs #43 (campos), #44 (off-thread fix), #48 (Brevo). **Validado em 2026-05-30 com entrega externa.** Falta: múltiplos responsáveis, telefone, flag `recebe_notificacao`.
+11. ✅ **Email ao responsável na ocorrência (entrega real em prod)** — campos `nome/email_responsavel` no Aluno; envio em thread daemon (fire-and-forget) com `EMAIL_TIMEOUT=10s`, protegido por try/except. Backend de email = **Brevo via HTTP API** (`django-anymail`) — Resend e Gmail SMTP foram tentados e falharam pelo bloqueio de SMTP outbound do Render free (set/2025). Sender verificado: ver `CLAUDE.local.md` (repo público — email fora daqui). 300 emails/dia free. PRs #43 (campos), #44 (off-thread fix), #48 (Brevo). **Validado em 2026-05-30 com entrega externa.** **Múltiplos responsáveis e `recebe_notificacao` entregues** (fatias 1–2 do `RESPONSAVEIS.md`): o destino agora é o vínculo, com fallback pro campo antigo só quando o aluno não tem vínculo nenhum. Falta: telefone (outro canal, outro provedor) e a tela de vínculos (fatia 4, depende do PR #117).
 12. **Email assíncrono dedicado** — fila (Celery/Dramatiq/RQ) com retry + histórico, quando o volume crescer. Hoje é thread daemon best-effort. PENDENTE.
 13. **Timeline do aluno** — centraliza ocorrências, presença, advertências. Pode reaproveitar a API HistoricalRecords pra mostrar mudanças no histórico. PENDENTE.
 
@@ -439,7 +442,7 @@ Pendências de segurança de produção ficam no `CLAUDE.local.md` (não version
 - Limitação restante: usuários puros (diretor/secretaria/coordenador sem perfil de professor) ainda dependem do `/admin/` do Django — não têm página de gestão dedicada. Fica pra quando uma `UsuariosPage` aparecer no roadmap.
 
 ### Meta de curto prazo — STATUS
-Infra ✅, segurança operacional ✅, audit log ✅, comunicação por email **funcional em prod** ✅, **Sentry em prod ✅ (DSN setado + smoke test confirmado + captura de 4xx)**, **identidade visual completa ✅ (Login + Sidebar + Dashboard + listagens + detalhes + forms; DESIGN.md durável travado)**, auto-escopo de escola ✅, **diário de classe ✅ (5 fatias + redesenho do PDF #97)**, **fluxo de senha completo ✅ (próprio + esqueci + admin reseta de terceiro, PR #100)**, **performance ✅ (índices, annotates, bulk, prefetch + escopo obrigatório nos endpoints matriz)**. **Próximo objetivo crítico: migração pra OVH 🔴** — segue em Render free + Vercel. O Postgres free foi **reiniciado em out/2026**, então a validade de ~90 dias voltou a contar: **~30 dias de folga a partir de 2026-10-06** (vence por volta de 2026-11-05). É o prazo real da migração — passou disso, o banco expira de novo. Dump local já feito (PG 18 custom format, ~222KB), restore smoke-testado num container PG 18 local. Resta: provisionar VPS OVH, restaurar dump, ajustar `ALLOWED_HOSTS`/`CSRF_TRUSTED_ORIGINS`/`CORS_ALLOWED_ORIGINS`/`DATABASE_URL`, rotacionar `SECRET_KEY`, trocar `VITE_API_URL` no Vercel. Frontend continua no Vercel — só backend+banco saem do Render. Próximas frentes pós-OVH: fila assíncrona pra email (item 12), múltiplos responsáveis no aluno, dashboard com mais métricas.
+Infra ✅, segurança operacional ✅, audit log ✅, comunicação por email **funcional em prod** ✅, **Sentry em prod ✅ (DSN setado + smoke test confirmado + captura de 4xx)**, **identidade visual completa ✅ (Login + Sidebar + Dashboard + listagens + detalhes + forms; DESIGN.md durável travado)**, auto-escopo de escola ✅, **diário de classe ✅ (5 fatias + redesenho do PDF #97)**, **fluxo de senha completo ✅ (próprio + esqueci + admin reseta de terceiro, PR #100)**, **performance ✅ (índices, annotates, bulk, prefetch + escopo obrigatório nos endpoints matriz)**. **Próximo objetivo crítico: migração pra OVH 🔴** — segue em Render free + Vercel. O Postgres free foi **reiniciado em out/2026**, então a validade de ~90 dias voltou a contar: **~30 dias de folga a partir de 2026-10-06** (vence por volta de 2026-11-05). É o prazo real da migração — passou disso, o banco expira de novo. Dump local já feito (PG 18 custom format, ~222KB), restore smoke-testado num container PG 18 local. Resta: provisionar VPS OVH, restaurar dump, ajustar `ALLOWED_HOSTS`/`CSRF_TRUSTED_ORIGINS`/`CORS_ALLOWED_ORIGINS`/`DATABASE_URL`, rotacionar `SECRET_KEY`, trocar `VITE_API_URL` no Vercel. Frontend continua no Vercel — só backend+banco saem do Render. Próximas frentes pós-OVH: fila assíncrona pra email (item 12), dashboard com mais métricas.
 
 ---
 
