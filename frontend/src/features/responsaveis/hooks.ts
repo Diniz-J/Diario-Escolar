@@ -59,15 +59,19 @@ export function useConvidarResponsavel() {
     },
     onError: (err) => {
       if (isAxiosError(err)) {
-        const detail = err.response?.data?.detail;
-        if (typeof detail === "string") {
-          toast.error(detail);
-          return;
-        }
+        // O 429 vem ANTES do `detail`: o throttle do DRF responde
+        // `{"detail": "Request was throttled. Expected available in N
+        // seconds."}`, em inglês. Na ordem inversa, essa frase é que
+        // chegava na tela da secretaria.
         if (err.response?.status === 429) {
           toast.error(
             "Muitos convites em pouco tempo. Aguarde alguns minutos.",
           );
+          return;
+        }
+        const detail = err.response?.data?.detail;
+        if (typeof detail === "string") {
+          toast.error(detail);
           return;
         }
       }

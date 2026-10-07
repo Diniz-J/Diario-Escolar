@@ -219,6 +219,30 @@ class FiltroEBuscaTests(_ListaSetup):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("situacao", resp.data)
 
+    def test_situacao_nao_alcanca_o_detalhe(self):
+        """O filtro é da listagem; o detalhe não tem filtro nenhum.
+
+        O DRF chama `filter_queryset` também no `retrieve`, por dentro do
+        `get_object`. Com o filtro no `get_queryset`, pedir o detalhe com
+        os filtros da tela na URL escondia um responsável que existe
+        (404) ou reclamava de um valor inválido (400) numa rota que não
+        filtra nada.
+        """
+        alvo = self._responsavel("Sem convite", "s@a.com")
+        detalhe = reverse(
+            "api_v1:responsavel-detail", kwargs={"pk": alvo.pk}
+        )
+        self._login(self.diretor)
+
+        for params in ({}, {"situacao": "ativo"}, {"situacao": "xpto"}):
+            with self.subTest(params=params):
+                resp = self.client.get(detalhe, params)
+                self.assertEqual(resp.status_code, 200)
+                self.assertEqual(resp.data["id"], alvo.id)
+                # A situação derivada continua sendo calculada: as
+                # anotações seguem no `get_queryset`.
+                self.assertEqual(resp.data["situacao"], "sem_convite")
+
     def test_busca_pelo_nome_do_aluno(self):
         """A secretaria procura 'o pai do João', não o nome do responsável."""
         r = self._responsavel("", "pai@a.com")

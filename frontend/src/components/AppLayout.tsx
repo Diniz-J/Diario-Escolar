@@ -294,7 +294,7 @@ export function AppLayout() {
               podeImportar={podeImportar}
               podeConfigurarEscola={podeModificarCadastros}
               podeUsarDiario={podeUsarDiario}
-          podeGerirResponsaveis={podeModificarCadastros}
+              podeGerirResponsaveis={podeModificarCadastros}
             />
           </SheetContent>
         </Sheet>

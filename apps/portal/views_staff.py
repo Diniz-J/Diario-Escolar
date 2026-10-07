@@ -78,19 +78,39 @@ class ResponsavelStaffViewSet(EscopoEscolaMixin, viewsets.ReadOnlyModelViewSet):
             .order_by("nome", "pk")
         )
 
-        situacao = self.request.query_params.get("situacao")
-        if situacao:
-            if situacao not in SITUACOES_VALIDAS:
-                raise ValidationError(
-                    {
-                        "situacao": (
-                            "Situação inválida. Use uma de: "
-                            + ", ".join(sorted(SITUACOES_VALIDAS))
-                        )
-                    }
-                )
-            qs = self._filtrar_situacao(qs, situacao)
         return qs
+
+    def filter_queryset(self, queryset):
+        """Aplica o `?situacao=` só na listagem.
+
+        O DRF chama `filter_queryset` também no `retrieve`, por dentro do
+        `get_object`. Com o filtro no `get_queryset`, como estava,
+        `/responsaveis/<id>/?situacao=ativo` devolvia 404 pra um
+        responsável que existe, e `?situacao=xpto` devolvia 400 numa rota
+        de detalhe que não tem filtro nenhum — bastava alguém levar os
+        filtros da tela pra URL do detalhe. É a mesma armadilha que
+        `ComunicadoViewSet` já tinha pago; o remédio é o mesmo.
+
+        As anotações continuam no `get_queryset`: o serializer precisa
+        delas pra derivar a situação, inclusive no detalhe.
+        """
+        queryset = super().filter_queryset(queryset)
+        if self.action != "list":
+            return queryset
+
+        situacao = self.request.query_params.get("situacao")
+        if not situacao:
+            return queryset
+        if situacao not in SITUACOES_VALIDAS:
+            raise ValidationError(
+                {
+                    "situacao": (
+                        "Situação inválida. Use uma de: "
+                        + ", ".join(sorted(SITUACOES_VALIDAS))
+                    )
+                }
+            )
+        return self._filtrar_situacao(queryset, situacao)
 
     def _filtrar_situacao(self, qs, situacao: str):
         """Traduz a situação derivada em filtro de queryset.
