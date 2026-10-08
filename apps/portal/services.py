@@ -86,9 +86,14 @@ def montar_email(responsavel, finalidade, token_cru: str) -> EmailMultiAlternati
 def emitir_link(responsavel, finalidade, enviado_por=None) -> ConviteResponsavel:
     """Gera o link e envia o email, **síncrono**. Levanta se o envio falhar.
 
-    Se o email não sair, o link é invalidado antes de propagar o erro.
-    Sem isso, o comando de lote veria um convite "pendente" e nunca mais
-    tentaria aquele responsável — o pai ficaria sem convite pra sempre.
+    Falha de envio não deixa rastro no estado da conta:
+
+    - O link novo é **apagado** (não só expirado). Uma linha expirada que
+      nunca saiu fazia a tela de responsáveis mostrar "convite expirado"
+      pra quem nunca recebeu convite, e o comando de lote a contaria como
+      tentativa. O erro em si fica no log (Sentry), via quem chamou.
+    - Os links pendentes anteriores só são invalidados **depois** que o
+      email sai. Um reenvio que falha mantém o convite anterior valendo.
     """
     convite, token_cru = ConviteResponsavel.gerar(
         responsavel, finalidade, enviado_por=enviado_por
@@ -96,8 +101,11 @@ def emitir_link(responsavel, finalidade, enviado_por=None) -> ConviteResponsavel
     try:
         montar_email(responsavel, finalidade, token_cru).send(fail_silently=False)
     except Exception:
-        convite.invalidar()
+        convite.delete()
         raise
+    ConviteResponsavel.pendentes(responsavel).exclude(pk=convite.pk).update(
+        expira_em=timezone.now()
+    )
     return convite
 
 

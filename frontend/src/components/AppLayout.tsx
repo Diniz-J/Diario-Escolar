@@ -60,6 +60,9 @@ interface SidebarBodyProps {
   // Diário de aula é a área do docente — só professor/inspetor veem o item
   // (a direção acessa o diário pela ficha do professor).
   podeUsarDiario: boolean;
+  // Responsáveis é gestão de acesso de usuário externo: quem convida é
+  // nível-diretor, igual à permissão do endpoint (`IsAdminOrDiretor`).
+  podeGerirResponsaveis: boolean;
 }
 
 // Itens da seção "Configuração" — visíveis pra admin/diretor/secretaria
@@ -83,6 +86,7 @@ function SidebarBody({
   podeImportar,
   podeConfigurarEscola,
   podeUsarDiario,
+  podeGerirResponsaveis,
 }: SidebarBodyProps) {
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
@@ -143,6 +147,22 @@ function SidebarBody({
             }
           >
             Diário de aula
+          </NavLink>
+        )}
+        {podeGerirResponsaveis && (
+          <NavLink
+            to="/responsaveis"
+            onClick={onNavigate}
+            className={({ isActive }) =>
+              cn(
+                "relative block pl-4 pr-3 py-2 text-sm rounded-md transition-colors border-l-2 border-transparent",
+                isActive
+                  ? "border-l-ferrugem font-medium text-creme bg-white/[0.04]"
+                  : "text-creme/75 hover:text-creme hover:bg-white/[0.04]",
+              )
+            }
+          >
+            Responsáveis
           </NavLink>
         )}
         {/* Seção "Configuração" — itens administrativos agrupados.
@@ -274,6 +294,7 @@ export function AppLayout() {
               podeImportar={podeImportar}
               podeConfigurarEscola={podeModificarCadastros}
               podeUsarDiario={podeUsarDiario}
+              podeGerirResponsaveis={podeModificarCadastros}
             />
           </SheetContent>
         </Sheet>
@@ -298,6 +319,7 @@ export function AppLayout() {
           podeImportar={podeImportar}
           podeConfigurarEscola={podeModificarCadastros}
           podeUsarDiario={podeUsarDiario}
+          podeGerirResponsaveis={podeModificarCadastros}
         />
       </aside>
 

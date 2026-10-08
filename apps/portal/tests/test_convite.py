@@ -154,6 +154,21 @@ class ConvidarTests(_ConviteSetup):
         self.assertEqual(resp.status_code, 502)
         self.assertFalse(ConviteResponsavel.pendentes(self.semeado).exists())
 
+    def test_falha_no_envio_nao_deixa_linha_de_convite(self):
+        """O link que não saiu é apagado, não expirado: senão a tela do
+        staff mostrava "convite expirado" pra quem nunca recebeu nada."""
+        with mock.patch(ENVIO, side_effect=ConnectionError("provedor fora")):
+            self._convidar(self.semeado)
+        self.assertFalse(ConviteResponsavel.objects.filter(responsavel=self.semeado).exists())
+
+    def test_reenvio_que_falha_mantem_o_convite_anterior(self):
+        """Os pendentes só caem depois que o email novo sai."""
+        self._convidar(self.semeado)
+        token_anterior = token_do_email(mail.outbox[0])
+        with mock.patch(ENVIO, side_effect=ConnectionError("provedor fora")):
+            self.assertEqual(self._convidar(self.semeado).status_code, 502)
+        self.assertEqual(self._definir(token_anterior).status_code, 200)
+
     def test_convite_novo_invalida_o_anterior(self):
         self._convidar(self.semeado)
         self._convidar(self.semeado)
