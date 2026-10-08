@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+{% comment %}
+Relatório cadastral de alunos, separado por turma — impresso, serve de
+lista da turma, e uma lista corrida de 400 nomes não serve em cima de uma
+mesa.
+
+`{% comment %}` e não `{# #}`: a segunda forma é de uma linha só, e um
+`{# #}` multilinha é impresso no PDF como texto.
+{% endcomment %}
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Relatório de Alunos</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 1.5cm 1.8cm;
+      @bottom-right {
+        content: "Página " counter(page) " de " counter(pages);
+        font-family: "DejaVu Sans", sans-serif;
+        font-size: 8pt;
+        color: #6b6859;
+      }
+    }
+    body {
+      font-family: "DejaVu Sans", sans-serif;
+      color: #2d2a24;
+      font-size: 9.5pt;
+      line-height: 1.5;
+    }
+    .marca { display: table; width: 100%; margin-bottom: 4pt; }
+    .marca .logo-cell {
+      display: table-cell; vertical-align: middle; width: 36pt;
+    }
+    .marca .logo-cell img {
+      width: 32pt; height: 32pt; border-radius: 6pt; display: block;
+    }
+    .marca .nome-cell {
+      display: table-cell; vertical-align: middle; padding-left: 8pt;
+      font-family: Georgia, "DejaVu Serif", serif; font-size: 13pt;
+      color: #3a4524; letter-spacing: -0.01em;
+    }
+    h1 {
+      font-family: Georgia, "DejaVu Serif", serif; font-size: 22pt;
+      font-weight: 500; letter-spacing: -0.01em; margin: 6pt 0 0 0;
+      color: #2d2a24;
+    }
+    .filete { height: 1px; width: 48pt; background: #b07d62; margin: 8pt 0 14pt 0; }
+    .meta-principal {
+      width: 100%; border-collapse: separate; border-spacing: 18pt 0;
+      margin-bottom: 8pt;
+    }
+    .meta-principal td { width: 50%; padding: 0; vertical-align: top; border: none; }
+    .meta-divisor { height: 1px; background: #ece9e0; margin: 8pt 0; }
+    .meta-aux {
+      width: 100%; border-collapse: separate; border-spacing: 18pt 0;
+      margin-bottom: 16pt;
+    }
+    .meta-aux td { width: 33%; padding: 0; vertical-align: top; border: none; }
+    .label {
+      font-size: 7pt; text-transform: uppercase; letter-spacing: 0.18em;
+      color: #6b6859; display: block; margin-bottom: 2pt;
+    }
+    .valor { color: #2d2a24; font-weight: 500; }
+    .valor-aux { color: #2d2a24; font-size: 8.5pt; }
+    /* Cabeçalho de turma. */
+    .turma-titulo {
+      font-family: Georgia, "DejaVu Serif", serif; font-size: 12pt;
+      font-weight: 500; color: #3a4524; margin: 14pt 0 2pt 0;
+      page-break-after: avoid;
+    }
+    .turma-ctx {
+      font-size: 7pt; text-transform: uppercase; letter-spacing: 0.14em;
+      color: #6b6859; margin-bottom: 4pt;
+    }
+    table.alunos {
+      width: 100%; border-collapse: collapse; margin-bottom: 4pt;
+      /* Largura fixa: cada turma é uma tabela, e sem isto cada uma
+         dimensiona as colunas pelo próprio conteúdo — as colunas
+         dançariam de uma turma pra outra na mesma folha. */
+      table-layout: fixed;
+    }
+    table.alunos col.c-ordem { width: 6%; }
+    table.alunos col.c-matricula { width: 15%; }
+    table.alunos col.c-nome { width: 36%; }
+    table.alunos col.c-nasc { width: 16%; }
+    table.alunos col.c-resp { width: 27%; }
+    table.alunos td, table.alunos th { word-wrap: break-word; }
+    table.alunos thead { display: table-header-group; }
+    table.alunos th {
+      font-size: 7pt; text-transform: uppercase; letter-spacing: 0.14em;
+      color: #6b6859; font-weight: 500; text-align: left;
+      padding: 0 4pt 5pt 0; border-bottom: 1px solid #ece9e0;
+    }
+    table.alunos td {
+      padding: 5pt 4pt 5pt 0; border-bottom: 1px solid #f2efe7;
+      vertical-align: top;
+    }
+    table.alunos tr { page-break-inside: avoid; }
+    .ordem { color: #6b6859; font-size: 8pt; }
+    .matricula { font-size: 8pt; color: #6b6859; white-space: nowrap; }
+    .nasc { font-size: 8.5pt; white-space: nowrap; }
+    .responsavel { font-size: 8.5pt; }
+    .contato { font-size: 7.5pt; color: #6b6859; display: block; }
+    .marca-inativo {
+      font-size: 7pt; color: #6b6859; text-transform: uppercase;
+      letter-spacing: 0.1em; padding-left: 4pt;
+    }
+    .sem-dado { color: #6b6859; }
+    .vazio { color: #6b6859; font-style: italic; }
+    .assinaturas {
+      width: 100%; margin-top: 32pt; border-collapse: separate;
+      border-spacing: 24pt 0;
+    }
+    .assinaturas td { width: 50%; vertical-align: bottom; text-align: center; }
+    .linha-assinatura {
+      border-top: 1px solid #2d2a24; padding-top: 4pt; font-size: 8pt;
+      color: #6b6859;
+    }
+  </style>
+</head>
+<body>
+  <div class="marca">
+    {% if logo_path %}
+    <div class="logo-cell"><img src="file://{{ logo_path }}" alt=""></div>
+    {% endif %}
+    <div class="nome-cell">Diário Diniz</div>
+  </div>
+
+  <h1>Relatório de Alunos</h1>
+  <div class="filete"></div>
+
+  <table class="meta-principal">
+    <tr>
+      <td>
+        <span class="label">Recorte</span>
+        <span class="valor">{{ recorte }}</span>
+      </td>
+      <td>
+        <span class="label">Escola</span>
+        <span class="valor">{{ escola_nome|default:"—" }}</span>
+      </td>
+    </tr>
+  </table>
+
+  <div class="meta-divisor"></div>
+
+  <table class="meta-aux">
+    <tr>
+      <td>
+        <span class="label">Alunos</span>
+        <span class="valor-aux">{{ total }}</span>
+      </td>
+      <td>
+        <span class="label">Turmas</span>
+        <span class="valor-aux">{{ grupos|length }}</span>
+      </td>
+      <td>
+        <span class="label">Emitido em</span>
+        <span class="valor-aux">{{ gerado_em|date:"d/m/Y H:i" }}</span>
+      </td>
+    </tr>
+  </table>
+
+  {% for grupo in grupos %}
+  <div class="turma-titulo">{{ grupo.turma_nome }}</div>
+  <div class="turma-ctx">
+    {{ grupo.turno }} · {{ grupo.ano_letivo }} ·
+    {{ grupo.alunos|length }}
+    {% if grupo.alunos|length == 1 %}aluno{% else %}alunos{% endif %}
+  </div>
+  <table class="alunos">
+    <colgroup>
+      <col class="c-ordem"><col class="c-matricula"><col class="c-nome">
+      <col class="c-nasc"><col class="c-resp">
+    </colgroup>
+    <thead>
+      <tr>
+        <th class="ordem">#</th>
+        <th>Matrícula</th>
+        <th>Aluno</th>
+        <th>Nascimento</th>
+        <th>Responsável</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for aluno in grupo.alunos %}
+      <tr>
+        <td class="ordem">{{ forloop.counter }}</td>
+        <td class="matricula">{{ aluno.matricula }}</td>
+        <td>
+          {{ aluno.nome_completo }}
+          {% if not aluno.ativo %}<span class="marca-inativo">[ inativo ]</span>{% endif %}
+        </td>
+        <td class="nasc">
+          {% if aluno.data_nascimento %}
+          {{ aluno.data_nascimento|date:"d/m/Y" }}
+          {% else %}<span class="sem-dado">—</span>{% endif %}
+        </td>
+        <td class="responsavel">
+          {% if aluno.nome_responsavel %}
+          {{ aluno.nome_responsavel }}
+          {% else %}<span class="sem-dado">—</span>{% endif %}
+          {% if aluno.email_responsavel %}
+          <span class="contato">{{ aluno.email_responsavel }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% empty %}
+  <p class="vazio">Nenhum aluno no recorte selecionado.</p>
+  {% endfor %}
+
+  <table class="assinaturas">
+    <tr>
+      <td><div class="linha-assinatura">Secretaria</div></td>
+      <td><div class="linha-assinatura">Direção / Coordenação</div></td>
+    </tr>
+  </table>
+</body>
+</html>

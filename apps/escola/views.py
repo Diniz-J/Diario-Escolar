@@ -4,12 +4,28 @@ Todos os ViewSets escopam o queryset à escola do `request.user` (via
 `EscopoEscolaMixin` ou override manual em `EscolaViewSet`). Admin e superuser
 bypassam o filtro.
 """
+from django.template.loader import render_to_string
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 
 from apps.common.import_export_views import ImportExportViewSetMixin
+from apps.common.pdf import caminho_logo, render_pdf
 from apps.common.permissions import IsAdmin, IsAdminOrDiretor
 from apps.common.views import EscopoEscolaMixin, ReadWritePermissionMixin
+from apps.relatorios.exportacao import (
+    FORMATOS_PLANILHA,
+    exportar_planilha,
+    resolver_formato,
+    resposta_download,
+)
+from apps.relatorios.services import (
+    LIMITE_PDF_ALUNOS,
+    agrupar_alunos_por_turma,
+    linhas_alunos,
+)
 
 from .models import Aluno, Disciplina, Escola, Lecionamento, Professor, Turma
 from .resources import (
@@ -27,6 +43,13 @@ from .serializers import (
     ProfessorSerializer,
     TurmaSerializer,
 )
+
+# Alias module-level: o render mora em `apps/common/pdf.py`, mas o nome
+# fica aqui porque os testes dão `mock.patch` em
+# `apps.escola.views._render_pdf`.
+_render_pdf = render_pdf
+
+FORMATOS_EXPORT = ("pdf", *FORMATOS_PLANILHA)
 
 
 class EscolaViewSet(ReadWritePermissionMixin, viewsets.ModelViewSet):
@@ -115,6 +138,97 @@ class AlunoViewSet(
         """Soft delete: só marca `ativo=False`, mantém a linha no banco."""
         instance.ativo = False
         instance.save(update_fields=["ativo", "atualizado_em"])
+
+    @action(detail=False, methods=["get"])
+    def relatorio(self, request):
+        """`GET /alunos/relatorio/?formato=pdf|csv|xlsx` — cadastral.
+
+        Deliberadamente SEPARADO do `export/` que o
+        `ImportExportViewSetMixin` expõe. Aquele é o serviço de migração
+        em massa: admin global, atrás do flag comercial
+        `Escola.importacao_em_lote_habilitada`, e devolve a base no
+        formato de reimportação. Este é a lista que a secretaria tira da
+        própria escola pra usar no dia a dia — baixar a lista da sua
+        turma não é a mesma coisa que extrair a base inteira.
+
+        A permissão vem do `ReadWritePermissionMixin`: por não ser
+        `list`/`retrieve`, cai no `WRITE_PERMISSION` (admin/diretor, com
+        secretaria e coordenador como aliases). Professor não entra — a
+        planilha leva nome e email de responsável. Há teste fixando os
+        dois lados, porque a regra é consequência do mixin e não de uma
+        declaração local: `permission_classes` no `@action` seria
+        ignorado em silêncio, já que o mixin sobrescreve
+        `get_permissions`.
+
+        Reaproveita `get_queryset` (escopo de escola) e
+        `filter_queryset` (`?turma=`, `?ativo=`, busca por nome e
+        matrícula), então o arquivo sai com o mesmo recorte da tela.
+        """
+        formato = resolver_formato(request, FORMATOS_EXPORT, default="pdf")
+        alunos = list(self.filter_queryset(self.get_queryset()))
+
+        stem = "alunos"
+        if formato in FORMATOS_PLANILHA:
+            headers, linhas = linhas_alunos(alunos)
+            return exportar_planilha(
+                headers, linhas, formato=formato, stem=stem
+            )
+
+        if len(alunos) > LIMITE_PDF_ALUNOS:
+            raise ValidationError(
+                {
+                    "detail": (
+                        f"O recorte tem {len(alunos)} alunos e o PDF "
+                        f"comporta {LIMITE_PDF_ALUNOS}. Filtre por turma "
+                        "ou baixe em CSV/XLSX, que não têm esse limite."
+                    )
+                }
+            )
+
+        escola_usuario = getattr(request.user, "escola", None)
+        contexto = {
+            "grupos": agrupar_alunos_por_turma(alunos),
+            "total": len(alunos),
+            "escola_nome": (
+                alunos[0].escola.nome
+                if alunos
+                else (escola_usuario.nome if escola_usuario else "")
+            ),
+            "recorte": self._descrever_recorte(request, alunos),
+            "gerado_em": timezone.localtime(),
+            "logo_path": caminho_logo(),
+        }
+        html_str = render_to_string("relatorio_alunos_pdf.html", contexto)
+        return resposta_download(
+            _render_pdf(html_str),
+            content_type="application/pdf",
+            nome_arquivo=f"{stem}.pdf",
+        )
+
+    def _descrever_recorte(self, request, alunos) -> str:
+        """Rótulo legível do recorte, pro cabeçalho do PDF.
+
+        O nome da turma sai dos alunos encontrados, não do `?turma=`
+        recebido: o queryset é escopado, então um id de outra escola
+        devolve lista vazia — mas resolver pelo parâmetro imprimiria o
+        nome da turma alheia no cabeçalho.
+        """
+        partes = []
+        if request.query_params.get("turma"):
+            nomes = {aluno.turma.nome for aluno in alunos}
+            if len(nomes) == 1:
+                partes.append(f"turma {nomes.pop()}")
+
+        ativo = request.query_params.get("ativo")
+        if ativo is not None:
+            ligado = ativo.lower() in ("true", "1")
+            partes.append("ativos" if ligado else "inativos")
+
+        busca = request.query_params.get("search")
+        if busca:
+            partes.append(f'busca "{busca}"')
+
+        return " · ".join(partes) if partes else "Todos os alunos"
 
     def get_import_extras(self, request) -> dict:
         """Aceita `turno_padrao` e `ano_letivo_padrao` no upload.

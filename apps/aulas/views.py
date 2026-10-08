@@ -11,7 +11,6 @@ Escopo de visibilidade:
 A transição pra `conferido` é exclusiva da action `conferir` — o serializer
 recusa `status=conferido`, então não há como o professor se autoconferir.
 """
-import unicodedata
 from datetime import date
 
 from django.core.exceptions import ObjectDoesNotExist
@@ -24,6 +23,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
+from apps.common.pdf import caminho_logo, render_pdf, slug_arquivo
 from apps.common.permissions import (
     IsAdminOrDiretor,
     IsAdminOrDiretorOrProfessor,
@@ -55,17 +55,10 @@ _MESES = [
 ]
 
 
-def _render_pdf(html_str: str) -> bytes:
-    """Helper module-level: renderiza HTML→PDF via WeasyPrint.
-
-    Mesmo padrão do boletim (apps/boletins/views.py): nível de função pra
-    ser mockável nos testes e com import lazy do WeasyPrint (que só carrega
-    libs do sistema quando de fato chamado — `manage.py check` no Windows
-    continua funcionando).
-    """
-    from weasyprint import HTML  # noqa: WPS433
-
-    return HTML(string=html_str).write_pdf()
+# Alias module-level: o render mora em `apps/common/pdf.py`, mas o nome
+# fica aqui porque os testes dão `mock.patch` em
+# `apps.aulas.views._render_pdf`.
+_render_pdf = render_pdf
 
 
 def _agrupar_por_mes(registros):
@@ -293,11 +286,7 @@ class RegistroAulaViewSet(
         }
         # WeasyPrint não tem servidor HTTP: a logo precisa de caminho
         # absoluto (file://). Mesmo padrão do boletim.
-        from django.contrib.staticfiles import finders
-
-        contexto["logo_path"] = (
-            finders.find("branding/diario-diniz-badge-128.png") or ""
-        )
+        contexto["logo_path"] = caminho_logo()
 
         html_str = render_to_string("aula_diario_pdf.html", contexto)
         pdf_bytes = _render_pdf(html_str)
@@ -307,15 +296,8 @@ class RegistroAulaViewSet(
                 professor.usuario.get_full_name()
                 or professor.usuario.username
             )
-            # ASCII-safe: tira acentos pra Content-Disposition não engasgar
-            # em browsers antigos / proxies.
-            nome_ascii = (
-                unicodedata.normalize("NFKD", nome)
-                .encode("ascii", "ignore")
-                .decode("ascii")
-            )
-            slug = nome_ascii.strip().lower().replace(" ", "_")
-            nome_arquivo = f"diario_{slug}.pdf" if slug else "diario_aula.pdf"
+            slug = slug_arquivo(nome, fallback="aula")
+            nome_arquivo = f"diario_{slug}.pdf"
         else:
             nome_arquivo = "diario_aula.pdf"
 

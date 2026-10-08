@@ -21,6 +21,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.common.pdf import caminho_logo, render_pdf
+from apps.common.planilha import neutralizar_formula
 from apps.common.permissions import IsAdminOrDiretorOrProfessorOrInspetor
 from apps.escola.models import Aluno
 
@@ -53,18 +55,10 @@ def _checar_acesso_aluno(request, aluno: Aluno) -> None:
         raise PermissionDenied("Aluno fora da sua escola.")
 
 
-def _render_pdf(html_str: str) -> bytes:
-    """Helper module-level: chama WeasyPrint pra render HTML→PDF.
-
-    Extraído pra um nível de função pra ficar mockável nos testes
-    (não dá pra patch numa importação `from X import Y` que mora
-    dentro de outra função). O import do WeasyPrint é mantido lazy
-    aqui mesmo — `manage.py check` no Windows continua funcionando
-    porque a lib só é carregada quando esta função é chamada.
-    """
-    from weasyprint import HTML  # noqa: WPS433
-
-    return HTML(string=html_str).write_pdf()
+# Alias module-level: o render mora em `apps/common/pdf.py` (três views
+# geram PDF), mas o nome fica aqui porque os testes dão `mock.patch` em
+# `apps.boletins.views._render_pdf`.
+_render_pdf = render_pdf
 
 
 def _resolver_filtros(
@@ -145,11 +139,7 @@ class BoletimAlunoPDFView(APIView):
         # da marca — passamos via `logo_path` no contexto e o template
         # usa file://. Sem isto, `{% static %}` retorna URL relativa
         # que o WeasyPrint nao resolve (nao tem servidor HTTP).
-        from django.contrib.staticfiles import finders
-
-        contexto["logo_path"] = (
-            finders.find("branding/diario-diniz-badge-128.png") or ""
-        )
+        contexto["logo_path"] = caminho_logo()
         html_str = render_to_string("boletim_pdf.html", contexto)
         pdf_bytes = _render_pdf(html_str)
 
@@ -212,7 +202,11 @@ class BoletimAlunoAvaliacoesView(APIView):
         ]
         dataset = tablib.Dataset(headers=headers)
         for linha in linhas:
-            dataset.append([linha[h] for h in headers])
+            # `titulo` é texto livre do professor e a escola abre este
+            # arquivo no Excel — ver `apps/common/planilha.py`.
+            dataset.append(
+                [neutralizar_formula(linha[h], formato) for h in headers]
+            )
 
         conteudo = dataset.export(formato)
         if isinstance(conteudo, str):

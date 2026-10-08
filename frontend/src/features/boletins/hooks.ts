@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
+import { baixarArquivo } from "@/lib/download";
 import type { Boletim } from "@/types/api";
 
 interface BoletimParams {
@@ -30,39 +31,6 @@ export function useBoletim(
   });
 }
 
-// Download de arquivo via axios+Blob — preserva o Bearer no header
-// (não dá pra usar `window.location` direto porque perderia auth).
-// Cria URL temporária com createObjectURL, dispara click invisível,
-// limpa.
-//
-// `nomeCustomizado` (sem extensão) sobrescreve o nome sugerido pelo
-// backend via Content-Disposition. Quando ausente, usa o nome do
-// backend (default `boletim_<matricula>_<periodo>.pdf` etc.).
-async function downloadArquivo(
-  url: string,
-  params: Record<string, unknown>,
-  extensao?: string,
-  nomeCustomizado?: string,
-) {
-  const resp = await api.get(url, { params, responseType: "blob" });
-  // Content-Disposition vem do backend: `attachment; filename="..."`.
-  const disp = resp.headers["content-disposition"] as string | undefined;
-  const matchNome = disp?.match(/filename="?([^"]+)"?/);
-  const nomeDoBackend = matchNome ? matchNome[1] : "download";
-  const nomeFinal = nomeCustomizado
-    ? `${nomeCustomizado}${extensao ?? ""}`
-    : nomeDoBackend;
-  const blobUrl = URL.createObjectURL(resp.data as Blob);
-  const a = document.createElement("a");
-  a.href = blobUrl;
-  a.download = nomeFinal;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  // Libera memória depois de um tick.
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
-}
-
 // PDF do boletim individual. `periodo` opcional (sem ele, gera anual);
 // `nome` opcional (sem ele, usa o nome sugerido pelo backend).
 export function useBaixarBoletimPDF() {
@@ -72,7 +40,7 @@ export function useBaixarBoletimPDF() {
       periodo?: number;
       nome?: string;
     }): Promise<void> => {
-      await downloadArquivo(
+      await baixarArquivo(
         `/boletins/aluno/${params.alunoId}/pdf/`,
         params.periodo ? { periodo: params.periodo } : {},
         ".pdf",
@@ -92,7 +60,7 @@ export function useExportarAvaliacoesAluno() {
       periodo?: number;
       nome?: string;
     }): Promise<void> => {
-      await downloadArquivo(
+      await baixarArquivo(
         `/boletins/aluno/${params.alunoId}/avaliacoes/`,
         {
           formato: params.formato,

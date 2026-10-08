@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAlunos } from "@/features/alunos/hooks";
+import { usePermissoes } from "@/features/auth/usePermissoes";
+import { ExportarAlunosDialog } from "@/features/relatorios/ExportarAlunosDialog";
+import { FrequenciaDialog } from "@/features/relatorios/FrequenciaDialog";
 import { useTurma } from "@/features/turmas/hooks";
 
 // Página /turmas/:id — detalhe + alunos vinculados.
@@ -29,6 +33,9 @@ export function TurmaDetalhePage() {
   const turmaId = params.id ? parseInt(params.id, 10) : undefined;
 
   const turmaQuery = useTurma(turmaId);
+  const { podeModificarCadastros } = usePermissoes();
+  const [frequenciaOpen, setFrequenciaOpen] = useState(false);
+  const [listaOpen, setListaOpen] = useState(false);
   // Lista só alunos ativos da turma — alunos inativos (soft delete)
   // ficam disponíveis pra pesquisa de histórico na página de Alunos
   // via toggle "Mostrar inativos", não aqui.
@@ -40,17 +47,55 @@ export function TurmaDetalhePage() {
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/turmas">← Voltar</Link>
         </Button>
-        <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
-          {turmaQuery.isLoading ? (
-            <Skeleton className="h-8 w-64" />
-          ) : turmaQuery.data ? (
-            turmaQuery.data.nome
-          ) : (
-            "Turma não encontrada"
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
+            {turmaQuery.isLoading ? (
+              <Skeleton className="h-8 w-64" />
+            ) : turmaQuery.data ? (
+              turmaQuery.data.nome
+            ) : (
+              "Turma não encontrada"
+            )}
+          </h1>
+          {turmaQuery.data && (
+            <div className="flex gap-2 sm:mt-1 shrink-0">
+              {/* `/alunos/relatorio/` é de nível diretor no backend (403 pra
+                  professor/inspetor) — mesmo gate da `AlunosPage`. A
+                  frequência é lida também pelo corpo docente. */}
+              {podeModificarCadastros && (
+                <Button variant="outline" onClick={() => setListaOpen(true)}>
+                  Lista da turma
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                onClick={() => setFrequenciaOpen(true)}
+              >
+                Frequência
+              </Button>
+            </div>
           )}
-        </h1>
+        </div>
         <div className="h-px w-10 bg-ferrugem" />
       </header>
+
+      {turmaQuery.data && (
+        <>
+          <FrequenciaDialog
+            open={frequenciaOpen}
+            onOpenChange={setFrequenciaOpen}
+            turmaId={turmaQuery.data.id}
+            turmaNome={turmaQuery.data.nome}
+            anoLetivo={turmaQuery.data.ano_letivo}
+          />
+          <ExportarAlunosDialog
+            open={listaOpen}
+            onOpenChange={setListaOpen}
+            filtros={{ turma: turmaQuery.data.id, ativo: true }}
+            recorte={`turma ${turmaQuery.data.nome} · alunos ativos`}
+          />
+        </>
+      )}
 
       {turmaQuery.data && (
         <Card>

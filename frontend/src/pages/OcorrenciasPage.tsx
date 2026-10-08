@@ -29,6 +29,7 @@ import {
   STATUS_ORDEM,
 } from "@/features/ocorrencias/constants";
 import { useOcorrenciasPaginated } from "@/features/ocorrencias/hooks";
+import { ExportarOcorrenciasDialog } from "@/features/relatorios/ExportarOcorrenciasDialog";
 import { useTurmas } from "@/features/turmas/hooks";
 import type { OcorrenciaStatus } from "@/types/api";
 
@@ -42,6 +43,7 @@ export function OcorrenciasPage() {
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [page, setPage] = useState(1);
   // Reseta pra página 1 sempre que o filtro server-side muda — senão
   // pode cair numa página que não existe mais no novo subset.
@@ -51,16 +53,37 @@ export function OcorrenciasPage() {
 
   // Filtros server-side: status + range de datas vão pro backend.
   // A busca por nome (aluno/turma) continua client-side.
-  const ocorrenciasQuery = useOcorrenciasPaginated(
-    {
+  // Um objeto só pros filtros server-side: a listagem e o export leem
+  // daqui, então não há como o arquivo sair com recorte diferente do
+  // que está na tela.
+  const filtrosServidor = useMemo(
+    () => ({
       ...(filtroStatus !== FILTRO_TODOS
         ? { status: filtroStatus as OcorrenciaStatus }
         : {}),
       ...(dataInicio ? { data_inicio: dataInicio } : {}),
       ...(dataFim ? { data_fim: dataFim } : {}),
-    },
-    { page, page_size: PAGE_SIZE },
+    }),
+    [filtroStatus, dataInicio, dataFim],
   );
+
+  const ocorrenciasQuery = useOcorrenciasPaginated(filtrosServidor, {
+    page,
+    page_size: PAGE_SIZE,
+  });
+
+  // Rótulo do recorte pro diálogo — o mesmo que o backend imprime no
+  // cabeçalho do PDF, só que aqui serve pra conferir antes de baixar.
+  const recorteLegivel = useMemo(() => {
+    const partes: string[] = [];
+    if (dataInicio && dataFim) partes.push(`${dataInicio} a ${dataFim}`);
+    else if (dataInicio) partes.push(`a partir de ${dataInicio}`);
+    else if (dataFim) partes.push(`até ${dataFim}`);
+    if (filtroStatus !== FILTRO_TODOS) {
+      partes.push(STATUS_LABEL[filtroStatus as OcorrenciaStatus]);
+    }
+    return partes.length ? partes.join(" · ") : "Todas as ocorrências";
+  }, [dataInicio, dataFim, filtroStatus]);
   const alunosQuery = useAlunos();
   const turmasQuery = useTurmas();
 
@@ -111,10 +134,22 @@ export function OcorrenciasPage() {
           </h1>
           <div className="h-px w-10 bg-ferrugem" />
         </div>
-        <Button onClick={() => setFormOpen(true)}>Nova ocorrência</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setExportOpen(true)}>
+            Exportar
+          </Button>
+          <Button onClick={() => setFormOpen(true)}>Nova ocorrência</Button>
+        </div>
       </header>
 
       <OcorrenciaFormDialog open={formOpen} onOpenChange={setFormOpen} />
+      <ExportarOcorrenciasDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        filtros={filtrosServidor}
+        recorte={recorteLegivel}
+        busca={busca.trim() || undefined}
+      />
 
       <div className="flex flex-wrap gap-3 items-end">
         <Input

