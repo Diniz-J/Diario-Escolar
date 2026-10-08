@@ -5,15 +5,17 @@ usuário externo. Nada de autoria de comunicado, log de entrega de outros
 alunos, observação interna de professor ou qualquer dado agregado da turma
 (`PORTAL.md`, seção 4.2).
 """
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from apps.avaliacao.models import PeriodoAvaliativo
 from apps.comunicados.models import Comunicado
+from apps.common.serializers import validate_escola_do_usuario
 from apps.escola.models import Aluno
 from apps.materiais.models import Material
 from apps.ocorrencias.models import Ocorrencia
 
-from .models import Responsavel
+from .models import Responsavel, ResponsavelAluno
 
 
 class FilhoSerializer(serializers.ModelSerializer):
@@ -155,3 +157,95 @@ class ResponsavelStaffSerializer(serializers.ModelSerializer):
 
     def get_situacao_display(self, obj) -> str:
         return self.SITUACOES[self.get_situacao(obj)]
+
+
+class ResponsavelAlunoStaffSerializer(serializers.ModelSerializer):
+    """Vínculo responsável × aluno, escrito pela secretaria (fatia 4).
+
+    Este é o serializer mais sensível do projeto. `ResponsavelAluno` é o
+    modelo que decide quem lê o boletim, as ocorrências e os comunicados
+    de qual aluno (`PORTAL.md`, seção 4.2) — um vínculo indevido é acesso
+    indevido aos dados de uma criança, não um registro errado.
+
+    Por isso o guard é em **duas camadas, com propósitos diferentes**:
+
+    1. `validate_responsavel`/`validate_aluno` checam cada lado contra a
+       escola de quem está logado. É o guard de IDOR do projeto
+       (`validate_escola_do_usuario`), e sem ele um diretor da Escola X
+       escreveria na Escola Y mandando os ids no body.
+    2. `validate()` delega ao `clean()` do model, que exige os dois lados
+       na **mesma** escola.
+
+    As duas são necessárias e nenhuma substitui a outra: a (1) sozinha
+    deixaria passar responsável de X com aluno de Y (ambos legítimos para
+    um admin global); a (2) sozinha deixaria passar um par
+    inteiramente de outra escola, porque responsável e aluno concordam
+    entre si. É esse segundo caso que tem teste próprio — ele passa por
+    `clean()` sem reclamar.
+    """
+
+    responsavel_nome = serializers.CharField(
+        source="responsavel.nome", read_only=True
+    )
+    responsavel_email = serializers.CharField(
+        source="responsavel.email", read_only=True
+    )
+    aluno_nome = serializers.CharField(
+        source="aluno.nome_completo", read_only=True
+    )
+    aluno_turma = serializers.CharField(source="aluno.turma.nome", read_only=True)
+    aluno_ativo = serializers.BooleanField(source="aluno.ativo", read_only=True)
+
+    class Meta:
+        model = ResponsavelAluno
+        fields = [
+            "id",
+            "responsavel",
+            "responsavel_nome",
+            "responsavel_email",
+            "aluno",
+            "aluno_nome",
+            "aluno_turma",
+            "aluno_ativo",
+            "criado_em",
+        ]
+        read_only_fields = [
+            "id",
+            "responsavel_nome",
+            "responsavel_email",
+            "aluno_nome",
+            "aluno_turma",
+            "aluno_ativo",
+            "criado_em",
+        ]
+
+    def validate_responsavel(self, value):
+        validate_escola_do_usuario(
+            value.escola,
+            self.context.get("request"),
+            "Você só pode vincular responsável da sua própria escola.",
+        )
+        return value
+
+    def validate_aluno(self, value):
+        validate_escola_do_usuario(
+            value.escola,
+            self.context.get("request"),
+            "Você só pode vincular aluno da sua própria escola.",
+        )
+        return value
+
+    def validate(self, attrs: dict) -> dict:
+        """Roda o `clean()` do model — a regra de mesma escola mora lá.
+
+        Replicar a comparação aqui criaria uma segunda cópia da regra que
+        decide acesso a dado de aluno, e duas cópias divergem.
+        """
+        instance = ResponsavelAluno(
+            responsavel=attrs.get("responsavel"), aluno=attrs.get("aluno")
+        )
+        try:
+            instance.clean()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
+        return attrs
