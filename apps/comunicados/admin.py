@@ -10,6 +10,14 @@ class ComunicadoDestinatarioInline(admin.TabularInline):
 
     `extra=0` e tudo readonly: as linhas são criadas pelo serviço de
     disparo. Editá-las pelo admin corromperia a auditoria de entrega.
+
+    A FK `responsavel` fica **fora** dos campos de propósito. Agora que há
+    uma linha por responsável, a coluna seria redundante — o snapshot de
+    `email`/`nome_responsavel` já identifica quem recebeu, e é justamente
+    pra isso que ele existe. Renderizar mais uma FK readonly dobraria o
+    `str()` por linha num inline que já faz um por `aluno`: num comunicado
+    de escola inteira isso é centenas de queries pra repetir informação
+    que a linha já mostra.
     """
 
     model = ComunicadoDestinatario
