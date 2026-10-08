@@ -129,12 +129,22 @@ Teste obrigatório nos dois sentidos.
 
 ### 4.2. Dedup continua por endereço normalizado
 
-Dois responsáveis podem ter o mesmo email (casal que usa uma conta só), e
-irmãos compartilham responsável. O envio deduplica por
+Irmãos compartilham responsável, então o envio deduplica por
 `normalizar_email()` — mesma regra do `apps/common/texto.py` que o
 comunicado e o portal já usam. Sem isso, o mesmo endereço recebe o mesmo
 comunicado duas vezes, e a cota de 300/dia do Brevo é compartilhada entre
 ocorrência, comunicado e convite.
+
+> **Corrigido na fatia 1.** Esta seção supunha também o casal que usa uma
+> conta só, gerando dois destinos iguais para o **mesmo** aluno. Isso não
+> acontece: o unique por `(escola, email)` do `Responsavel` recusa a
+> segunda conta, e todo responsável de um aluno é da mesma escola dele.
+> A dedup que importa é entre irmãos, e ela mora no agrupamento por
+> endereço do comunicado (`_agrupar_por_email`), não em
+> `destinatarios.py`. O módulo mantém uma dedup por aluno como rede, com
+> o motivo real escrito no código: `ResponsavelAluno.objects.create()`
+> não passa por `clean()`, então um vínculo cruzando escola feito por
+> shell traria um endereço repetido.
 
 ### 4.3. Escopo de escola
 
@@ -153,15 +163,15 @@ recebeu?" depois da mudança. Isso é critério de aceite, não detalhe.
 
 ## 5. Fatias
 
-Uma PR por fatia, na ordem. As três primeiras são backend e saem de
+Uma PR por fatia, na ordem. As três primeiras são backend e saíram de
 `main`; a quarta depende do #117 (ver §6).
 
-| # | Fatia | Verificação |
-|---|---|---|
-| 1 | `apps/portal/destinatarios.py` — origem única do destinatário | Aluno sem vínculo recebe pelo campo antigo; aluno com dois vínculos gera dois destinos; irmãos com o mesmo responsável deduplicam; consulta em lote não faz N+1 |
-| 2 | `recebe_notificacao` no `Responsavel` + migration | Desligar exclui do envio e **mantém** o acesso ao portal; aluno cujos vínculos todos recusaram não cai no fallback |
-| 3 | `ComunicadoDestinatario` por responsável + migration | Comunicado já enviado mantém o log intacto; dois responsáveis geram duas linhas; `contar_previa` bate com o que sai |
-| 4 | Tela de vínculos no staff | Secretaria adiciona e remove responsável de um aluno; não cria vínculo cruzando escola; professor não acessa |
+| # | Fatia | Verificação | Status |
+|---|---|---|---|
+| 1 | `apps/portal/destinatarios.py` — origem única do destinatário | Aluno sem vínculo recebe pelo campo antigo; aluno com dois vínculos gera dois destinos; irmãos com o mesmo responsável deduplicam; consulta em lote não faz N+1 | ✅ PR #120 |
+| 2 | `recebe_notificacao` no `Responsavel` + migration | Desligar exclui do envio e **mantém** o acesso ao portal; aluno cujos vínculos todos recusaram não cai no fallback | ✅ PR #121 |
+| 3 | `ComunicadoDestinatario` por responsável + migration | Comunicado já enviado mantém o log intacto; dois responsáveis geram duas linhas; `contar_previa` bate com o que sai | ✅ PR #122 |
+| 4 | Tela de vínculos no staff | Secretaria adiciona e remove responsável de um aluno; não cria vínculo cruzando escola; professor não acessa | PENDENTE (depende do #117) |
 
 ### Fatia 1 — `destinatarios.py`
 
@@ -173,6 +183,12 @@ fatia 3 precisa saber de quem foi a entrega.
 
 `apps/ocorrencias/services.py` e `apps/comunicados/services.py` passam a
 chamar isso. O `montar_email_*` de cada um não muda.
+
+> **Ajuste na entrega.** Só a ocorrência trocou de origem na fatia 1. O
+> comunicado foi junto com a fatia 3, porque enquanto o log tinha uma linha
+> por aluno ele não conseguia registrar duas entregas — passar a resolver
+> dois destinos antes disso faria a prévia prometer duas mensagens e sair
+> uma. As duas mudanças são inseparáveis.
 
 Atenção ao `contar_previa` do comunicado: ele alimenta o diálogo de
 confirmação ("este comunicado vai para 142 responsáveis") e o aviso de
@@ -191,6 +207,18 @@ linhas legíveis.
 
 Não apagar nem reescrever linha antiga. Não tornar a FK obrigatória.
 
+> **Detalhe que só apareceu implementando.** O unique novo precisa de
+> `nulls_distinct=False` (Postgres 15+; o projeto fixa `postgres:16` no
+> compose, no CI e em produção). No padrão do Postgres, NULL é distinto de
+> NULL num unique, então duas linhas `(comunicado, aluno, NULL)` passariam
+> e a idempotência da materialização — que depende de `ignore_conflicts` —
+> se perderia justamente no caminho do fallback, mandando o comunicado em
+> dobro pra escola sem vínculo.
+
+> **Efeito colateral no portal.** `alunos_por_comunicado` faz join no log,
+> então um filho com mãe e pai vinculados passou a aparecer duas vezes no
+> mesmo aviso dentro do portal do pai. Precisou de `distinct()`.
+
 ---
 
 ## 6. Sequência e dependências
@@ -199,14 +227,14 @@ Não apagar nem reescrever linha antiga. Não tornar a FK obrigatória.
 vínculos é a tela "Responsáveis" (`/responsaveis`), que nasce lá. Até
 mergear, não há onde pendurar a UI.
 
-**As fatias 1–3 não dependem de nada aberto.** Saem de `main`. Checado:
-não tocam em nenhum arquivo do #117 (portal: `views_staff.py`,
-`urls_staff.py`, `serializers.py`, `ConviteResponsavel`) nem do #118
-(`relatorios`, `common/planilha.py`, `boletins/views.py`,
-`escola/views.py`, `ocorrencias/views.py`). A fatia 2 toca
-`apps/portal/models.py`, que o #117 também toca — classes diferentes
-(`Responsavel` vs `ConviteResponsavel`), conflito improvável e trivial se
-acontecer.
+**As fatias 1–3 não dependiam de nada aberto** e já estão na `main`
+(PRs #120–#122). Checado na época: não tocam em nenhum arquivo do #117
+(portal: `views_staff.py`, `urls_staff.py`, `serializers.py`,
+`ConviteResponsavel`) nem do #118 (`relatorios`, `common/planilha.py`,
+`boletins/views.py`, `escola/views.py`, `ocorrencias/views.py`). A fatia 2
+tocou `apps/portal/models.py`, que o #117 também toca — classes diferentes
+(`Responsavel` vs `ConviteResponsavel`), então o #117 deve rebasear sem
+briga.
 
 ---
 
@@ -225,5 +253,11 @@ acontecer.
 
 ## 8. Estado
 
-**Nada entregue.** Doc escrita em out/2026, escopo aprovado, implementação
-não começada.
+**Fatias 1–3 entregues** (out/2026, PRs #120, #121 e #122): o destino do
+email é o vínculo, o opt-out existe e o log do comunicado registra uma
+entrega por responsável. 610 testes na `main`.
+
+**Fatia 4 pendente** — a tela de vínculos, que é o que permite à secretaria
+criar o segundo responsável. Até ela entrar, a capacidade que as três
+primeiras entregam só é exercitável pelo `/admin/` do Django (ver §1, "por
+que está latente hoje" — segue valendo).
