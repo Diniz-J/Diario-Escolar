@@ -10,7 +10,11 @@ from rest_framework import serializers
 
 from apps.avaliacao.models import PeriodoAvaliativo
 from apps.comunicados.models import Comunicado
-from apps.common.serializers import validate_escola_do_usuario
+from apps.common.serializers import (
+    AutoEscopoEscolaSerializerMixin,
+    validate_escola_do_usuario,
+)
+from apps.common.texto import normalizar_email
 from apps.escola.models import Aluno
 from apps.materiais.models import Material
 from apps.ocorrencias.models import Ocorrencia
@@ -249,3 +253,52 @@ class ResponsavelAlunoStaffSerializer(serializers.ModelSerializer):
         except DjangoValidationError as exc:
             raise serializers.ValidationError(exc.message_dict) from exc
         return attrs
+
+
+class ResponsavelCriacaoSerializer(
+    AutoEscopoEscolaSerializerMixin, serializers.ModelSerializer
+):
+    """Criação de conta de responsável pela secretaria (fatia 4).
+
+    **Reverte uma decisão da fatia 6b, de propósito.** O
+    `ResponsavelStaffViewSet` nasceu somente-leitura, com a justificativa
+    de que a conta vem da semeadura ou do admin e que a tela existe pra
+    ver acesso e convidar. O que mostrou que isso não bastava foi o §1 do
+    `RESPONSAVEIS.md`: a semeadura cria **uma** conta por email tirado do
+    `Aluno.email_responsavel`, ou seja, uma por família. Vincular contas
+    existentes nunca produz o caso mãe-e-pai, então sem criar aqui o
+    segundo responsável continuaria nascendo só no `/admin/` — e a
+    capacidade que as fatias 1 a 3 sustentam no envio ficaria inalcançável
+    pra quem opera a escola.
+
+    O que a reversão NÃO afrouxa: a conta nasce sem senha utilizável (o
+    `save()` do model cuida disso), então criar não dá acesso a nada. O
+    acesso continua vindo só do convite, que é outra ação, com rate limit
+    próprio.
+    """
+
+    class Meta:
+        model = Responsavel
+        fields = ["id", "nome", "email", "escola"]
+        read_only_fields = ["id"]
+        # `escola` opcional — auto-preenchida pelo JWT via
+        # AutoEscopoEscolaSerializerMixin quando o usuário tem escola.
+        extra_kwargs = {"escola": {"required": False}}
+
+    def validate_escola(self, value):
+        return validate_escola_do_usuario(
+            value,
+            self.context.get("request"),
+            "Você só pode cadastrar responsável na sua própria escola.",
+        )
+
+    def validate_email(self, value: str) -> str:
+        """Normaliza ANTES do unique, não só no `save()`.
+
+        O model normaliza em `save()`, que roda **depois** da validação.
+        Sem normalizar aqui, `Maria@Example.com` passaria pelo
+        `UniqueTogetherValidator` — que compara o valor cru contra o
+        banco, onde está `maria@example.com` — e só estouraria no INSERT,
+        virando 500 em vez de um 400 dizendo que o email já existe.
+        """
+        return normalizar_email(value)

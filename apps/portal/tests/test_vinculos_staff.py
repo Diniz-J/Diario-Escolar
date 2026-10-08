@@ -1,12 +1,17 @@
-"""Testes da escrita do vínculo responsável × aluno (fatia 4).
+"""Testes da escrita do staff na fatia 4: vínculo e criação de conta.
 
 `ResponsavelAluno` decide quem lê o boletim, as ocorrências e os
 comunicados de qual aluno. Um vínculo indevido não é um registro errado, é
 acesso indevido aos dados de uma criança — então o escopo de escola tem
 teste em todas as direções que podem furar, inclusive a que o `clean()` do
 model não cobre.
+
+A criação de conta está aqui pelo mesmo motivo (é a outra escrita que a
+fatia abre, com as mesmas fixtures) e porque ela reverte a decisão de
+somente-leitura da 6b: o que a revisão precisa ver junto é que criar não
+dá acesso a nada — a conta nasce sem senha utilizável e o acesso segue
+vindo do convite.
 """
-from django.urls import reverse
 from rest_framework.test import APIClient
 from django.test import TestCase
 
@@ -15,6 +20,7 @@ from apps.escola.models import Aluno, Escola, Professor, Turma
 from apps.portal.models import Responsavel, ResponsavelAluno
 
 URL_LISTA = "/api/v1/vinculos-responsavel/"
+URL_RESPONSAVEIS = "/api/v1/responsaveis/"
 
 
 class _VinculoSetup(TestCase):
@@ -305,3 +311,130 @@ class EscopoObrigatorioTests(_VinculoSetup):
             )
 
         self.assertEqual(len(resp.data), 5)
+
+
+class CriacaoDeResponsavelTests(_VinculoSetup):
+    """`POST /responsaveis/` — a reversão da somente-leitura da 6b."""
+
+    def _criar(self, **payload):
+        return self.client.post(URL_RESPONSAVEIS, payload, format="json")
+
+    def test_secretaria_cadastra_responsavel(self):
+        resp = self._criar(nome="Pai da Ana", email="pai.ana@example.com")
+
+        self.assertEqual(resp.status_code, 201, resp.data)
+        criado = Responsavel.objects.get(pk=resp.data["id"])
+        self.assertEqual(criado.escola, self.escola)
+        self.assertEqual(criado.nome, "Pai da Ana")
+
+    def test_conta_nasce_sem_senha_utilizavel(self):
+        """Criar não dá acesso: o acesso vem do convite, que é outra ação."""
+        resp = self._criar(nome="Pai", email="pai@example.com")
+
+        criado = Responsavel.objects.get(pk=resp.data["id"])
+        self.assertFalse(criado.has_usable_password())
+
+    def test_recem_criado_aparece_como_sem_convite(self):
+        """A secretaria cria e o próprio botão Convidar é o passo seguinte."""
+        self._criar(nome="Pai", email="pai@example.com")
+
+        lista = self.client.get(URL_RESPONSAVEIS, {"situacao": "sem_convite"})
+
+        emails = [item["email"] for item in lista.data["results"]]
+        self.assertIn("pai@example.com", emails)
+
+    def test_escola_vem_do_jwt_sem_o_payload_pedir(self):
+        """Auto-escopo: a secretaria não escolhe escola (nem vê o campo)."""
+        resp = self._criar(nome="Pai", email="pai@example.com")
+
+        self.assertEqual(
+            Responsavel.objects.get(pk=resp.data["id"]).escola_id, self.escola.pk
+        )
+
+    def test_escola_alheia_no_payload_e_recusada(self):
+        resp = self._criar(
+            nome="Pai", email="pai@example.com", escola=self.outra.pk
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("escola", resp.data)
+
+    def test_email_duplicado_na_escola_devolve_400(self):
+        resp = self._criar(nome="Outra Mãe", email=self.responsavel.email)
+
+        self.assertEqual(resp.status_code, 400)
+
+    def test_email_com_caixa_diferente_tambem_colide(self):
+        """Regressão: o model normaliza no `save()`, depois da validação.
+
+        Sem normalizar no serializer, o `UniqueTogetherValidator` compara
+        o valor cru contra o banco e deixa passar — o erro só apareceria
+        no INSERT, como 500.
+        """
+        resp = self._criar(nome="Outra Mãe", email="  MAE@Example.COM ")
+
+        self.assertEqual(resp.status_code, 400, resp.data)
+
+    def test_mesmo_email_em_outra_escola_e_permitido(self):
+        """O unique é por `(escola, email)`: duas escolas, duas contas."""
+        self.client.force_authenticate(self.admin)
+
+        resp = self.client.post(
+            URL_RESPONSAVEIS,
+            {
+                "nome": "Mesma pessoa",
+                "email": self.responsavel.email,
+                "escola": self.outra.pk,
+            },
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, 201, resp.data)
+
+    def test_admin_global_sem_escola_precisa_mandar_escola(self):
+        self.client.force_authenticate(self.admin)
+
+        resp = self._criar(nome="Pai", email="pai@example.com")
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("escola", resp.data)
+
+    def test_professor_e_inspetor_nao_cadastram(self):
+        for user in (self.professor_user, self.inspetor):
+            with self.subTest(user.perfil):
+                self.client.force_authenticate(user)
+                self.assertEqual(
+                    self._criar(nome="Pai", email="p@example.com").status_code, 403
+                )
+
+
+class FluxoCompletoTests(_VinculoSetup):
+    def test_cadastrar_e_vincular_segundo_responsavel(self):
+        """O caminho inteiro que a fatia 4 abre, sem passar pelo /admin/."""
+        ResponsavelAluno.objects.create(
+            responsavel=self.responsavel, aluno=self.aluno
+        )
+
+        criado = self.client.post(
+            URL_RESPONSAVEIS,
+            {"nome": "Pai da Ana", "email": "pai.ana@example.com"},
+            format="json",
+        )
+        self.assertEqual(criado.status_code, 201, criado.data)
+
+        vinculo = self.client.post(
+            URL_LISTA,
+            {"responsavel": criado.data["id"], "aluno": self.aluno.pk},
+            format="json",
+        )
+        self.assertEqual(vinculo.status_code, 201, vinculo.data)
+
+        self.assertEqual(self.aluno.responsaveis.count(), 2)
+        # E agora o email da ocorrência sai pros dois — é a fatia 1 em uso.
+        from apps.portal.destinatarios import destinatarios_do_aluno
+
+        destinos = destinatarios_do_aluno(self.aluno)
+        self.assertEqual(
+            sorted(d.email for d in destinos),
+            ["mae@example.com", "pai.ana@example.com"],
+        )

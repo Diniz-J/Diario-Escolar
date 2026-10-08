@@ -27,6 +27,7 @@ from apps.common.views import EscopoEscolaMixin, FiltroEscopoObrigatorioMixin
 from .models import ConviteResponsavel, Responsavel, ResponsavelAluno
 from .serializers import (
     ResponsavelAlunoStaffSerializer,
+    ResponsavelCriacaoSerializer,
     ResponsavelStaffSerializer,
 )
 
@@ -38,16 +39,24 @@ SITUACOES_VALIDAS = frozenset(
 )
 
 
-class ResponsavelStaffViewSet(EscopoEscolaMixin, viewsets.ReadOnlyModelViewSet):
-    """`GET /responsaveis/` e `/responsaveis/<id>/` — nível-diretor.
+class ResponsavelStaffViewSet(
+    EscopoEscolaMixin, mixins.CreateModelMixin, viewsets.ReadOnlyModelViewSet
+):
+    """`GET /responsaveis/`, `/responsaveis/<id>/` e `POST` — nível-diretor.
 
-    Somente leitura. O cadastro de responsável nasce da semeadura
-    (`portal_semear_responsaveis`) ou do admin; esta tela existe pra ver o
-    estado do acesso e convidar, não pra criar conta de usuário externo
-    pela API do staff.
+    Leitura mais criação. O `POST` entrou na fatia 4 e **reverte** a
+    decisão de somente-leitura desta viewset — o motivo está no
+    `ResponsavelCriacaoSerializer`, em resumo: a semeadura faz uma conta
+    por família, então sem criar aqui o segundo responsável nunca sai do
+    `/admin/`.
+
+    Continua **sem `PUT`/`PATCH`/`DELETE`**. Corrigir email errado segue
+    pelo admin, como a 6b documentou, e apagar responsável é `PROTECT` dos
+    dois lados de propósito — o que a escola faz é desativar (`ativo`).
 
     Mesma permissão do convite (`IsAdminOrDiretor`, que cobre secretaria e
-    coordenador como aliases): quem pode convidar é quem pode ver a lista.
+    coordenador como aliases): quem pode convidar é quem pode ver a lista
+    e quem pode cadastrar.
     """
 
     queryset = Responsavel.objects.all()
@@ -60,6 +69,17 @@ class ResponsavelStaffViewSet(EscopoEscolaMixin, viewsets.ReadOnlyModelViewSet):
     # Busca pelo nome do aluno também: a secretaria procura "o pai do
     # João", não o nome do responsável, que às vezes nem está preenchido.
     search_fields = ["nome", "email", "alunos__nome_completo"]
+
+    def get_serializer_class(self):
+        """Contrato de leitura intocado.
+
+        A listagem é consumida pela tela com `situacao` derivada e os
+        filhos embutidos; o payload de criação é só nome e email. Dois
+        serializers em vez de um com metade dos campos somente-leitura.
+        """
+        if self.action == "create":
+            return ResponsavelCriacaoSerializer
+        return ResponsavelStaffSerializer
 
     def get_queryset(self):
         agora = timezone.now()

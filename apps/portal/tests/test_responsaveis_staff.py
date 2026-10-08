@@ -97,13 +97,35 @@ class PermissaoTests(_ListaSetup):
     def test_anonimo_nao_lista(self):
         self.assertIn(self.client.get(self._url()).status_code, (401, 403))
 
-    def test_listagem_e_somente_leitura(self):
-        """Conta de usuário externo não nasce pela API do staff."""
+    def test_cadastro_entra_mas_edicao_e_remocao_nao(self):
+        """A superfície segue estreita — mas não é mais somente-leitura.
+
+        Este teste exigia 405 no POST, com a justificativa de que conta de
+        usuário externo não nasce pela API do staff. A fatia 4 do
+        `RESPONSAVEIS.md` reverteu isso de propósito: a semeadura cria uma
+        conta por família (um email por `Aluno.email_responsavel`), então
+        vincular contas existentes nunca produz o caso mãe-e-pai e sem o
+        POST aqui o segundo responsável nunca sairia do `/admin/`.
+
+        O que continua valendo, e é o que este teste passa a fixar: editar
+        e apagar não entraram. Corrigir email errado segue pelo admin e
+        apagar responsável é `PROTECT` dos dois lados — a escola desativa
+        (`ativo`). As regras da criação (escopo, unique, conta sem senha
+        utilizável) têm cobertura em `test_vinculos_staff.py`.
+        """
         self._login(self.diretor)
-        resp = self.client.post(
+        alvo = self._responsavel("Alguém", "alguem@a.com")
+        detalhe = f"{reverse('api_v1:responsavel-list')}{alvo.pk}/"
+
+        criado = self.client.post(
             self._url(), {"nome": "X", "email": "x@a.com"}, format="json"
         )
-        self.assertEqual(resp.status_code, 405)
+        self.assertEqual(criado.status_code, 201, criado.data)
+
+        for metodo in (self.client.put, self.client.patch, self.client.delete):
+            with self.subTest(metodo.__name__):
+                resp = metodo(detalhe, {"nome": "Y"}, format="json")
+                self.assertEqual(resp.status_code, 405)
 
 
 class EscopoTests(_ListaSetup):
