@@ -4,14 +4,18 @@ Em testes o EMAIL_BACKEND é o locmem (settings.TESTING), então os emails
 ficam em `django.core.mail.outbox` em vez de serem enviados de verdade.
 """
 from datetime import date
+from smtplib import SMTPException
+from unittest.mock import patch
 
 from django.core import mail
+from django.core.mail import EmailMultiAlternatives
 from django.test import TestCase
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from apps.accounts.models import Usuario
 from apps.escola.models import Aluno, Escola, Professor, Turma
 from apps.ocorrencias.views import OcorrenciaViewSet
+from apps.portal.models import Responsavel, ResponsavelAluno
 
 
 class OcorrenciaEmailTests(TestCase):
@@ -94,3 +98,93 @@ class OcorrenciaEmailTests(TestCase):
         self.assertEqual(status_code, 201)
         # ...mas nenhum email é enviado (sem responsável cadastrado).
         self.assertEqual(len(mail.outbox), 0)
+
+    def test_dois_responsaveis_vinculados_recebem_mensagens_individuais(self):
+        """Mãe e pai cadastrados: dois emails, cada um saudado pelo nome.
+
+        Individuais de propósito — endereço de um responsável não é dado
+        do outro, então nada de dois no mesmo `to`.
+        """
+        aluno = Aluno.objects.create(
+            escola=self.escola,
+            matricula="A4",
+            nome_completo="Davi Lima",
+            turma=self.turma,
+            nome_responsavel="Cadastro Antigo",
+            email_responsavel="antigo@example.com",
+        )
+        mae = Responsavel.objects.create(
+            escola=self.escola, nome="Marta Lima", email="marta@example.com"
+        )
+        pai = Responsavel.objects.create(
+            escola=self.escola, nome="Jorge Lima", email="jorge@example.com"
+        )
+        ResponsavelAluno.objects.create(responsavel=mae, aluno=aluno)
+        ResponsavelAluno.objects.create(responsavel=pai, aluno=aluno)
+
+        self.assertEqual(self._criar_ocorrencia(aluno), 201)
+
+        self.assertEqual(len(mail.outbox), 2)
+        for email in mail.outbox:
+            self.assertEqual(len(email.to), 1)
+        por_destino = {email.to[0]: email for email in mail.outbox}
+        self.assertEqual(
+            sorted(por_destino), ["jorge@example.com", "marta@example.com"]
+        )
+        self.assertIn("Marta Lima", por_destino["marta@example.com"].body)
+        self.assertIn("Jorge Lima", por_destino["jorge@example.com"].body)
+        # O campo de texto do aluno não entra junto com os vínculos.
+        self.assertNotIn("antigo@example.com", por_destino)
+
+    def test_responsavel_desativado_silencia_sem_cair_no_campo_antigo(self):
+        """§4.1 do RESPONSAVEIS.md: vínculo existe, logo não há fallback.
+
+        Cair no campo do aluno aqui mandaria email pro mesmo endereço que
+        a escola acabou de desativar.
+        """
+        aluno = Aluno.objects.create(
+            escola=self.escola,
+            matricula="A5",
+            nome_completo="Eva Rocha",
+            turma=self.turma,
+            nome_responsavel="Rita Rocha",
+            email_responsavel="rita@example.com",
+        )
+        desligada = Responsavel.objects.create(
+            escola=self.escola,
+            nome="Rita Rocha",
+            email="rita@example.com",
+            ativo=False,
+        )
+        ResponsavelAluno.objects.create(responsavel=desligada, aluno=aluno)
+
+        self.assertEqual(self._criar_ocorrencia(aluno), 201)
+
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_falha_em_um_destinatario_nao_impede_o_outro(self):
+        """Email inválido da mãe não pode calar o do pai."""
+        aluno = Aluno.objects.create(
+            escola=self.escola,
+            matricula="A6",
+            nome_completo="Felipe Dias",
+            turma=self.turma,
+        )
+        for nome, email in (("Ruim", "ruim@example.com"), ("Bom", "bom@example.com")):
+            responsavel = Responsavel.objects.create(
+                escola=self.escola, nome=nome, email=email
+            )
+            ResponsavelAluno.objects.create(responsavel=responsavel, aluno=aluno)
+
+        original = EmailMultiAlternatives.send
+
+        def send_falhando(self, *args, **kwargs):
+            if self.to == ["ruim@example.com"]:
+                raise SMTPException("endereço recusado pelo provedor")
+            return original(self, *args, **kwargs)
+
+        with patch.object(EmailMultiAlternatives, "send", send_falhando):
+            with self.assertLogs("apps.ocorrencias.services", level="ERROR"):
+                self.assertEqual(self._criar_ocorrencia(aluno), 201)
+
+        self.assertEqual([email.to for email in mail.outbox], [["bom@example.com"]])

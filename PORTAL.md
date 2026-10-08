@@ -116,7 +116,18 @@ disciplina, igual o `RegistroAula` do diário de classe já faz.
 O campo de texto continua existindo e **continua sendo o destino do email
 de comunicado e de ocorrência** na v1. Não troco o que funciona em produção
 no mesmo passo que crio o modelo novo. A duplicidade é consciente e
-temporária; convergir é fatia posterior.
+temporária; convergir é fatia posterior — desenhada em
+[`RESPONSAVEIS.md`](./RESPONSAVEIS.md).
+
+> **Convergido** (out/2026, [`RESPONSAVEIS.md`](./RESPONSAVEIS.md) fatia 1).
+> O destino do email passou a ser o vínculo: `apps/portal/destinatarios.py`
+> é a origem única e as apps de envio chamam de lá. O campo de texto
+> **não** foi removido — segue como entrada do cadastro, como base da
+> semeadura e como fallback para o aluno **sem nenhum vínculo** (a escola
+> que nunca semeou não pode emudecer em silêncio). O fallback dispara por
+> ausência de vínculo, nunca por ausência de destino elegível: aluno com
+> vínculo cuja conta está inativa fica sem destino, sem recair no campo
+> antigo.
 
 A escola não redigita nada: `manage.py portal_semear_responsaveis` converte
 os campos atuais do aluno em contas e vínculos, deduplicando por email
