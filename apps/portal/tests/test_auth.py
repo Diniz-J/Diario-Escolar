@@ -221,6 +221,22 @@ class LoginTests(_PortalAuthSetup):
         self._responsavel(self.outra_escola, "maria@example.com")
         self.assertEqual(self._login_portal().status_code, 409)
 
+    def test_opt_out_de_email_nao_corta_o_acesso_ao_portal(self):
+        """`recebe_notificacao` é silêncio, não desativação.
+
+        São campos separados de propósito (`RESPONSAVEIS.md` §3): o pai que
+        pede pra não receber aviso continua querendo consultar o boletim.
+        Se o login passasse a checar este campo, pedir silêncio tiraria o
+        acesso — exatamente o que a separação existe pra evitar.
+        """
+        Responsavel.objects.filter(pk=self.responsavel.pk).update(
+            recebe_notificacao=False
+        )
+
+        access, _ = self._tokens_portal()
+
+        self.assertEqual(self._get(URL_ME, access).status_code, 200)
+
 
 class SessaoTests(_PortalAuthSetup):
     def test_refresh_rotaciona_e_invalida_o_anterior(self):

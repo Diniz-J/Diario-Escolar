@@ -53,6 +53,14 @@ class Responsavel(AbstractBaseUser, BaseModelEscopado):
     nome = models.CharField(max_length=200)
     # Indexado: a listagem do portal e os envios filtram por conta ativa.
     ativo = models.BooleanField(default=True, db_index=True)
+    # Opt-out de email, separado de `ativo` de propósito: o pai que pede
+    # pra não receber aviso continua querendo consultar o boletim. Juntar
+    # os dois tiraria o acesso de quem só pediu silêncio.
+    #
+    # Mora aqui, e não no vínculo, porque "não quero receber email" é da
+    # pessoa, não da relação com cada filho — ninguém pediu granularidade
+    # por filho, e ela multiplicaria a UI sem caso de uso.
+    recebe_notificacao = models.BooleanField(default=True)
 
     # Sobrescreve o campo herdado para expor `escola.responsaveis` no reverse.
     escola = models.ForeignKey(

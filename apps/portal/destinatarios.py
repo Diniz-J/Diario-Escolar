@@ -16,9 +16,10 @@ destino elegível.**
 - Aluno com zero vínculos → usa `Aluno.email_responsavel`. É a escola que
   nunca rodou a semeadura; sem o fallback ela pararia de receber email em
   silêncio.
-- Aluno com vínculos, mas nenhum elegível (conta inativa) → zero
-  destinos, **sem** fallback. Cair no campo do aluno aqui reenviaria pro
-  mesmo endereço que acabou de ser desligado.
+- Aluno com vínculos, mas nenhum elegível (conta inativa ou com
+  `recebe_notificacao=False`) → zero destinos, **sem** fallback. Cair no
+  campo do aluno aqui reenviaria pro mesmo endereço que acabou de pedir
+  silêncio, transformando o opt-out em nada.
 """
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -88,14 +89,22 @@ def destinatarios_por_aluno(
         "responsavel__email",
         "responsavel__nome",
         "responsavel__ativo",
+        "responsavel__recebe_notificacao",
     )
 
     com_vinculo: set[int] = set()
     por_aluno: dict[int, list[Destinatario]] = {}
     vistos: dict[int, set[str]] = {}
-    for aluno_id, responsavel_id, email, nome, ativo in linhas:
+    for (
+        aluno_id,
+        responsavel_id,
+        email,
+        nome,
+        ativo,
+        recebe_notificacao,
+    ) in linhas:
         com_vinculo.add(aluno_id)
-        if not ativo:
+        if not (ativo and recebe_notificacao):
             continue
         email = normalizar_email(email)
         if not email:

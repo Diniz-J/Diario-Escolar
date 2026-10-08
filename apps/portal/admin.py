@@ -20,8 +20,15 @@ class ResponsavelAlunoInline(admin.TabularInline):
 
 @admin.register(Responsavel)
 class ResponsavelAdmin(SimpleHistoryAdmin):
-    list_display = ("nome", "email", "escola", "ativo", "total_alunos")
-    list_filter = ("ativo", "escola")
+    list_display = (
+        "nome",
+        "email",
+        "escola",
+        "ativo",
+        "recebe_notificacao",
+        "total_alunos",
+    )
+    list_filter = ("ativo", "recebe_notificacao", "escola")
     search_fields = ("nome", "email", "alunos__nome_completo")
     # `password` e `last_login` vêm do AbstractBaseUser. A senha não é
     # editável aqui: quem define é o responsável, pelo convite.
