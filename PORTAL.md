@@ -120,8 +120,7 @@ temporária; convergir é fatia posterior — desenhada em
 [`RESPONSAVEIS.md`](./RESPONSAVEIS.md).
 
 > **Convergido** (out/2026, [`RESPONSAVEIS.md`](./RESPONSAVEIS.md) fatias
-> 1–2).
-> O destino do email passou a ser o vínculo: `apps/portal/destinatarios.py`
+> 1–3). O destino do email é o vínculo: `apps/portal/destinatarios.py`
 > é a origem única e as apps de envio chamam de lá. O campo de texto
 > **não** foi removido — segue como entrada do cadastro, como base da
 > semeadura e como fallback para o aluno **sem nenhum vínculo** (a escola
@@ -391,7 +390,9 @@ despublicados". Link abre em aba nova com `rel="noopener noreferrer"`.
 
 ## 6. Pendências conhecidas
 
-- Convergir `Aluno.email_responsavel` com `Responsavel.email` (seção 3).
+- ~~Convergir `Aluno.email_responsavel` com `Responsavel.email` (seção 3).~~
+  Entregue nas fatias 1–3 do [`RESPONSAVEIS.md`](./RESPONSAVEIS.md); falta
+  só a tela de vínculos (fatia 4), que depende da tela "Responsáveis".
 - **Nota aparece pro responsável assim que o professor lança.** O boletim
   do portal reaproveita o `montar_boletim` do staff, que não tem etapa de
   publicação: nota provisória ou digitada errada chega direto ao pai. Se

@@ -4,13 +4,23 @@ Em testes o EMAIL_BACKEND é o locmem (`settings.TESTING`) e o envio roda
 síncrono (ver `services.enviar_comunicado`), então `mail.outbox` reflete
 exatamente o lote.
 """
+from smtplib import SMTPException
+from unittest.mock import patch
+
 from django.core import mail
+from django.core.mail import EmailMultiAlternatives
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from apps.accounts.models import Usuario
 from apps.comunicados.models import Comunicado, ComunicadoDestinatario
-from apps.comunicados.services import contar_previa, enviar_comunicado
+from apps.comunicados.services import (
+    _materializar_destinatarios,
+    contar_previa,
+    enviar_comunicado,
+)
 from apps.escola.models import Aluno, Escola, Turma
+from apps.portal.models import Responsavel, ResponsavelAluno
 
 
 class ComunicadoEnvioTests(TestCase):
@@ -295,3 +305,227 @@ class ComunicadoEnvioTests(TestCase):
         self.assertEqual(previa["total_emails"], 2)
         self.assertEqual(previa["total_sem_email"], 1)
         self.assertEqual(len(mail.outbox), 0, "prévia não pode enviar nada")
+
+
+class ComunicadoMultiplosResponsaveisTests(ComunicadoEnvioTests):
+    """Log por responsável — `RESPONSAVEIS.md` fatia 3.
+
+    Herda as fixtures de `ComunicadoEnvioTests`; os testes do pai rodam de
+    novo aqui, o que é barato e não incomoda.
+    """
+
+    def _responsavel(self, nome, email, aluno, **kwargs):
+        responsavel = Responsavel.objects.create(
+            escola=self.escola, nome=nome, email=email, **kwargs
+        )
+        ResponsavelAluno.objects.create(responsavel=responsavel, aluno=aluno)
+        return responsavel
+
+    def test_dois_responsaveis_geram_duas_linhas_e_dois_emails(self):
+        aluno = self._aluno("Davi", self.turma_a, "antigo@example.com", "Antigo")
+        mae = self._responsavel("Marta", "marta@example.com", aluno)
+        pai = self._responsavel("Jorge", "jorge@example.com", aluno)
+
+        comunicado = self._comunicado()
+        enviar_comunicado(comunicado, usuario=self.diretor)
+
+        self.assertEqual(
+            sorted(msg.to[0] for msg in mail.outbox),
+            ["jorge@example.com", "marta@example.com"],
+        )
+        linhas = comunicado.destinatarios.all()
+        self.assertEqual(linhas.count(), 2)
+        self.assertEqual(
+            sorted(linha.responsavel_id for linha in linhas),
+            sorted([mae.id, pai.id]),
+        )
+        # O campo de texto do aluno não entra junto com os vínculos.
+        self.assertNotIn("antigo@example.com", [msg.to[0] for msg in mail.outbox])
+
+    def test_falha_de_um_responsavel_nao_contamina_o_outro(self):
+        """O ganho da fatia: dois resultados de entrega para o mesmo aluno."""
+        aluno = self._aluno("Eva", self.turma_a)
+        self._responsavel("Ruim", "ruim@example.com", aluno)
+        boa = self._responsavel("Boa", "boa@example.com", aluno)
+
+        original = EmailMultiAlternatives.send
+
+        def send_falhando(self, *args, **kwargs):
+            if self.to == ["ruim@example.com"]:
+                raise SMTPException("endereço recusado pelo provedor")
+            return original(self, *args, **kwargs)
+
+        comunicado = self._comunicado()
+        with patch.object(EmailMultiAlternatives, "send", send_falhando):
+            enviar_comunicado(comunicado, usuario=self.diretor)
+
+        comunicado.refresh_from_db()
+        self.assertEqual(comunicado.total_enviados, 1)
+        self.assertEqual(comunicado.total_falhas, 1)
+        # Mesmo aluno, resultados independentes.
+        por_responsavel = {
+            linha.responsavel_id: linha.status
+            for linha in comunicado.destinatarios.all()
+        }
+        self.assertEqual(
+            por_responsavel[boa.id], ComunicadoDestinatario.Status.ENVIADO
+        )
+        self.assertEqual(
+            {linha.aluno_id for linha in comunicado.destinatarios.all()},
+            {aluno.id},
+        )
+
+    def test_aluno_sem_destino_gera_uma_linha_sem_email(self):
+        """A unidade do aviso de cadastro incompleto é o aluno."""
+        self._aluno("Sem ninguém", self.turma_a)
+
+        comunicado = self._comunicado()
+        enviar_comunicado(comunicado, usuario=self.diretor)
+
+        comunicado.refresh_from_db()
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(comunicado.total_sem_email, 1)
+        linha = comunicado.destinatarios.get()
+        self.assertIsNone(linha.responsavel_id)
+        self.assertEqual(linha.email, "")
+
+    def test_responsavel_desativado_nao_cai_no_campo_antigo(self):
+        """§4.1: vínculo existe, logo sem fallback — e aluno vira sem_email."""
+        aluno = self._aluno("Fabio", self.turma_a, "rita@example.com", "Rita")
+        self._responsavel("Rita", "rita@example.com", aluno, ativo=False)
+
+        comunicado = self._comunicado()
+        enviar_comunicado(comunicado, usuario=self.diretor)
+
+        comunicado.refresh_from_db()
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(comunicado.total_sem_email, 1)
+
+    def test_opt_out_nao_recebe_comunicado(self):
+        aluno = self._aluno("Gabi", self.turma_a)
+        self._responsavel(
+            "Recusou", "recusou@example.com", aluno, recebe_notificacao=False
+        )
+        self._responsavel("Aceita", "aceita@example.com", aluno)
+
+        comunicado = self._comunicado()
+        enviar_comunicado(comunicado, usuario=self.diretor)
+
+        self.assertEqual([msg.to[0] for msg in mail.outbox], ["aceita@example.com"])
+
+    def test_previa_bate_com_o_que_sai(self):
+        """A prévia alimenta o botão "Enviar N emails": tem que ser honesta.
+
+        Com múltiplos responsáveis `total_emails` passa de `total_alunos`,
+        e é `total_emails` que corresponde ao que o provedor recebe.
+        """
+        com_dois = self._aluno("Hugo", self.turma_a)
+        self._responsavel("Mãe do Hugo", "mae.hugo@example.com", com_dois)
+        self._responsavel("Pai do Hugo", "pai.hugo@example.com", com_dois)
+        # Irmãos pelo mesmo responsável: contam como uma mensagem.
+        irmao = self._aluno("Ivo", self.turma_a)
+        irma = self._aluno("Iara", self.turma_b)
+        compartilhado = Responsavel.objects.create(
+            escola=self.escola, nome="Pai dos I", email="pai.i@example.com"
+        )
+        ResponsavelAluno.objects.create(responsavel=compartilhado, aluno=irmao)
+        ResponsavelAluno.objects.create(responsavel=compartilhado, aluno=irma)
+        # Sem vínculo: entra pelo campo de texto.
+        self._aluno("Joana", self.turma_a, "joana.mae@example.com", "Mãe")
+        # Sem nada.
+        self._aluno("Lia", self.turma_b)
+
+        comunicado = self._comunicado()
+        previa = contar_previa(comunicado)
+
+        self.assertEqual(previa["total_alunos"], 5)
+        self.assertEqual(previa["total_emails"], 4)
+        self.assertEqual(previa["total_sem_email"], 1)
+
+        enviar_comunicado(comunicado, usuario=self.diretor)
+
+        self.assertEqual(len(mail.outbox), previa["total_emails"])
+        comunicado.refresh_from_db()
+        self.assertEqual(comunicado.total_sem_email, previa["total_sem_email"])
+
+    def test_materializar_duas_vezes_nao_duplica_linha(self):
+        """Idempotência do `ignore_conflicts` nos dois caminhos.
+
+        O do fallback depende de `nulls_distinct=False` no unique: sem
+        isso, `(comunicado, aluno, NULL)` passaria duas vezes e o pai
+        receberia o comunicado em dobro.
+        """
+        com_vinculo = self._aluno("Marta", self.turma_a)
+        self._responsavel("Resp", "resp@example.com", com_vinculo)
+        self._aluno("Nina", self.turma_b, "nina.mae@example.com", "Mãe")
+        self._aluno("Otto", self.turma_b)
+
+        comunicado = self._comunicado()
+        self.assertEqual(_materializar_destinatarios(comunicado), 3)
+        self.assertEqual(_materializar_destinatarios(comunicado), 3)
+
+        self.assertEqual(comunicado.destinatarios.count(), 3)
+
+    def test_previa_nao_cresce_com_o_numero_de_alunos(self):
+        """O comunicado alcança a escola toda: N+1 aqui é inaceitável.
+
+        Duas consultas fixas — os alunos e os vínculos do lote. O `.only()`
+        de `_alunos_para_envio` precisa trazer os campos do fallback, senão
+        o acesso diferido viraria um SELECT por aluno sem vínculo.
+        """
+        for i in range(10):
+            aluno = self._aluno(f"Aluno {i}", self.turma_a, f"a{i}@example.com", "R")
+            if i % 2 == 0:
+                self._responsavel(f"Resp {i}", f"r{i}@example.com", aluno)
+
+        comunicado = self._comunicado()
+        with self.assertNumQueries(2):
+            previa = contar_previa(comunicado)
+
+        self.assertEqual(previa["total_alunos"], 10)
+
+    def test_unique_trata_responsavel_nulo_como_valor(self):
+        """Prova direta do `nulls_distinct=False`.
+
+        No padrão do Postgres, NULL é distinto de NULL num unique — então
+        `(comunicado, aluno, NULL)` passaria duas vezes e o pai da escola
+        sem vínculo receberia o comunicado em dobro. É a única garantia
+        que o caminho do fallback tem.
+        """
+        aluno = self._aluno("Quim", self.turma_a, "quim.mae@example.com", "Mãe")
+        comunicado = self._comunicado()
+        ComunicadoDestinatario.objects.create(
+            comunicado=comunicado, aluno=aluno, email="quim.mae@example.com"
+        )
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                ComunicadoDestinatario.objects.create(
+                    comunicado=comunicado,
+                    aluno=aluno,
+                    email="quim.mae@example.com",
+                )
+
+    def test_linha_antiga_sem_responsavel_continua_respondendo(self):
+        """§4.4: o log de comunicado já enviado não perde histórico.
+
+        A migration deixa as linhas antigas com `responsavel=NULL` — elas
+        têm que continuar respondendo "o responsável do João recebeu?" pelo
+        snapshot de email/nome.
+        """
+        aluno = self._aluno("Pedro", self.turma_a, "pedro.mae@example.com", "Mãe")
+        comunicado = self._comunicado()
+        antiga = ComunicadoDestinatario.objects.create(
+            comunicado=comunicado,
+            aluno=aluno,
+            email="pedro.mae@example.com",
+            nome_responsavel="Mãe",
+            status=ComunicadoDestinatario.Status.ENVIADO,
+        )
+
+        encontrada = comunicado.destinatarios.get(aluno=aluno)
+
+        self.assertEqual(encontrada.pk, antiga.pk)
+        self.assertIsNone(encontrada.responsavel_id)
+        self.assertEqual(encontrada.email, "pedro.mae@example.com")
+        self.assertEqual(encontrada.nome_responsavel, "Mãe")
