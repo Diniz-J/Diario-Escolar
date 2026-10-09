@@ -314,6 +314,7 @@ Single-Page Application em React 19 + TypeScript que consome a API REST do backe
 | `/presenca` | Lista de chamadas por turma e data |
 | `/comunicados` | Lista de comunicados (rascunhos primeiro, depois falhas, enviados por último); filtro por status; botão "Enviar" nas linhas em rascunho |
 | `/comunicados/:id` | Detalhe com a mensagem, autoria e o log de entrega por responsável (enviados / falhas / sem email), filtrável |
+| `/responsaveis` | Contas de acesso ao portal: situação do acesso (sem convite / convidado / expirado / ativo / inativo), botão Convidar, cadastro de responsável e gerência dos vínculos com os alunos |
 | `/presenca/:id` | Tela da chamada com resumo P/A/J/R e edição inline por aluno (optimistic update) |
 | `/boletim/:alunoId` | Boletim agregado do aluno (frequência + notas + ocorrências) com layout de impressão |
 

@@ -108,7 +108,14 @@ aluno não tem vínculo **nenhum** — ver `RESPONSAVEIS.md` §4.1, é a
 armadilha central da frente. `recebe_notificacao` é opt-out de email e é
 **separado de `ativo`** de propósito: quem pede silêncio continua
 consultando o boletim no portal. Semeadura:
-`manage.py portal_semear_responsaveis`. **Fatia 6 entregue**: frontend do
+`manage.py portal_semear_responsaveis`. **Escrita do staff** (fatia 4 do
+`RESPONSAVEIS.md`): `views_staff.py` tem o `ResponsavelAlunoStaffViewSet`
+(cria e apaga vínculo, sem `PUT`/`PATCH`) e o `POST` do
+`ResponsavelStaffViewSet` (cadastra conta — reverteu a somente-leitura da
+6b). O guard do vínculo é **duas camadas**: o `clean()` exige os dois lados
+na mesma escola, e o serializer checa **cada lado contra a escola de quem
+está logado** — sem a segunda, um par consistente de outra escola passaria,
+porque o `clean()` não tem o que reclamar. **Fatia 6 entregue**: frontend do
 portal sob `/portal`, em chunk próprio (`React.lazy` no `App.tsx` separa a
 árvore do staff da do portal), sessão independente em
 `features/portal/` (storage `portal_*`, `portalApi` que guarda o refresh
@@ -397,17 +404,16 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
    ✅ **Smoke test do Sentry CONFIRMADO em prod** (era pendência da FASE 2): o 404 do endpoint de PDF (antes do #94 deployar) caiu no painel — prova que `SENTRY_DSN` está setado no Render e que a captura de 4xx (#92) está ativa.
 
 ### FASE 4 — Comunicação Institucional — FUNCIONAL EM PROD
-11. ✅ **Email ao responsável na ocorrência (entrega real em prod)** — campos `nome/email_responsavel` no Aluno; envio em thread daemon (fire-and-forget) com `EMAIL_TIMEOUT=10s`, protegido por try/except. Backend de email = **Brevo via HTTP API** (`django-anymail`) — Resend e Gmail SMTP foram tentados e falharam pelo bloqueio de SMTP outbound do Render free (set/2025). Sender verificado: ver `CLAUDE.local.md` (repo público — email fora daqui). 300 emails/dia free. PRs #43 (campos), #44 (off-thread fix), #48 (Brevo). **Validado em 2026-05-30 com entrega externa.** **Múltiplos responsáveis e `recebe_notificacao` entregues** (fatias 1–3 do `RESPONSAVEIS.md`, PRs #120–#122): o destino agora é o vínculo, com fallback pro campo antigo só quando o aluno não tem vínculo nenhum. Falta: telefone (outro canal, outro provedor) e a tela de vínculos (fatia 4, depende do PR #117).
+11. ✅ **Email ao responsável na ocorrência (entrega real em prod)** — campos `nome/email_responsavel` no Aluno; envio em thread daemon (fire-and-forget) com `EMAIL_TIMEOUT=10s`, protegido por try/except. Backend de email = **Brevo via HTTP API** (`django-anymail`) — Resend e Gmail SMTP foram tentados e falharam pelo bloqueio de SMTP outbound do Render free (set/2025). Sender verificado: ver `CLAUDE.local.md` (repo público — email fora daqui). 300 emails/dia free. PRs #43 (campos), #44 (off-thread fix), #48 (Brevo). **Validado em 2026-05-30 com entrega externa.** **Múltiplos responsáveis e `recebe_notificacao` entregues** (as quatro fatias do `RESPONSAVEIS.md`, PRs #120–#122 + a tela de vínculos): o destino agora é o vínculo, com fallback pro campo antigo só quando o aluno não tem vínculo nenhum, e a secretaria cadastra o segundo responsável pela tela `/responsaveis`, sem `/admin/`. Falta: telefone (outro canal, outro provedor).
 
     **O desenho completo está em [`RESPONSAVEIS.md`](./RESPONSAVEIS.md)**
     (out/2026). É a convergência que o `PORTAL.md` adiou: o email saía pelo
     campo de texto `Aluno.email_responsavel` enquanto o portal lia os
     vínculos `ResponsavelAluno`, então quem estava vinculado só pelo M2M
-    **via no portal e não recebia email**. Quatro fatias; 1–3 entregues, a
-    última (tela de vínculos) depende do PR #117. A armadilha central está
-    registrada lá e vale pra qualquer mexida futura no envio: o fallback pro
-    campo antigo dispara por **ausência de vínculo**, nunca por ausência de
-    destino — senão o opt-out vira nada.
+    **via no portal e não recebia email**. Quatro fatias, todas entregues.
+    A armadilha central está registrada lá e vale pra qualquer mexida
+    futura no envio: o fallback pro campo antigo dispara por **ausência de
+    vínculo**, nunca por ausência de destino — senão o opt-out vira nada.
 12. **Email assíncrono dedicado** — fila (Celery/Dramatiq/RQ) com retry + histórico, quando o volume crescer. Hoje é thread daemon best-effort. PENDENTE.
 13. **Timeline do aluno** — centraliza ocorrências, presença, advertências. Pode reaproveitar a API HistoricalRecords pra mostrar mudanças no histórico. PENDENTE.
 
@@ -444,9 +450,11 @@ senha · 4) leituras · 5) mural · 5b) tela do mural no staff · 6) frontend
 do portal · 6b) tela "Responsáveis" + botão Convidar no staff.
 
 **6b entregue**: `GET /responsaveis/` em `apps/portal/views_staff.py`
-(somente leitura, `IsAdminOrDiretor`, escopado por escola, paginado, busca
-incluindo nome do aluno) + tela `/responsaveis` com badge de situação e
-botão Convidar. A `situacao` é derivada (`Exists`/`Subquery`, sem N+1) e tem
+(`IsAdminOrDiretor`, escopado por escola, paginado, busca incluindo nome do
+aluno) + tela `/responsaveis` com badge de situação e botão Convidar.
+Nasceu somente-leitura; a fatia 4 do `RESPONSAVEIS.md` acrescentou
+cadastro de conta e escrita de vínculo na mesma tela (ver o mapa do
+`portal/`). A `situacao` é derivada (`Exists`/`Subquery`, sem N+1) e tem
 cinco valores: os três previstos mais `convite_expirado` e `inativo`, porque
 exibir "convidado" pra convite vencido faria a secretaria esperar por nada.
 O `convidar` da fatia 3 migrou pra `urls_staff.py` com o nome de rota

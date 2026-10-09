@@ -164,14 +164,14 @@ recebeu?" depois da mudança. Isso é critério de aceite, não detalhe.
 ## 5. Fatias
 
 Uma PR por fatia, na ordem. As três primeiras são backend e saíram de
-`main`; a quarta depende do #117 (ver §6).
+`main`; a quarta esperou o #117 (ver §6).
 
 | # | Fatia | Verificação | Status |
 |---|---|---|---|
 | 1 | `apps/portal/destinatarios.py` — origem única do destinatário | Aluno sem vínculo recebe pelo campo antigo; aluno com dois vínculos gera dois destinos; irmãos com o mesmo responsável deduplicam; consulta em lote não faz N+1 | ✅ PR #120 |
 | 2 | `recebe_notificacao` no `Responsavel` + migration | Desligar exclui do envio e **mantém** o acesso ao portal; aluno cujos vínculos todos recusaram não cai no fallback | ✅ PR #121 |
 | 3 | `ComunicadoDestinatario` por responsável + migration | Comunicado já enviado mantém o log intacto; dois responsáveis geram duas linhas; `contar_previa` bate com o que sai | ✅ PR #122 |
-| 4 | Tela de vínculos no staff | Secretaria adiciona e remove responsável de um aluno; não cria vínculo cruzando escola; professor não acessa | PENDENTE (depende do #117) |
+| 4 | Tela de vínculos no staff | Secretaria adiciona e remove responsável de um aluno; não cria vínculo cruzando escola; professor não acessa | ✅ |
 
 ### Fatia 1 — `destinatarios.py`
 
@@ -219,13 +219,66 @@ Não apagar nem reescrever linha antiga. Não tornar a FK obrigatória.
 > então um filho com mãe e pai vinculados passou a aparecer duas vezes no
 > mesmo aviso dentro do portal do pai. Precisou de `distinct()`.
 
+### Fatia 4 — a tela, e o que ela precisou abrir a mais
+
+O escopo desta seção era "adiciona e remove responsável de um aluno", que
+se lê como só vincular. **Não bastava.** A semeadura cria uma conta por
+email tirado do `Aluno.email_responsavel`, ou seja uma por família, então
+vincular contas existentes nunca produz o caso mãe-e-pai — sem criar conta
+aqui, o segundo responsável continuaria nascendo só no `/admin/` e as três
+fatias anteriores seguiriam inalcançáveis pra quem opera a escola. Era o
+§1 desta doc dizendo uma coisa e o §5 outra; a decisão (out/2026) foi
+seguir o §1.
+
+Isso **reverteu** a nota do 6b que fazia o `ResponsavelStaffViewSet`
+somente-leitura ("conta de usuário externo não nasce pela API do staff").
+O motivo está no `ResponsavelCriacaoSerializer`, e o teste que fixava a
+decisão antiga foi reescrito, não apagado — ele agora fixa a afirmação
+mais estreita que continua valendo: cadastro entrou, **edição e remoção
+não**. Corrigir email errado segue pelo admin; apagar responsável é
+`PROTECT` dos dois lados.
+
+O que a reversão não afrouxa: a conta nasce sem senha utilizável, então
+cadastrar não dá acesso a nada. O acesso continua vindo só do convite.
+
+**O guard do vínculo tem duas camadas, e nenhuma substitui a outra.** O
+`clean()` do model exige que responsável e aluno concordem entre si; o
+serializer checa **cada lado contra a escola de quem está logado**. O caso
+que só a segunda camada pega: responsável e aluno ambos de outra escola —
+eles concordam, o `clean()` fica calado, e sem o guard por lado um diretor
+criaria esse vínculo e ganharia acesso aos dados de uma criança alheia.
+Tem teste próprio, e remover qualquer um dos dois guards derruba três.
+
+Detalhes que só apareceram implementando:
+
+- **O escopo da listagem filtra os dois lados.** Redundante enquanto o
+  invariante vale, e é por isso que está lá: `objects.create()` não passa
+  por `clean()`, então um vínculo cruzado por shell existe em teoria, e
+  filtrar só pelo responsável mostraria a um diretor o nome de um aluno de
+  outra escola.
+- **O email é normalizado no serializer, não só no `save()`.** O model
+  normaliza depois da validação, então `Maria@Example.com` passava pelo
+  `UniqueTogetherValidator` (que compara o valor cru contra o banco, onde
+  está `maria@example.com`) e só estourava no INSERT — 500 em vez de 400.
+- **A listagem do vínculo exige `?responsavel=` ou `?aluno=`** em vez de
+  paginar (`FiltroEscopoObrigatorioMixin`), mesma escolha dos endpoints
+  matriz: a tela sempre pede os filhos de uma família.
+- **Sem `PUT`/`PATCH` no vínculo.** Trocar um lado do par é outro vínculo;
+  apagar e criar mantém o histórico auditado legível.
+
+Na UI, a consequência que não é óbvia e está escrita na tela: **remover o
+último vínculo não silencia o aluno** — pelo §4.1, zero vínculos faz o
+email voltar a sair pelo campo de texto do cadastro. Sem avisar, a
+secretaria lê "removido" como "silenciado".
+
 ---
 
 ## 6. Sequência e dependências
 
-**A fatia 4 depende do PR #117 estar mergeado.** O lugar natural da tela de
-vínculos é a tela "Responsáveis" (`/responsaveis`), que nasce lá. Até
-mergear, não há onde pendurar a UI.
+**A fatia 4 dependia do PR #117** — o lugar natural da tela de vínculos é
+a tela "Responsáveis" (`/responsaveis`), que nasceu lá, e até mergear não
+havia onde pendurar a UI. O #117 entrou em out/2026 e a fatia saiu em
+seguida.
 
 **As fatias 1–3 não dependiam de nada aberto** e já estão na `main`
 (PRs #120–#122). Checado na época: não tocam em nenhum arquivo do #117
@@ -253,11 +306,18 @@ briga.
 
 ## 8. Estado
 
-**Fatias 1–3 entregues** (out/2026, PRs #120, #121 e #122): o destino do
-email é o vínculo, o opt-out existe e o log do comunicado registra uma
-entrega por responsável. 610 testes na `main`.
+**Frente completa** (out/2026). Fatias 1–3 nos PRs #120, #121 e #122: o
+destino do email é o vínculo, o opt-out existe e o log do comunicado
+registra uma entrega por responsável. Fatia 4 fecha o ciclo: a secretaria
+cadastra o segundo responsável e gerencia os vínculos pela tela
+`/responsaveis`, sem `/admin/`.
 
-**Fatia 4 pendente** — a tela de vínculos, que é o que permite à secretaria
-criar o segundo responsável. Até ela entrar, a capacidade que as três
-primeiras entregam só é exercitável pelo `/admin/` do Django (ver §1, "por
-que está latente hoje" — segue valendo).
+O §1 ("por que está latente hoje") **deixou de valer** — era a ausência
+desta tela que mantinha a capacidade inalcançável. Fica como registro do
+raciocínio que decidiu o escopo.
+
+Pendências que esta frente não cobriu, por escolha registrada no §7:
+telefone do responsável (outro canal, outro provedor), remover
+`Aluno.nome/email_responsavel` e opt-out por filho. E uma que a fatia 4
+deixou de fora de propósito: **editar nome/email de responsável pela tela**
+— corrigir email errado segue pelo `/admin/`, como o 6b documentou.
