@@ -657,6 +657,36 @@ export interface ResponsavelAlunoResumo {
   ativo: boolean;
 }
 
+// Vínculo responsável × aluno, como o staff escreve (fatia 4 do
+// RESPONSAVEIS.md). É o registro que decide quem lê o boletim de quem,
+// então o backend valida os dois lados contra a escola de quem está
+// logado — a UI nunca manda escola.
+export interface VinculoResponsavel {
+  id: number;
+  responsavel: number;
+  responsavel_nome: string;
+  responsavel_email: string;
+  aluno: number;
+  aluno_nome: string;
+  aluno_turma: string | null;
+  aluno_ativo: boolean;
+  criado_em: string;
+}
+
+export type VinculoResponsavelInput = {
+  responsavel: number;
+  aluno: number;
+};
+
+// `escola` omitida de propósito: o backend deduz pelo JWT
+// (AutoEscopoEscolaSerializerMixin). A conta nasce sem senha utilizável,
+// então criar não dá acesso — o acesso vem do convite.
+export type ResponsavelCriacaoInput = {
+  nome: string;
+  email: string;
+  escola?: number;
+};
+
 export interface ResponsavelStaff {
   id: number;
   nome: string;
