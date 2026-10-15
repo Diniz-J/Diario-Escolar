@@ -91,6 +91,7 @@ LOCAL_APPS: list[str] = [
     "apps.avaliacao",
     "apps.aulas",
     "apps.materiais",
+    "apps.financeiro",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -441,3 +442,20 @@ SENTRY_TUNNEL_PROJECT_IDS = [
     for p in config("SENTRY_TUNNEL_PROJECT_IDS", default="").split(",")
     if p.strip()
 ]
+
+
+# ---------------------------------------------------------------------- #
+# Financeiro                                                             #
+# ---------------------------------------------------------------------- #
+# Default de multa e juros de mora dos contratos NOVOS (`PlanoCobranca`).
+# Os percentuais ficam gravados em cada plano no momento do cadastro:
+# são cláusula de contrato, não configuração do sistema, então mudar a
+# env aqui não reescreve contrato já assinado. Valores em percentual
+# (2.00 = 2%), nos patamares usuais de mensalidade escolar no Brasil:
+# multa única de 2% e juros de 1% ao mês pro rata die.
+FINANCEIRO_MULTA_PERCENTUAL_PADRAO = config(
+    "FINANCEIRO_MULTA_PERCENTUAL_PADRAO", default="2.00"
+)
+FINANCEIRO_JUROS_MES_PERCENTUAL_PADRAO = config(
+    "FINANCEIRO_JUROS_MES_PERCENTUAL_PADRAO", default="1.00"
+)
