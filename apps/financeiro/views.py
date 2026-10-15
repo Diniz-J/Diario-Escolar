@@ -14,11 +14,15 @@ mixin só existe pra quando divergem. Como ele sobrescreve
 de `@action` futura ser ignorada em silêncio.
 
 Escrita do que é dinheiro mora fora daqui: `status`/`valor_pago`/
-`data_pagamento` da fatura são do `services.py` (fatia 3), `id_externo`/
-`link_pagamento` são do gateway (fatia 4). Ver `serializers.py`.
+`data_pagamento` da fatura são escritos pelo `services.py`, e
+`id_externo`/`link_pagamento` pelo gateway (fatia 4). As views nunca
+reescrevem esses campos — o registro e o estorno de pagamento delegam em
+`registrar_pagamento`/`estornar_pagamento`, que reconciliam a fatura na
+mesma transação. Ver `serializers.py` e `FINANCEIRO.md` §2.4.
 """
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, viewsets
+from rest_framework import filters, mixins, viewsets
 from rest_framework.exceptions import ValidationError
 
 from apps.common.pagination import PaginacaoCompulsoria, PaginacaoPadrao
@@ -30,9 +34,12 @@ from .models import Fatura, FaturaItem, Pagamento, PlanoCobranca
 from .serializers import (
     FaturaItemSerializer,
     FaturaSerializer,
+    PagamentoCreateSerializer,
     PagamentoSerializer,
     PlanoCobrancaSerializer,
+    erro_drf,
 )
+from .services import estornar_pagamento, registrar_pagamento
 
 
 class PlanoCobrancaViewSet(EscopoEscolaMixin, viewsets.ModelViewSet):
@@ -122,19 +129,25 @@ class FaturaItemViewSet(EscopoEscolaMixin, viewsets.ModelViewSet):
     filterset_fields = ["fatura"]
 
 
-class PagamentoViewSet(EscopoEscolaMixin, viewsets.ReadOnlyModelViewSet):
-    """Somente leitura nesta fatia.
+class PagamentoViewSet(
+    EscopoEscolaMixin,
+    mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.ReadOnlyModelViewSet,
+):
+    """Registro manual (secretaria recebeu), leitura e estorno.
 
-    Registrar pagamento chega na fatia 3 junto de
-    `services.registrar_pagamento()`, que atualiza `valor_pago` e
-    `status` da fatura na mesma transação. Expor `POST` antes disso
-    permitiria pagamento registrado com fatura intocada — o estado
-    inconsistente que a decisão de não conciliar no `save()` existe pra
-    evitar (`FINANCEIRO.md` §2.4).
+    **Sem `update`**: corrigir valor ou data de um pagamento registrado
+    deixaria a fatura reconciliada com um número que não existe mais. O
+    caminho é estornar e registrar de novo, que passa pelos dois lados da
+    conciliação.
+
+    `POST` e `DELETE` delegam no `services.py` em vez de salvar pelo
+    serializer: é lá que `valor_pago` e `status` da fatura são
+    reescritos, na mesma transação (`FINANCEIRO.md` §2.4).
     """
 
     queryset = Pagamento.objects.select_related("fatura__aluno", "escola")
-    serializer_class = PagamentoSerializer
     permission_classes = [IsAdminOrDiretor]
     pagination_class = PaginacaoCompulsoria
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
@@ -144,3 +157,44 @@ class PagamentoViewSet(EscopoEscolaMixin, viewsets.ReadOnlyModelViewSet):
         "fatura__aluno__nome_completo",
         "fatura__aluno__matricula",
     ]
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return PagamentoCreateSerializer
+        return PagamentoSerializer
+
+    def perform_create(self, serializer) -> None:
+        """Entrega ao service e devolve o que ele criou.
+
+        `serializer.instance` é setado à mão porque o service é que
+        persiste — sem isso o DRF renderizaria a resposta a partir de um
+        serializer sem instância.
+
+        O service é idempotente por `referencia_externa`: reenviar a
+        mesma referência devolve o pagamento que já existe, com 201 e o
+        recurso existente, em vez de criar o segundo.
+        """
+        dados = serializer.validated_data
+        try:
+            serializer.instance = registrar_pagamento(
+                fatura=dados["fatura"],
+                valor=dados["valor"],
+                data=dados["data"],
+                metodo=dados["metodo"],
+                referencia_externa=dados.get("referencia_externa", ""),
+            )
+        except DjangoValidationError as exc:
+            # O service valida com `full_clean()` pra que as invariantes
+            # valham também pro command e pro webhook. O DRF não traduz o
+            # `ValidationError` do Django, então sem isto "fatura
+            # cancelada não recebe pagamento" sairia como 500.
+            raise erro_drf(exc) from exc
+
+    def perform_destroy(self, instance) -> None:
+        """`DELETE` é estorno: apaga o pagamento e reconcilia a fatura.
+
+        É o que torna acionável a recusa de cancelar fatura com pagamento
+        registrado — estorna aqui, cancela a fatura depois. O audit log
+        guarda a linha apagada e quem apagou.
+        """
+        estornar_pagamento(instance)
