@@ -62,6 +62,21 @@ segue o mesmo caminho: command + cron, idempotente pelo unique de banco.
 Quando a fila existir, a geração migra sem mudar o modelo — o que garante
 a idempotência é a constraint, não o agendador.
 
+Dois comandos, os dois seguros de repetir:
+
+```cron
+# Gera as faturas do mês, todo dia 1 às 6h.
+0 6 1 * *  cd /app && python manage.py financeiro_gerar_faturas
+
+# Move pra `vencido` o que venceu, todo dia às 7h.
+0 7 * * *  cd /app && python manage.py financeiro_marcar_vencidas
+```
+
+`financeiro_gerar_faturas` aceita `--competencia YYYY-MM` (default: mês
+corrente), `--escola <id>` e `--dry-run`. Rodar duas vezes no mesmo mês
+não duplica nada: a segunda execução conta as faturas que já existem como
+ignoradas. É o que permite re-rodar à mão depois de uma falha parcial.
+
 ### 2.3. Multa e juros são regra, não campo
 
 `Fatura.encargos(hoje)` calcula multa + juros de mora pro rata die a
@@ -109,6 +124,35 @@ imposto no `clean()`.
 O dia 31 é cadastro legítimo ("vence no último dia"). Quem resolve
 fevereiro é o clamp da geração, que trava no último dia do mês da
 competência. Validar em 1..28 obrigaria a escola a mentir no cadastro.
+
+### 2.8. Na virada de contrato, cobra o plano mais antigo do mês
+
+Entre os planos ativos cuja vigência intersecta a competência, a geração
+escolhe **o de `vigencia_inicio` mais antiga** — que é o que estava
+valendo no dia 1 do mês.
+
+O caso que obriga a ter regra: plano A encerra dia 10, plano B começa
+dia 11. As duas vigências são legítimas e não se sobrepõem, as duas
+passam na validação, e as duas cobrem março. Março sai pelo A, e o B
+começa a cobrar em abril.
+
+A mesma regra resolve matrícula nova no meio do mês: existe só o
+contrato novo, então ele cobra o mês inteiro, valor cheio.
+
+**Por que escolher na aplicação e não deixar o banco decidir**: a
+alternativa seria tentar criar as duas faturas e deixar o unique de
+`(aluno, competencia)` derrubar a segunda. Funcionaria, mas qual plano
+cobra o mês passaria a depender da ordem de inserção — ou seja, o valor
+no boleto do responsável seria arbitrário. A escolha é explícita e
+determinística, e o comando avisa quando encontra um aluno nessa
+situação.
+
+**Rateio por dias está fora de escopo.** Seria o mais justo e o mais
+caro: quebraria o invariante de uma fatura por aluno por mês e exigiria
+campo de período na fatura. Se a escola pedir, é mudança de schema, não
+ajuste de regra.
+
+---
 
 ---
 
@@ -237,7 +281,7 @@ enviada ao responsável.
 
 ---
 
-## 5. API (fatia 2)
+## 5. API
 
 Rotas sob `/api/v1/`: `planos-cobranca/`, `faturas/`, `fatura-itens/` e
 `pagamentos/`.
@@ -286,10 +330,27 @@ contrato novo); no item de fatura apaga de verdade, porque a linha é
 detalhamento e corrigir taxa lançada errada é operação legítima da
 secretaria — o audit log guarda o que saiu.
 
-**`Pagamento` é somente leitura nesta fatia.** `POST` chega na fatia 3
-junto de `registrar_pagamento()`, que atualiza a fatura na mesma
-transação. Expor antes criaria pagamento registrado com fatura
-intocada — o estado que §2.4 existe pra evitar.
+**`Pagamento` registra, lê e estorna, nunca edita.** `POST` e `DELETE`
+delegam em `registrar_pagamento()`/`estornar_pagamento()`, que reconciliam
+a fatura na mesma transação; o serializer de escrita não chama `save()`.
+Não há `PUT`/`PATCH`: corrigir valor ou data de um pagamento já
+conciliado deixaria a fatura com um número que não existe mais, então o
+caminho é estornar e registrar de novo, que passa pelos dois lados da
+conciliação. O `DELETE` é o que torna acionável a recusa de cancelar
+fatura com pagamento registrado — estorna, depois cancela.
+
+Detalhe que custou código: o DRF monta um `UniqueValidator` sozinho a
+partir do `UniqueConstraint` de `referencia_externa`, e com ele o reenvio
+do mesmo pagamento (duplo clique, retry de rede) morreria em 400 antes de
+chegar ao service. O campo é declarado com `validators=[]` justamente pra
+que a resposta venha de quem sabe dar a certa: o service devolve o
+pagamento que já existe. O constraint continua no banco como rede.
+
+Outro: o `services.py` valida com `full_clean()`, pra que as invariantes
+valham para os três chamadores (API, command e webhook). O DRF não traduz
+o `ValidationError` do Django, então a view converte no limite da API
+(`erro_drf`) — sem isso, "fatura cancelada não recebe pagamento" sairia
+como 500.
 
 **Paginação**: `PaginacaoCompulsoria` em faturas e pagamentos (300
 alunos por 12 meses são 3.600 linhas por ano letivo), `PaginacaoPadrao`
@@ -342,7 +403,7 @@ Decisões já tomadas pra quando a fatia 4 começar:
 |---|---|---|
 | 1 | Models, migration, admin, testes | **entregue** |
 | 2 | API DRF (viewsets, serializers, filtros, permissões) | **entregue** |
-| 3 | `services.py` + geração recorrente + job de vencidas | pendente |
+| 3 | `services.py` + geração recorrente + job de vencidas | **entregue** |
 | 4 | `gateways/base.py` + `asaas.py` | pendente |
 | 5 | Webhook + conciliação + notificação ao responsável | pendente |
 | 6 | Frontend (ficha financeira, listagem da secretaria) | pendente |
@@ -359,10 +420,17 @@ fatura no portal do responsável.
 
 ## 8. Estado
 
-**Fatias 1 e 2 entregues.** App `financeiro` com os quatro modelos
-(escopo por escola, audit log, admin com inlines na fatura) e a API REST
-sob `/api/v1/`: CRUD de plano, fatura e item, pagamento somente leitura,
-filtros por período, paginação e permissão de direção. 103 testes.
+**Fatias 1, 2 e 3 entregues.** O módulo está funcional ponta a ponta sem
+gateway: os quatro modelos, a API REST sob `/api/v1/`, e o `services.py`
+com geração recorrente idempotente, conciliação (registro e estorno) e o
+job de vencidas, com dois management commands pra cron. 150 testes.
 
-Próximo passo é a fatia 3 (`services.py` + geração recorrente), que é
-também o que destrava o `POST /pagamentos/`.
+Uma escola já pode operar assim: cadastra o plano de cada aluno, o cron
+gera as faturas todo dia 1, a secretaria registra o Pix ou o dinheiro que
+recebeu e o status acompanha. O que falta é a cobrança sair
+automaticamente (fatias 4 e 5) e a tela (fatia 6).
+
+Próximo passo é a fatia 4 (client do Asaas), **bloqueada** enquanto
+`docs.asaas.com` estiver negado pela política de rede do ambiente de
+desenvolvimento — o adapter precisa ser escrito contra o contrato real,
+não de memória.

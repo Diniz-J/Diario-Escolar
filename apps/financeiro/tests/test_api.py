@@ -13,7 +13,7 @@ O que a fatia promete e precisa ficar travado:
 - a listagem de faturas não faz query por linha, apesar dos campos
   derivados que leem o plano.
 """
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.test import TestCase
@@ -535,8 +535,65 @@ class PagamentoTests(_Setup):
             metodo=Pagamento.Metodo.PIX,
         )
 
-    def test_post_nao_existe(self):
-        """Conciliação é da fatia 3 — ver FINANCEIRO.md §2.4."""
+    def test_post_registra_e_reconcilia(self):
+        """A API não grava pagamento: delega no service, que reconcilia."""
+        fatura = Fatura.objects.create(
+            escola=self.escola,
+            plano=self.plano_ana,
+            aluno=self.ana,
+            competencia=date(2026, 4, 1),
+            valor=Decimal("500.00"),
+            vencimento=date(2026, 4, 10),
+        )
+        resp = self.client.post(
+            URL_PAGAMENTOS,
+            {
+                "fatura": fatura.pk,
+                "valor": "500.00",
+                "data": "2026-04-09",
+                "metodo": "dinheiro",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        fatura.refresh_from_db()
+        self.assertEqual(fatura.status, Fatura.Status.PAGO)
+        self.assertEqual(fatura.valor_pago, Decimal("500.00"))
+        self.assertEqual(fatura.data_pagamento, date(2026, 4, 9))
+
+    def test_post_em_fatura_de_outra_escola_da_400(self):
+        """Guard de IDOR: o escopo do queryset não cobre o campo `fatura`."""
+        resp = self.client.post(
+            URL_PAGAMENTOS,
+            {
+                "fatura": self.fatura_b.pk,
+                "valor": "10.00",
+                "data": "2026-03-09",
+                "metodo": "pix",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.assertIn("fatura", resp.data)
+
+    def test_post_repetido_com_a_mesma_referencia_nao_duplica(self):
+        payload = {
+            "fatura": self.fatura_ana.pk,
+            "valor": "100.00",
+            "data": "2026-03-09",
+            "metodo": "pix",
+            "referencia_externa": "pay_999",
+        }
+        primeiro = self.client.post(URL_PAGAMENTOS, payload, format="json")
+        segundo = self.client.post(URL_PAGAMENTOS, payload, format="json")
+        self.assertEqual(primeiro.status_code, 201, primeiro.data)
+        self.assertEqual(segundo.status_code, 201, segundo.data)
+        self.assertEqual(primeiro.data["id"], segundo.data["id"])
+        self.assertEqual(Pagamento.objects.filter(referencia_externa="pay_999").count(), 1)
+
+    def test_post_em_fatura_cancelada_da_400(self):
+        self.fatura_ana.status = Fatura.Status.CANCELADO
+        self.fatura_ana.save(update_fields=["status", "atualizado_em"])
         resp = self.client.post(
             URL_PAGAMENTOS,
             {
@@ -547,11 +604,63 @@ class PagamentoTests(_Setup):
             },
             format="json",
         )
+        self.assertEqual(resp.status_code, 400, resp.data)
+
+    def test_delete_estorna(self):
+        """`DELETE` é estorno — apaga o pagamento e reconcilia a fatura.
+
+        Fatura própria, não a do `setUp`: aquela já tem um pagamento de
+        fixture, e estornar um de dois deixaria a fatura paga — correto,
+        mas não é o que este teste quer observar.
+        """
+        fatura = Fatura.objects.create(
+            escola=self.escola,
+            plano=self.plano_ana,
+            aluno=self.ana,
+            competencia=date(2026, 5, 1),
+            valor=Decimal("300.00"),
+            # Vencimento à frente de hoje: o estorno devolve a fatura pra
+            # `pendente`. Com vencimento passado a reconciliação devolveria
+            # `vencido` — correto, mas não é o que este teste observa.
+            vencimento=date.today() + timedelta(days=30),
+        )
+        pagamento = self.client.post(
+            URL_PAGAMENTOS,
+            {
+                "fatura": fatura.pk,
+                "valor": "300.00",
+                "data": date.today().isoformat(),
+                "metodo": "pix",
+            },
+            format="json",
+        ).data
+        resp = self.client.delete(url_pagamento(pagamento["id"]))
+        self.assertEqual(resp.status_code, 204)
+        fatura.refresh_from_db()
+        self.assertEqual(fatura.status, Fatura.Status.PENDENTE)
+        self.assertEqual(fatura.valor_pago, Decimal("0.00"))
+        self.assertEqual(Pagamento.objects.filter(fatura=fatura).count(), 0)
+
+    def test_patch_nao_existe(self):
+        """Corrigir pagamento é estornar e registrar de novo."""
+        resp = self.client.patch(
+            url_pagamento(self.pagamento.pk), {"valor": "1.00"}, format="json"
+        )
         self.assertEqual(resp.status_code, 405)
 
-    def test_delete_nao_existe(self):
-        resp = self.client.delete(url_pagamento(self.pagamento.pk))
-        self.assertEqual(resp.status_code, 405)
+    def test_professor_nao_registra_pagamento(self):
+        self._como(self.professor)
+        resp = self.client.post(
+            URL_PAGAMENTOS,
+            {
+                "fatura": self.fatura_ana.pk,
+                "valor": "10.00",
+                "data": "2026-03-09",
+                "metodo": "pix",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 403)
 
     def test_leitura_traz_aluno_e_competencia(self):
         resp = self.client.get(url_pagamento(self.pagamento.pk))
