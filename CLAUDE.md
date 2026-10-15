@@ -159,8 +159,20 @@ sobreposta é barrada só no `clean()`: limitação conhecida da v1, com o
 caminho da exclusion constraint (`daterange` + `EXCLUDE USING gist`)
 anotado no `FINANCEIRO.md` §3.2. Dinheiro é sempre `DecimalField`, com
 arredondamento comercial (`ROUND_HALF_UP`) centralizado em
-`arredondar_dinheiro()`. **Fatia 1 entregue** (models/migration/admin/60
-testes); API, geração recorrente, gateway e webhook são as fatias
+`arredondar_dinheiro()`. **Fatias 1 e 2 entregues**
+(models/migration/admin + API REST, 103 testes). A API é **só direção**
+(`IsAdminOrDiretor` uniforme; professor e inspetor levam 403 até na
+leitura) e o que mexe em dinheiro é read-only — `status`/`valor_pago`/
+`data_pagamento` pertencem ao `services.py`, `id_externo`/
+`link_pagamento` ao gateway. `Fatura.aluno` também é read-only, deduzido
+do plano, e como o `UniqueTogetherValidator` do DRF só cobre campos
+graváveis, a competência repetida precisa de validação explícita pra dar
+400 em vez de estourar o unique como 500. Os serializers **não**
+espelham as invariantes à mão (como `materiais`/`aulas` fazem): rodam o
+`clean()` do modelo sobre uma cópia carregada com o payload
+(`_validar_pelo_clean`), porque o `PlanoCobranca` tem cinco invariantes e
+duas cópias delas divergiriam. `DELETE` cancela a fatura, desativa o
+plano e apaga o item. Geração recorrente, gateway e webhook são as fatias
 seguintes.
 
 **`tarefas/`** — esqueleto vazio (só `__init__.py`/`apps.py`/`migrations`). Feature **removida** do produto; frontend não tem `TarefasPage` nem feature `tarefas/`. Diretório mantido pra não quebrar migrations históricas.
@@ -538,9 +550,12 @@ não reabrir discussão:
 Fatias: 1) models · 2) API DRF · 3) services + geração recorrente ·
 4) gateway Asaas · 5) webhook + conciliação + notificação · 6) frontend.
 
-**Fatia 1 entregue**: app `financeiro` com os quatro modelos, escopo por
-escola, audit log, admin com inlines na fatura e 60 testes. Sem rota
-exposta ainda — cadastro pelo `/admin/`.
+**Fatias 1 e 2 entregues**: os quatro modelos (escopo por escola, audit
+log, admin com inlines na fatura) e a API REST sob `/api/v1/`
+(`planos-cobranca/`, `faturas/`, `fatura-itens/`, `pagamentos/` — este
+último somente leitura até a fatia 3 trazer a conciliação). Filtros por
+período, paginação compulsória nas listagens que crescem sem teto,
+permissão de direção. 103 testes.
 
 ### FASE 5 — Evolução SaaS
 14. **Multi-tenancy real** — middleware de tenant, RLS PostgreSQL, billing. Só após validação comercial.

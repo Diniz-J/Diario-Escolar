@@ -237,7 +237,67 @@ enviada ao responsável.
 
 ---
 
-## 5. Integração com gateway
+## 5. API (fatia 2)
+
+Rotas sob `/api/v1/`: `planos-cobranca/`, `faturas/`, `fatura-itens/` e
+`pagamentos/`.
+
+**Financeiro é só direção.** `IsAdminOrDiretor` uniforme em todas as
+ações, leitura inclusive — pelos aliases do projeto cobre admin,
+diretor, secretaria e coordenador. Professor e inspetor levam 403 em
+tudo. Mensalidade, bolsa e inadimplência não são assunto de quem dá
+aula, e é o mesmo raciocínio que já barra o professor no relatório
+cadastral de alunos. A classe vai direto em `permission_classes`, sem o
+`ReadWritePermissionMixin`: leitura e escrita têm a mesma regra, e como
+o mixin sobrescreve `get_permissions`, deixá-lo no caminho faria
+qualquer `permission_classes` de `@action` futura ser ignorada em
+silêncio.
+
+**O serializer roda o `clean()` do modelo, não uma cópia das regras.**
+`materiais` e `aulas` reescrevem as invariantes dentro do `validate()`
+(o DRF não chama `clean()`), o que é razoável quando a regra é uma
+linha. O `PlanoCobranca` tem cinco, uma delas com consulta ao banco
+(sobreposição de vigência) — duas cópias divergiriam, e divergência
+aqui significa cobrança errada. `_validar_pelo_clean()` carrega uma
+cópia rasa da instância com o payload e chama o `clean()` dela,
+convertendo o erro do Django no do DRF com as chaves por campo
+preservadas. Efeito colateral bom: em `PATCH` parcial as invariantes
+enxergam o registro completo, não só o pedaço que veio no corpo.
+
+**Quase tudo que mexe em dinheiro é read-only.** `status`, `valor_pago` e
+`data_pagamento` da fatura são do `services.py` (fatia 3); `id_externo` e
+`link_pagamento`, do gateway (fatia 4). `status` editável pela API seria
+o caminho de marcar "pago" sem pagamento nenhum, e `id_externo` digitado
+à mão é como se concilia a cobrança do aluno errado. `valor` e
+`vencimento` seguem editáveis — a secretaria corrige fatura.
+
+**`Fatura.aluno` é read-only e deduzido do `plano`.** O campo existe pra
+sustentar o unique de `(aluno, competencia)` (§3.1), não pra ser
+preenchido por quem chama. Consequência que exigiu código: o
+`UniqueTogetherValidator` do DRF só monta a checagem quando todos os
+campos do constraint são graváveis, então sem uma validação explícita a
+competência repetida estouraria `IntegrityError` e o front mostraria
+erro de servidor em vez de "este aluno já tem fatura neste mês".
+
+**`DELETE` por recurso**: na fatura cancela (`status=cancelado`, e
+recusa com 400 quando há pagamento registrado — estorne primeiro); no
+plano desativa (`ativo=False`, o que também libera a vigência pra um
+contrato novo); no item de fatura apaga de verdade, porque a linha é
+detalhamento e corrigir taxa lançada errada é operação legítima da
+secretaria — o audit log guarda o que saiu.
+
+**`Pagamento` é somente leitura nesta fatia.** `POST` chega na fatia 3
+junto de `registrar_pagamento()`, que atualiza a fatura na mesma
+transação. Expor antes criaria pagamento registrado com fatura
+intocada — o estado que §2.4 existe pra evitar.
+
+**Paginação**: `PaginacaoCompulsoria` em faturas e pagamentos (300
+alunos por 12 meses são 3.600 linhas por ano letivo), `PaginacaoPadrao`
+em planos e itens, que são listas curtas por aluno ou por fatura.
+
+---
+
+## 6. Integração com gateway
 
 Client isolado atrás de interface:
 
@@ -276,20 +336,20 @@ Decisões já tomadas pra quando a fatia 4 começar:
 
 ---
 
-## 6. Fatias
+## 7. Fatias
 
 | # | Escopo | Status |
 |---|---|---|
 | 1 | Models, migration, admin, testes | **entregue** |
-| 2 | API DRF (viewsets, serializers, filtros, permissões) | pendente |
+| 2 | API DRF (viewsets, serializers, filtros, permissões) | **entregue** |
 | 3 | `services.py` + geração recorrente + job de vencidas | pendente |
 | 4 | `gateways/base.py` + `asaas.py` | pendente |
 | 5 | Webhook + conciliação + notificação ao responsável | pendente |
 | 6 | Frontend (ficha financeira, listagem da secretaria) | pendente |
 
-Decisão de permissão pendente de confirmação na fatia 2: financeiro é
-**só direção** (`IsAdminOrDiretor`, que já cobre secretaria e
-coordenador). Professor e inspetor não leem mensalidade.
+A permissão ficou decidida na fatia 2: financeiro é **só direção**
+(`IsAdminOrDiretor`, que já cobre secretaria e coordenador). Professor e
+inspetor não leem mensalidade. Ver §5.
 
 Fora de escopo até alguém pedir: nota fiscal de serviço, inadimplência
 com régua de cobrança automática, split de pagamento, carnê impresso,
@@ -297,8 +357,12 @@ fatura no portal do responsável.
 
 ---
 
-## 7. Estado
+## 8. Estado
 
-**Fatia 1 entregue.** App `financeiro` com os quatro modelos, escopo por
-escola, audit log, admin com inlines na fatura e 60 testes. Nenhuma rota
-exposta ainda — o cadastro é pelo `/admin/`.
+**Fatias 1 e 2 entregues.** App `financeiro` com os quatro modelos
+(escopo por escola, audit log, admin com inlines na fatura) e a API REST
+sob `/api/v1/`: CRUD de plano, fatura e item, pagamento somente leitura,
+filtros por período, paginação e permissão de direção. 103 testes.
+
+Próximo passo é a fatia 3 (`services.py` + geração recorrente), que é
+também o que destrava o `POST /pagamentos/`.

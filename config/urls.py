@@ -91,6 +91,7 @@ api_v1_patterns = [
     path("", include("apps.avaliacao.urls")),
     path("", include("apps.aulas.urls")),
     path("", include("apps.materiais.urls")),
+    path("", include("apps.financeiro.urls")),
 ]
 
 urlpatterns = [
