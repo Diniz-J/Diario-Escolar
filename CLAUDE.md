@@ -130,6 +130,32 @@ delete (`ativo=False`). O portal lê em `/portal/alunos/<id>/materiais/`
 staff: `MuralPage` em `/mural` (fatia 5b) — professor publica só nos
 próprios lecionamentos ativos, direção escolhe o professor e modera.
 
+**`financeiro/`** — contas a receber da mensalidade (ver
+[`FINANCEIRO.md`](./FINANCEIRO.md)). Quatro modelos, todos auditados:
+`PlanoCobranca` (contrato do aluno: valor, dia de vencimento, desconto,
+multa/juros, vigência), `Fatura` (uma competência do contrato, com o valor
+**congelado na geração** — reajuste em maio não reescreve a fatura de
+março), `FaturaItem` (detalhamento, `CASCADE` como o `ItemPresenca`) e
+`Pagamento` (conciliação). A emissão de boleto/Pix **não é nossa** — é de
+gateway (Asaas); aqui fica o contas a receber e a conciliação por webhook.
+Três coisas que não se deduzem do schema: (1) o unique é
+`(aluno, competencia)` e **não** `(plano, competencia)`, senão a troca de
+plano no meio do mês geraria duas faturas da mesma competência e cobraria
+o aluno duas vezes — por isso `Fatura.aluno` é desnormalizado, e é a única
+razão do campo; (2) multa e juros são **método**
+(`Fatura.encargos(hoje)`), não campo, e os percentuais moram no plano
+porque são cláusula de contrato — mudar a env não reescreve contrato
+assinado; (3) `valor_pago`/`status` são escritos pelo `services.py`, nunca
+pelo `save()` do `Pagamento` (quebraria em bulk e esconderia o momento em
+que o dinheiro muda o estado da fatura) — tem teste travando. A vigência
+sobreposta é barrada só no `clean()`: limitação conhecida da v1, com o
+caminho da exclusion constraint (`daterange` + `EXCLUDE USING gist`)
+anotado no `FINANCEIRO.md` §3.2. Dinheiro é sempre `DecimalField`, com
+arredondamento comercial (`ROUND_HALF_UP`) centralizado em
+`arredondar_dinheiro()`. **Fatia 1 entregue** (models/migration/admin/60
+testes); API, geração recorrente, gateway e webhook são as fatias
+seguintes.
+
 **`tarefas/`** — esqueleto vazio (só `__init__.py`/`apps.py`/`migrations`). Feature **removida** do produto; frontend não tem `TarefasPage` nem feature `tarefas/`. Diretório mantido pra não quebrar migrations históricas.
 
 **`planos_ensino/`** — `PlanoEnsino` (ementa, conteúdo programático, objetivos, habilidades BNCC, carga horária, metodologia, recursos, avaliação, `ativo`). Único por `(escola, turma, disciplina, ano_letivo)`. Casca criada num dialog; campos longos preenchidos na tela de detalhe. **Auditado**.
@@ -290,10 +316,16 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 
 > Visão estratégica: validar operação real numa escola antes de expandir.
 > NÃO focar agora em: portal **do aluno** (login de aluno), app mobile nativo,
-> gamificação, financeiro, LMS, IA, microserviços, Kubernetes, arquitetura
+> gamificação, LMS, IA, microserviços, Kubernetes, arquitetura
 > enterprise.
 > Em andamento (out/2026): portal **do responsável**, só leitura — ver FASE 6
 > e [`PORTAL.md`](./PORTAL.md). Não confundir os dois.
+> Em andamento (out/2026): **financeiro** — cobrança de mensalidade, ver
+> FASE 7 e [`FINANCEIRO.md`](./FINANCEIRO.md). Saiu do "não focar agora" por
+> decisão de out/2026: é contas a receber procedural (quem deve o quê, desde
+> quando), que é exatamente o posicionamento de ERP administrativo — não é
+> gateway de pagamento nem ERP financeiro completo. A emissão de boleto/Pix
+> continua sendo de terceiro.
 > Focar em: estabilidade, rastreabilidade, deploy, operação, UX administrativa.
 
 ### MARCO: aplicação NO AR (demo)
@@ -470,6 +502,37 @@ identidade). Conta nasce sem senha utilizável: acesso só pelo convite.
 **Portão: a fatia 2 (login externo) não sobe antes da PR #105 estar
 mergeada e deployada.** A fatia 1 é só modelo/migration/admin, não abre
 caminho de autenticação, e pode ir em paralelo.
+
+### FASE 7 — Financeiro — EM ANDAMENTO
+
+Cobrança de mensalidade. Desenho, decisões e invariantes em
+[`FINANCEIRO.md`](./FINANCEIRO.md). Resumo do que já está decidido, pra
+não reabrir discussão:
+
+- **A recorrência é nossa, não do gateway.** Asaas/Vindi têm assinatura
+  nativa; não usamos. Bolsa, desconto variável, competência e reemissão
+  são regra da escola, e com a recorrência lá cada mudança vira chamada
+  de API — além do histórico financeiro passar a morar no provedor, o que
+  transforma "trocar de gateway" em migração de dados.
+- **Geração por management command + cron**, idempotente pela constraint
+  de banco. O projeto não tem fila (item 12 segue pendente); quando
+  tiver, a geração migra sem mexer no modelo.
+- **Gateway: Asaas**, atrás de interface (`gateways/base.py`), com client
+  próprio fino em `httpx` — não existe SDK Python maduro (os que existem
+  têm ≤3 estrelas; a maturidade do Asaas está no PHP).
+- **O contas a receber funciona sem gateway**: a escola que recebe Pix na
+  conta e dinheiro na secretaria registra `Pagamento` manual. O gateway é
+  integração, não dependência.
+- **Notificação sai por `apps/portal/destinatarios.py`**, como ocorrência
+  e comunicado — o pai vinculado só pelo M2M tem que receber
+  (`RESPONSAVEIS.md` §4.1).
+
+Fatias: 1) models · 2) API DRF · 3) services + geração recorrente ·
+4) gateway Asaas · 5) webhook + conciliação + notificação · 6) frontend.
+
+**Fatia 1 entregue**: app `financeiro` com os quatro modelos, escopo por
+escola, audit log, admin com inlines na fatura e 60 testes. Sem rota
+exposta ainda — cadastro pelo `/admin/`.
 
 ### FASE 5 — Evolução SaaS
 14. **Multi-tenancy real** — middleware de tenant, RLS PostgreSQL, billing. Só após validação comercial.
