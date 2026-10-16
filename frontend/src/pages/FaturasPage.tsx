@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
@@ -56,9 +57,15 @@ const STATUS_ORDEM: FaturaStatus[] = [
 // leitura), então a sidebar esconde o item pra eles.
 export function FaturasPage() {
   const turmasQuery = useTurmas();
+  // `?turma=<id>` na URL pré-filtra a lista. É como a TurmaDetalhePage
+  // manda pra cá ("Financeiro" no cabeçalho da turma): a pergunta de lá é
+  // "como está a situação financeira desta turma".
+  const [searchParams] = useSearchParams();
 
   const [filtroStatus, setFiltroStatus] = useState<string>(FILTRO_TODOS);
-  const [filtroTurma, setFiltroTurma] = useState<string>(FILTRO_TODOS);
+  const [filtroTurma, setFiltroTurma] = useState<string>(
+    searchParams.get("turma") ?? FILTRO_TODOS,
+  );
   const [filtroMes, setFiltroMes] = useState<string>("");
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
@@ -246,7 +253,17 @@ export function FaturasPage() {
                       className="cursor-pointer"
                       onClick={() => setDetalhe(fatura)}
                     >
-                      <TableCell>{fatura.aluno_nome}</TableCell>
+                      <TableCell>
+                        {/* Leva à ficha do aluno. `stopPropagation` porque
+                            a linha inteira abre o detalhe da fatura. */}
+                        <Link
+                          to={`/financeiro/alunos/${fatura.aluno}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="hover:text-ferrugem hover:underline"
+                        >
+                          {fatura.aluno_nome}
+                        </Link>
+                      </TableCell>
                       <TableCell className="hidden sm:table-cell">
                         {formatarCompetencia(fatura.competencia)}
                       </TableCell>

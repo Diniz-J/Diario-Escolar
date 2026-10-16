@@ -33,7 +33,7 @@ export function TurmaDetalhePage() {
   const turmaId = params.id ? parseInt(params.id, 10) : undefined;
 
   const turmaQuery = useTurma(turmaId);
-  const { podeModificarCadastros } = usePermissoes();
+  const { podeModificarCadastros, podeVerFinanceiro } = usePermissoes();
   const [frequenciaOpen, setFrequenciaOpen] = useState(false);
   const [listaOpen, setListaOpen] = useState(false);
   // Lista só alunos ativos da turma — alunos inativos (soft delete)
@@ -73,6 +73,17 @@ export function TurmaDetalhePage() {
               >
                 Frequência
               </Button>
+              {/* Leva à lista de faturas já filtrada por esta turma — a
+                  pergunta aqui é a situação financeira dos alunos dela.
+                  Nível-diretor, como o endpoint. */}
+              {podeVerFinanceiro && (
+                <Button
+                  variant="outline"
+                  onClick={() => navigate(`/financeiro?turma=${turmaId}`)}
+                >
+                  Financeiro
+                </Button>
+              )}
             </div>
           )}
         </div>

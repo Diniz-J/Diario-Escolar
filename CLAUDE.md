@@ -244,7 +244,7 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 - **`components/AppLayout.tsx`** — shell: sidebar fixa olive-dark em ≥768px, drawer (`Sheet`) com hamburguer em <768px. Logo "Diário Diniz" em Fraunces no topo + perfil em mono uppercase + nav com barra ferrugem no ativo + rodapé com filete ferrugem + logout + versão.
 - **`components/ui/`** — shadcn (editável). `Sheet` e `Switch` foram adicionados manualmente (CLI travava em prompt).
 - **`index.css`** — paleta de marca em CSS variables no `:root` (`--olive`, `--olive-dark`, `--linho`, `--paper`, `--ferrugem`, `--tinta`, `--sepia`, `--creme`) + mapeamento dos tokens shadcn (`--background`, `--primary`, etc.) pra paleta. Light mode permanente (sem `.dark` block). `color-scheme: light` + meta tag desabilitam force-dark dos browsers.
-- **~27 pages** — Login, Dashboard, Alunos, Turmas (+detalhe), Disciplinas, Professores (+detalhe — ficha 360º), PlanosEnsino (+detalhe), Ocorrencias (+detalhe), Presenca (+detalhe), Avaliacoes (+detalhe), PeriodosAvaliativos, NotasFinais, DiarioAula, Boletim, **Faturas + PlanosCobranca** (financeiro, sob um item só de sidebar com abas internas), Import, ContaSenha/EsqueciSenha/RedefinirSenha, NotFound, Placeholder. **Todas no padrão visual `DESIGN.md`** (Fraunces + filete ferrugem + eyebrow mono + `bg-paper`), inclusive listagens/detalhes/forms. Polidas em ondas: Login/Sidebar/Dashboard (PRs #50-#52), depois listagens e detalhes ao longo de jun/2026.
+- **~28 pages** — Login, Dashboard, Alunos, Turmas (+detalhe), Disciplinas, Professores (+detalhe — ficha 360º), PlanosEnsino (+detalhe), Ocorrencias (+detalhe), Presenca (+detalhe), Avaliacoes (+detalhe), PeriodosAvaliativos, NotasFinais, DiarioAula, Boletim, **Faturas + PlanosCobranca + FichaFinanceira** (financeiro; as duas primeiras sob um item só de sidebar com abas internas, a ficha alcançada pelo nome do aluno, pelo ⋯ da AlunosPage e pelo botão da TurmaDetalhePage), Import, ContaSenha/EsqueciSenha/RedefinirSenha, NotFound, Placeholder. **Todas no padrão visual `DESIGN.md`** (Fraunces + filete ferrugem + eyebrow mono + `bg-paper`), inclusive listagens/detalhes/forms. Polidas em ondas: Login/Sidebar/Dashboard (PRs #50-#52), depois listagens e detalhes ao longo de jun/2026.
 - **`types/api.ts`** — interfaces espelhando os serializers (mantido à mão; drf-spectacular no backlog). Todos os `*Input` com FK `escola` têm o campo opcional (`escola?: number`) — backend deduz pelo JWT quando ausente.
 
 ### Padrões de UI consolidados
@@ -577,8 +577,9 @@ contrato no meio do mês cobra o plano **mais antigo** que pega a
 competência — escolhido na aplicação, porque deixar o unique de banco
 decidir faria o valor do boleto depender da ordem de inserção.
 
-**Fatia 6 entregue** (frontend): `/financeiro` (faturas) e
-`/financeiro/planos`, sob um item só de sidebar com abas internas, escondido
+**Fatias 6 e 6b entregues** (frontend): `/financeiro` (faturas),
+`/financeiro/planos` e `/financeiro/alunos/:id` (ficha do aluno), as duas
+primeiras sob um item só de sidebar com abas internas, escondido
 de professor e inspetor via `podeVerFinanceiro`. Detalhe da fatura em dialog
 (composição + pagamentos + encargos do dia, com estorno), registro de
 pagamento com valor sugerido pelo `valor_atualizado`, e "Nova fatura" avulsa
@@ -586,9 +587,19 @@ pagamento com valor sugerido pelo `valor_atualizado`, e "Nova fatura" avulsa
 sem ela a tela nasceria vazia. **Com isso a escola opera o módulo inteiro
 pela UI, sem `/admin/`.**
 
+A **ficha do aluno** (6b) tem endpoint próprio
+(`GET /financeiro/alunos/<id>/`, `APIView` sem modelo, molde de
+`boletins`): devolve totais mais contratos, faturas e pagamentos numa
+requisição. **Os totais são somados em Python sobre os métodos do modelo,
+nunca em SQL** — `saldo()` trava em zero no pagamento a mais, e
+`Sum(valor - valor_pago)` faria o excesso de uma fatura abater a dívida de
+outra, mostrando dívida menor que a real. Três entradas (nome do aluno na
+lista de faturas, ⋯ da `AlunosPage`, botão "Financeiro" na
+`TurmaDetalhePage` → `/financeiro?turma=<id>`), todas nível-diretor.
+
 Fatia 4 (client do Asaas) está **bloqueada** enquanto `docs.asaas.com`
-estiver negado pela política de rede do ambiente de desenvolvimento. A 6b
-(ficha financeira do aluno) está livre.
+estiver negado pela política de rede do ambiente de desenvolvimento — é a
+última pendente.
 
 **Pendência operacional pra migração OVH**: as duas entradas de cron
 (`financeiro_gerar_faturas` dia 1, `financeiro_marcar_vencidas` diário)
