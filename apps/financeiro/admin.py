@@ -85,6 +85,11 @@ class FaturaAdmin(SimpleHistoryAdmin):
     )
     list_select_related = ("aluno", "plano", "escola")
     autocomplete_fields = ("escola", "plano", "aluno")
+    # `valor_pago` e `data_pagamento` são escritos pelo `services.py` na
+    # conciliação, nunca à mão — mesma razão de o `PagamentoInline` ser
+    # somente leitura. Editá-los no change form deixaria a fatura com
+    # dinheiro recebido sem o `Pagamento` que o explica.
+    readonly_fields = ("valor_pago", "data_pagamento")
     date_hierarchy = "vencimento"
     inlines = [FaturaItemInline, PagamentoInline]
     ordering = ("-competencia",)

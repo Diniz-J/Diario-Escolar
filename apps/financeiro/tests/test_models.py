@@ -241,6 +241,20 @@ class FaturaCleanTests(_Setup):
     def test_caminho_feliz(self):
         self.fatura(self.p).full_clean()
 
+    def test_paga_com_data_de_pagamento_passa(self):
+        """Caminho feliz da fatura PAGA — o par status+data é válido.
+
+        Fixa o lado que aprova: os ramos de erro cobrem paga-sem-data e
+        data-sem-estar-paga, mas sem isto um aperto futuro na regra
+        (ex.: exigir `valor_pago`) quebraria o caso legítimo sem teste.
+        """
+        self.fatura(
+            self.p,
+            status=Fatura.Status.PAGO,
+            valor_pago=Decimal("1000.00"),
+            data_pagamento=date(2026, 3, 9),
+        ).full_clean()
+
     def test_plano_de_outra_escola(self):
         outro = PlanoCobranca.objects.create(
             escola=self.escola_b,
