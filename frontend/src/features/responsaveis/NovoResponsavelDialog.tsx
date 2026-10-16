@@ -1,4 +1,3 @@
-import axios from "axios";
 import { useState, type FormEvent } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -23,7 +22,7 @@ import {
 import { usePermissoes } from "@/features/auth/usePermissoes";
 import { useEscolas } from "@/features/escolas/hooks";
 
-import { useCriarResponsavel } from "./hooks";
+import { primeiraMensagem, useCriarResponsavel } from "./hooks";
 
 interface NovoResponsavelDialogProps {
   open: boolean;
@@ -82,18 +81,10 @@ function Formulario({ onPronto }: { onPronto: () => void }) {
       });
       onPronto();
     } catch (err) {
-      if (axios.isAxiosError(err) && err.response?.data) {
-        // Erro por campo: `{email: ["..."]}` quando o email já existe na
-        // escola, `{escola: ["..."]}` no guard de escola alheia.
-        const data = err.response.data as Record<string, unknown>;
-        const primeira = Object.values(data)
-          .flat()
-          .find((v): v is string => typeof v === "string");
-        setErro(primeira ?? "Não foi possível cadastrar.");
-      } else {
-        setErro("Erro inesperado.");
-        console.error(err);
-      }
+      // Erro por campo (`{email: [...]}` já existe, `{escola: [...]}`
+      // guard de escola alheia) extraído pelo mesmo helper dos hooks.
+      setErro(primeiraMensagem(err, "Não foi possível cadastrar."));
+      console.error(err);
     }
   }
 

@@ -687,6 +687,17 @@ export type ResponsavelCriacaoInput = {
   escola?: number;
 };
 
+// Resposta do `POST /responsaveis/`: o serializer de criação devolve só
+// estes campos, não o shape completo de `ResponsavelStaff` (sem
+// `situacao`, `alunos`, convite...). A conta recém-criada aparece
+// completa na próxima listagem; aqui o retorno é enxuto de propósito.
+export interface ResponsavelCriado {
+  id: number;
+  nome: string;
+  email: string;
+  escola: number;
+}
+
 export interface ResponsavelStaff {
   id: number;
   nome: string;

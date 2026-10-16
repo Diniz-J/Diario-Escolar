@@ -7,6 +7,7 @@ import { normalizarPaginado } from "@/lib/pagination";
 import type {
   Paginated,
   ResponsavelCriacaoInput,
+  ResponsavelCriado,
   ResponsavelSituacao,
   ResponsavelStaff,
   VinculoResponsavel,
@@ -110,8 +111,9 @@ export function useVinculosDoResponsavel(responsavelId: number | null) {
 // Mensagem de erro do backend, que aqui vem por campo
 // (`{responsavel: [...]}`, `{aluno: [...]}`) e não como `detail`: as duas
 // camadas de guard de escola reportam no campo que falhou, e a secretaria
-// precisa ler qual lado está errado.
-function primeiraMensagem(err: unknown, fallback: string): string {
+// precisa ler qual lado está errado. Exportada porque o cadastro
+// (`NovoResponsavelDialog`) extrai o erro do mesmo jeito.
+export function primeiraMensagem(err: unknown, fallback: string): string {
   if (isAxiosError(err) && err.response?.data) {
     const data = err.response.data as Record<string, unknown>;
     if (typeof data.detail === "string") return data.detail;
@@ -177,8 +179,8 @@ export function useCriarResponsavel() {
   return useMutation({
     mutationFn: async (
       input: ResponsavelCriacaoInput,
-    ): Promise<ResponsavelStaff> => {
-      const { data } = await api.post<ResponsavelStaff>(
+    ): Promise<ResponsavelCriado> => {
+      const { data } = await api.post<ResponsavelCriado>(
         "/responsaveis/",
         input,
       );

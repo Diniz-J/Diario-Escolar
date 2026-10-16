@@ -1,5 +1,15 @@
 import { useMemo, useState } from "react";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,7 +29,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAlunos } from "@/features/alunos/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
-import type { ResponsavelStaff } from "@/types/api";
+import type { ResponsavelStaff, VinculoResponsavel } from "@/types/api";
 
 import {
   useCriarVinculo,
@@ -49,6 +59,10 @@ export function VinculosDialog({
   onOpenChange,
 }: VinculosDialogProps) {
   const [alunoId, setAlunoId] = useState<string>("");
+  // Vínculo aguardando confirmação de remoção. Remover apaga a linha de
+  // verdade e corta o acesso ao portal daquele aluno — ação destrutiva
+  // pede confirmação, como o resto do projeto (ex.: AlunoDeleteDialog).
+  const [removendo, setRemovendo] = useState<VinculoResponsavel | null>(null);
   const vinculosQuery = useVinculosDoResponsavel(responsavel?.id ?? null);
   const alunosQuery = useAlunos();
   // `Aluno` só traz o id da turma; o nome vem daqui. Nome de aluno
@@ -86,6 +100,18 @@ export function VinculosDialog({
     } catch (err) {
       // Toast com a mensagem do backend vem do hook.
       console.error(err);
+    }
+  }
+
+  async function confirmarRemocao() {
+    if (!removendo) return;
+    try {
+      await remover.mutateAsync(removendo.id);
+    } catch (err) {
+      // Toast com a mensagem do backend vem do hook.
+      console.error(err);
+    } finally {
+      setRemovendo(null);
     }
   }
 
@@ -153,7 +179,7 @@ export function VinculosDialog({
                       variant="ghost"
                       className="text-destructive hover:text-destructive"
                       disabled={remover.isPending}
-                      onClick={() => remover.mutate(v.id)}
+                      onClick={() => setRemovendo(v)}
                     >
                       Remover
                     </Button>
@@ -217,6 +243,34 @@ export function VinculosDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <AlertDialog
+        open={removendo != null}
+        onOpenChange={(aberto) => !aberto && setRemovendo(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover vínculo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{responsavel?.nome || "(sem nome)"}</strong> deixará de
+              acessar o portal de <strong>{removendo?.aluno_nome}</strong>. Se
+              for o último vínculo do aluno, o email volta a sair pelo campo de
+              responsável do cadastro dele — o aluno não fica sem notificação.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={remover.isPending}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmarRemocao}
+              disabled={remover.isPending}
+            >
+              {remover.isPending ? "Removendo..." : "Remover"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
