@@ -11,10 +11,15 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import ConvidarResponsavelView
-from .views_staff import ResponsavelStaffViewSet
+from .views_staff import ResponsavelAlunoStaffViewSet, ResponsavelStaffViewSet
 
 router = DefaultRouter()
 router.register(r"responsaveis", ResponsavelStaffViewSet, basename="responsavel")
+router.register(
+    r"vinculos-responsavel",
+    ResponsavelAlunoStaffViewSet,
+    basename="vinculo_responsavel",
+)
 
 # O path explícito vem ANTES do router: o detail do router casa
 # `responsaveis/<pk>/` e não pegaria `responsaveis/<pk>/convidar/`, mas a

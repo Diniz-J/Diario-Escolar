@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 
 import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -19,7 +25,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { usePermissoes } from "@/features/auth/usePermissoes";
 import { ConvidarDialog } from "@/features/responsaveis/ConvidarDialog";
+import { NovoResponsavelDialog } from "@/features/responsaveis/NovoResponsavelDialog";
+import { VinculosDialog } from "@/features/responsaveis/VinculosDialog";
 import {
   PODE_CONVIDAR,
   SITUACAO_BADGE,
@@ -50,6 +59,14 @@ export function ResponsaveisPage() {
   const [convidarAlvo, setConvidarAlvo] = useState<ResponsavelStaff | null>(
     null,
   );
+  const [vinculosAlvo, setVinculosAlvo] = useState<ResponsavelStaff | null>(
+    null,
+  );
+  const [criando, setCriando] = useState(false);
+  // O backend é nível-diretor nos três endpoints (listar, cadastrar,
+  // vincular), então o gate de UI é o mesmo — mostrar botão que leva a
+  // 403 é prometer o que não acontece.
+  const { podeModificarCadastros } = usePermissoes();
 
   // A busca é server-side (inclui nome de aluno, que não está na linha), e
   // sai com atraso pra não disparar uma request por tecla. Filtro
@@ -95,15 +112,21 @@ export function ResponsaveisPage() {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <header className="space-y-3">
-        <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
-          Responsáveis
-        </h1>
-        <div className="h-px w-10 bg-ferrugem" />
-        <p className="text-sm text-muted-foreground max-w-xl">
-          Contas de acesso ao portal. O cadastro vem do campo de responsável
-          do aluno; aqui você vê o estado do acesso e envia o convite.
-        </p>
+      <header className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-3">
+          <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
+            Responsáveis
+          </h1>
+          <div className="h-px w-10 bg-ferrugem" />
+          <p className="text-sm text-muted-foreground max-w-xl">
+            Contas de acesso ao portal. A semeadura cria uma conta por
+            família a partir do cadastro do aluno; aqui você cadastra o
+            segundo responsável, gerencia os vínculos e envia o convite.
+          </p>
+        </div>
+        {podeModificarCadastros && (
+          <Button onClick={() => setCriando(true)}>Novo responsável</Button>
+        )}
       </header>
 
       <ConvidarDialog
@@ -111,6 +134,13 @@ export function ResponsaveisPage() {
         onOpenChange={(aberto) => !aberto && setConvidarAlvo(null)}
         onConvidado={aposConvidar}
       />
+
+      <VinculosDialog
+        responsavel={vinculosAlvo}
+        onOpenChange={(aberto) => !aberto && setVinculosAlvo(null)}
+      />
+
+      <NovoResponsavelDialog open={criando} onOpenChange={setCriando} />
 
       <div className="flex flex-wrap gap-3 items-end">
         <Input
@@ -148,7 +178,7 @@ export function ResponsaveisPage() {
         <p className="text-sm text-muted-foreground">
           {buscaAplicada || filtroSituacao !== FILTRO_TODOS
             ? "Nenhum responsável neste filtro."
-            : "Nenhum responsável cadastrado. Rode o comando de semeadura para criar as contas a partir do cadastro dos alunos."}
+            : "Nenhum responsável cadastrado. Use \"Novo responsável\" ou rode o comando de semeadura para criar as contas a partir do cadastro dos alunos."}
         </p>
       ) : (
         <>
@@ -203,17 +233,37 @@ export function ResponsaveisPage() {
                       {formatarDataHora(r.ultimo_acesso)}
                     </TableCell>
                     <TableCell className="text-right">
-                      {PODE_CONVIDAR.includes(r.situacao) && (
-                        <Button
-                          size="sm"
-                          variant={
-                            r.situacao === "convidado" ? "outline" : "default"
-                          }
-                          onClick={() => setConvidarAlvo(r)}
-                        >
-                          {r.situacao === "convidado" ? "Reenviar" : "Convidar"}
-                        </Button>
-                      )}
+                      <div className="flex items-center justify-end gap-1">
+                        {PODE_CONVIDAR.includes(r.situacao) && (
+                          <Button
+                            size="sm"
+                            variant={
+                              r.situacao === "convidado" ? "outline" : "default"
+                            }
+                            onClick={() => setConvidarAlvo(r)}
+                          >
+                            {r.situacao === "convidado"
+                              ? "Reenviar"
+                              : "Convidar"}
+                          </Button>
+                        )}
+                        {podeModificarCadastros && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon-sm">
+                                ⋯
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => setVinculosAlvo(r)}
+                              >
+                                Gerenciar vínculos
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

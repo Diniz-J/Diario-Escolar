@@ -419,8 +419,12 @@ despublicados". Link abre em aba nova com `rel="noopener noreferrer"`.
 ## 6. Pendências conhecidas
 
 - ~~Convergir `Aluno.email_responsavel` com `Responsavel.email` (seção 3).~~
-  Entregue nas fatias 1–3 do [`RESPONSAVEIS.md`](./RESPONSAVEIS.md); falta
-  só a tela de vínculos (fatia 4), que depende da tela "Responsáveis".
+  Entregue nas quatro fatias do [`RESPONSAVEIS.md`](./RESPONSAVEIS.md). A
+  última acrescentou escrita à tela "Responsáveis": a secretaria cadastra
+  o segundo responsável e gerencia os vínculos sem `/admin/`. Isso
+  **reverteu** a nota desta doc que fazia o `ResponsavelStaffViewSet`
+  somente-leitura — o motivo está no `RESPONSAVEIS.md` §5. Editar e apagar
+  responsável continuam fora: email errado se corrige no admin.
 - **Nota aparece pro responsável assim que o professor lança.** O boletim
   do portal reaproveita o `montar_boletim` do staff, que não tem etapa de
   publicação: nota provisória ou digitada errada chega direto ao pai. Se
