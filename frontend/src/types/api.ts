@@ -711,3 +711,120 @@ export interface ResponsavelStaff {
   alunos: ResponsavelAlunoResumo[];
   criado_em: string;
 }
+
+// ---------------------------------------------------------------------- //
+// Financeiro (app `financeiro`) — ver FINANCEIRO.md                      //
+// ---------------------------------------------------------------------- //
+
+// Todo valor monetário chega como STRING: o `DecimalField` do DRF
+// serializa "1000.00" pra não perder precisão em float no JSON. Formatar
+// com `formatarBRL`, e nunca fazer aritmética de dinheiro no front — os
+// derivados (saldo, encargos, valor_atualizado) já vêm calculados.
+export type DescontoTipo = "nenhum" | "percentual" | "fixo";
+
+export interface PlanoCobranca {
+  id: number;
+  escola: number;
+  aluno: number;
+  aluno_nome: string;
+  valor_mensalidade: string;
+  dia_vencimento: number;
+  desconto_tipo: DescontoTipo;
+  desconto_valor: string;
+  // Mensalidade já com o desconto aplicado, calculada no backend.
+  valor_efetivo: string;
+  multa_percentual: string;
+  juros_mes_percentual: string;
+  vigencia_inicio: string;
+  vigencia_fim: string | null;
+  // false = contrato encerrado (soft delete). Libera a vigência pra um novo.
+  ativo: boolean;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export type PlanoCobrancaInput = {
+  escola?: number;
+  aluno: number;
+  valor_mensalidade: string;
+  dia_vencimento: number;
+  desconto_tipo: DescontoTipo;
+  desconto_valor: string;
+  multa_percentual?: string;
+  juros_mes_percentual?: string;
+  vigencia_inicio: string;
+  vigencia_fim?: string | null;
+};
+
+export type FaturaStatus = "pendente" | "pago" | "vencido" | "cancelado";
+
+export interface Fatura {
+  id: number;
+  escola: number;
+  plano: number;
+  // Read-only: o backend deduz do plano (FINANCEIRO.md §3.1).
+  aluno: number;
+  aluno_nome: string;
+  // Sempre o dia 1 do mês de referência (ex.: "2026-03-01").
+  competencia: string;
+  valor: string;
+  vencimento: string;
+  // Read-only: quem escreve é o services.py na conciliação.
+  status: FaturaStatus;
+  valor_pago: string;
+  data_pagamento: string | null;
+  // Derivados do backend. `encargos` é multa + juros pro rata die de hoje,
+  // calculado na hora — não é campo guardado (FINANCEIRO.md §2.3).
+  saldo: string;
+  encargos: string;
+  valor_atualizado: string;
+  dias_atraso: number;
+  esta_vencida: boolean;
+  // Do gateway (fatia 4). Read-only pra UI.
+  id_externo: string;
+  link_pagamento: string;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export type FaturaInput = {
+  escola?: number;
+  plano: number;
+  competencia: string;
+  valor: string;
+  vencimento: string;
+};
+
+export interface FaturaItem {
+  id: number;
+  escola: number;
+  fatura: number;
+  descricao: string;
+  valor: string;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export type PagamentoMetodo = "pix" | "boleto" | "cartao" | "dinheiro";
+
+export interface Pagamento {
+  id: number;
+  escola: number;
+  fatura: number;
+  aluno_nome: string;
+  competencia: string;
+  valor: string;
+  data: string;
+  metodo: PagamentoMetodo;
+  referencia_externa: string;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export type PagamentoInput = {
+  fatura: number;
+  valor: string;
+  data: string;
+  metodo: PagamentoMetodo;
+  referencia_externa?: string;
+};
