@@ -241,6 +241,14 @@ contexto). À direita ou na linha de baixo: botão primário
   `e.stopPropagation()` na célula.
 - Colunas secundárias usam `hidden sm:table-cell` / `md:table-cell` /
   `lg:table-cell` — **nunca** scroll horizontal grosso.
+- O breakpoint não é a largura da tela: a sidebar fixa come 240px a partir
+  de `md`, então em `md` (768px) a tabela só tem ~460px. Tabela com muitas
+  colunas precisa do degrau seguinte (`lg`/`xl`) — foi o caso da
+  `ResponsaveisPage`, onde `md:table-cell` jogava o botão de ação pra trás
+  do scroll. Vale medir (`scrollWidth > clientWidth`) em vez de supor.
+- `TableCell` do shadcn traz `whitespace-nowrap`: conteúdo longo numa
+  célula (nome + email + lista) estica a tabela além da viewport. Onde o
+  conteúdo pode quebrar, `whitespace-normal` na célula.
 - Linhas de registro inativo: opacidade reduzida + badge `[ inativo ]`
   em `text-[10px] text-sepia uppercase`.
 
