@@ -21,13 +21,17 @@ reescrevem esses campos — o registro e o estorno de pagamento delegam em
 mesma transação. Ver `serializers.py` e `FINANCEIRO.md` §2.4.
 """
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, mixins, viewsets
 from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.common.pagination import PaginacaoCompulsoria, PaginacaoPadrao
-from apps.common.permissions import IsAdminOrDiretor
+from apps.common.permissions import IsAdminOrDiretor, eh_admin_global
 from apps.common.views import EscopoEscolaMixin
+from apps.escola.models import Aluno
 
 from .filters import FaturaFilter, PagamentoFilter, PlanoCobrancaFilter
 from .models import Fatura, FaturaItem, Pagamento, PlanoCobranca
@@ -39,7 +43,7 @@ from .serializers import (
     PlanoCobrancaSerializer,
     erro_drf,
 )
-from .services import estornar_pagamento, registrar_pagamento
+from .services import estornar_pagamento, ficha_financeira, registrar_pagamento
 
 
 class PlanoCobrancaViewSet(EscopoEscolaMixin, viewsets.ModelViewSet):
@@ -198,3 +202,70 @@ class PagamentoViewSet(
         guarda a linha apagada e quem apagou.
         """
         estornar_pagamento(instance)
+
+
+class FichaFinanceiraAlunoView(APIView):
+    """`GET /financeiro/alunos/<id>/` — situação financeira consolidada.
+
+    Sem modelo próprio: agrega on-the-fly, como `boletins` e `relatorios`.
+    Devolve os totais (em aberto, vencido, encargos de hoje, pago no ano)
+    mais os três históricos — contratos, faturas e pagamentos — numa
+    requisição só, porque a tela mostra tudo junto e quatro chamadas
+    paralelas renderizariam a ficha em pedaços.
+
+    Os totais são somados no `services.py`, sobre os métodos do modelo, e
+    não em SQL: `saldo()` trava em zero no pagamento a mais, e uma soma
+    reescrita em SQL faria o excesso de uma fatura abater a dívida de
+    outra. Ver `ficha_financeira`.
+
+    Escopo: aluno de outra escola responde **404**, não 403 — existência
+    de aluno alheio não é informação que este endpoint deva confirmar.
+    (`boletins` responde 403 no mesmo caso; a divergência é consciente, e
+    o caminho aqui é o mesmo dos viewsets deste módulo, onde o escopo do
+    queryset já produz 404.)
+    """
+
+    permission_classes = [IsAdminOrDiretor]
+
+    def get(self, request, aluno_id: int):
+        alunos = Aluno.objects.select_related("turma")
+        if not eh_admin_global(request.user):
+            # Sem escola no token, não há recorte possível: nega tudo.
+            alunos = alunos.filter(
+                escola_id=getattr(request.user, "escola_id", None) or 0
+            )
+        aluno = get_object_or_404(alunos, pk=aluno_id)
+
+        ficha = ficha_financeira(aluno)
+        contexto = {"request": request}
+        totais = ficha.totais
+        return Response(
+            {
+                "aluno": {
+                    "id": aluno.id,
+                    "nome_completo": aluno.nome_completo,
+                    "matricula": aluno.matricula,
+                    "turma": aluno.turma.nome,
+                    "ativo": aluno.ativo,
+                },
+                # Strings, como todo dinheiro da API: o front formata, não
+                # calcula.
+                "totais": {
+                    "em_aberto": str(totais.em_aberto),
+                    "vencido": str(totais.vencido),
+                    "encargos_hoje": str(totais.encargos_hoje),
+                    "a_cobrar_hoje": str(totais.a_cobrar_hoje),
+                    "pago_no_ano": str(totais.pago_no_ano),
+                    "faturas_abertas": totais.faturas_abertas,
+                },
+                "planos": PlanoCobrancaSerializer(
+                    ficha.planos, many=True, context=contexto
+                ).data,
+                "faturas": FaturaSerializer(
+                    ficha.faturas, many=True, context=contexto
+                ).data,
+                "pagamentos": PagamentoSerializer(
+                    ficha.pagamentos, many=True, context=contexto
+                ).data,
+            }
+        )

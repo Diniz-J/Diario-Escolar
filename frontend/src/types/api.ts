@@ -828,3 +828,29 @@ export type PagamentoInput = {
   metodo: PagamentoMetodo;
   referencia_externa?: string;
 };
+
+// Ficha financeira do aluno: agregação on-the-fly do backend
+// (`GET /financeiro/alunos/<id>/`), no molde do boletim. Os totais vêm
+// somados em Decimal no servidor — ver FINANCEIRO.md §7.
+export interface TotaisFicha {
+  em_aberto: string;
+  vencido: string;
+  encargos_hoje: string;
+  a_cobrar_hoje: string;
+  pago_no_ano: string;
+  faturas_abertas: number;
+}
+
+export interface FichaFinanceira {
+  aluno: {
+    id: number;
+    nome_completo: string;
+    matricula: string;
+    turma: string;
+    ativo: boolean;
+  };
+  totais: TotaisFicha;
+  planos: PlanoCobranca[];
+  faturas: Fatura[];
+  pagamentos: Pagamento[];
+}

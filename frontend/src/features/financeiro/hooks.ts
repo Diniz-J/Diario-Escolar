@@ -8,6 +8,7 @@ import type {
   FaturaInput,
   FaturaItem,
   FaturaStatus,
+  FichaFinanceira,
   Pagamento,
   PagamentoInput,
   Paginated,
@@ -75,6 +76,23 @@ export function usePagamentosDaFatura(faturaId: number | null) {
       return normalizarPaginado(data).results;
     },
     enabled: faturaId != null,
+  });
+}
+
+// Ficha do aluno: uma requisição só, porque a tela mostra totais e os
+// três históricos juntos — quatro chamadas paralelas renderizariam a
+// ficha em pedaços. A chave entra em FATURAS_KEY pra que registrar ou
+// estornar pagamento invalide a ficha também.
+export function useFichaFinanceira(alunoId: number | null) {
+  return useQuery({
+    queryKey: [...FATURAS_KEY, "ficha", alunoId],
+    queryFn: async (): Promise<FichaFinanceira> => {
+      const { data } = await api.get<FichaFinanceira>(
+        `/financeiro/alunos/${alunoId}/`,
+      );
+      return data;
+    },
+    enabled: alunoId != null,
   });
 }
 
