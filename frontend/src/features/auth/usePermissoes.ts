@@ -39,9 +39,18 @@ export function usePermissoes() {
   // não-admin com `escola_id=null` por bug, ele NÃO deve ver essa UI.
   const ehAdminGlobal = perfil === "admin";
 
+  // Financeiro é nível-diretor em leitura E escrita (o backend usa
+  // `IsAdminOrDiretor` uniforme nos quatro viewsets): professor e inspetor
+  // levam 403 até no `list`. Flag com nome próprio, e não
+  // `podeModificarCadastros` reaproveitado, porque aqui ela também decide
+  // LEITURA — e a diferença importa se um dia o professor passar a ver
+  // cadastro sem ver mensalidade.
+  const podeVerFinanceiro = podeModificarCadastros;
+
   return {
     podeModificarCadastros,
     podeImportar,
     ehAdminGlobal,
+    podeVerFinanceiro,
   };
 }

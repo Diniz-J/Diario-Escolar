@@ -13,6 +13,7 @@ import { DashboardPage } from "@/pages/DashboardPage";
 import { DiarioAulaPage } from "@/pages/DiarioAulaPage";
 import { DisciplinasPage } from "@/pages/DisciplinasPage";
 import { EsqueciSenhaPage } from "@/pages/EsqueciSenhaPage";
+import { FaturasPage } from "@/pages/FaturasPage";
 import { ImportPage } from "@/pages/ImportPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { MuralPage } from "@/pages/MuralPage";
@@ -22,6 +23,7 @@ import { RedefinirSenhaPage } from "@/pages/RedefinirSenhaPage";
 import { OcorrenciaDetalhePage } from "@/pages/OcorrenciaDetalhePage";
 import { OcorrenciasPage } from "@/pages/OcorrenciasPage";
 import { PeriodosAvaliativosPage } from "@/pages/PeriodosAvaliativosPage";
+import { PlanosCobrancaPage } from "@/pages/PlanosCobrancaPage";
 import { PlanoEnsinoDetalhePage } from "@/pages/PlanoEnsinoDetalhePage";
 import { PlanosEnsinoPage } from "@/pages/PlanosEnsinoPage";
 import { PresencaDetalhePage } from "@/pages/PresencaDetalhePage";
@@ -85,6 +87,13 @@ export function AppRoutes() {
             element={<AvaliacaoDetalhePage />}
           />
           <Route path="/notas-finais" element={<NotasFinaisPage />} />
+          {/* Financeiro: duas telas sob um item só de sidebar, com abas
+              internas (ver FinanceiroTabs). */}
+          <Route path="/financeiro" element={<FaturasPage />} />
+          <Route
+            path="/financeiro/planos"
+            element={<PlanosCobrancaPage />}
+          />
           <Route path="/boletim/:alunoId" element={<BoletimPage />} />
           <Route
             path="/configuracao/periodos"

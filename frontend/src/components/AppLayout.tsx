@@ -63,6 +63,9 @@ interface SidebarBodyProps {
   // Responsáveis é gestão de acesso de usuário externo: quem convida é
   // nível-diretor, igual à permissão do endpoint (`IsAdminOrDiretor`).
   podeGerirResponsaveis: boolean;
+  // Mensalidade não é assunto de quem dá aula: o backend recusa professor
+  // e inspetor até na leitura, então o item nem aparece pra eles.
+  podeVerFinanceiro: boolean;
 }
 
 // Itens da seção "Configuração" — visíveis pra admin/diretor/secretaria
@@ -87,6 +90,7 @@ function SidebarBody({
   podeConfigurarEscola,
   podeUsarDiario,
   podeGerirResponsaveis,
+  podeVerFinanceiro,
 }: SidebarBodyProps) {
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
@@ -147,6 +151,22 @@ function SidebarBody({
             }
           >
             Diário de aula
+          </NavLink>
+        )}
+        {podeVerFinanceiro && (
+          <NavLink
+            to="/financeiro"
+            onClick={onNavigate}
+            className={({ isActive }) =>
+              cn(
+                "relative block pl-4 pr-3 py-2 text-sm rounded-md transition-colors border-l-2 border-transparent",
+                isActive
+                  ? "border-l-ferrugem font-medium text-creme bg-white/[0.04]"
+                  : "text-creme/75 hover:text-creme hover:bg-white/[0.04]",
+              )
+            }
+          >
+            Financeiro
           </NavLink>
         )}
         {podeGerirResponsaveis && (
@@ -246,7 +266,8 @@ function SidebarBody({
 
 export function AppLayout() {
   const { user, logout } = useAuth();
-  const { podeImportar, podeModificarCadastros } = usePermissoes();
+  const { podeImportar, podeModificarCadastros, podeVerFinanceiro } =
+    usePermissoes();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -295,6 +316,7 @@ export function AppLayout() {
               podeConfigurarEscola={podeModificarCadastros}
               podeUsarDiario={podeUsarDiario}
               podeGerirResponsaveis={podeModificarCadastros}
+              podeVerFinanceiro={podeVerFinanceiro}
             />
           </SheetContent>
         </Sheet>
@@ -320,6 +342,7 @@ export function AppLayout() {
           podeConfigurarEscola={podeModificarCadastros}
           podeUsarDiario={podeUsarDiario}
           podeGerirResponsaveis={podeModificarCadastros}
+          podeVerFinanceiro={podeVerFinanceiro}
         />
       </aside>
 

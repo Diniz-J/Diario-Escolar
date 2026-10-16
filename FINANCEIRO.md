@@ -397,7 +397,51 @@ Decisões já tomadas pra quando a fatia 4 começar:
 
 ---
 
-## 7. Fatias
+## 7. Frontend (fatia 6)
+
+Duas telas sob um item só de sidebar, com abas internas
+(`FinanceiroTabs`): `/financeiro` (faturas) e `/financeiro/planos`. O item
+da sidebar some pra professor e inspetor — `podeVerFinanceiro` no
+`usePermissoes`, espelhando o `IsAdminOrDiretor` uniforme do backend.
+Flag com nome próprio em vez de reaproveitar `podeModificarCadastros`
+porque aqui ela também decide **leitura**.
+
+**Dinheiro chega como string.** O `DecimalField` do DRF serializa
+`"1000.00"` pra não perder precisão em float, então os tipos do front
+declaram `string` e `formatarBRL` só formata. Nenhuma aritmética de
+dinheiro no front: saldo, encargos e valor atualizado vêm calculados do
+backend, que é onde a regra mora.
+
+**Datas sem hora não passam por `new Date`.** `new Date("2026-03-10")` é
+lido como UTC e, em fuso negativo, volta como dia 9. `formatarData` e
+`formatarCompetencia` fazem split da string. O mesmo cuidado no default
+de data do pagamento: `toISOString()` à noite viraria amanhã, data
+futura que o backend recusa.
+
+**A mensagem de erro do backend é a UI.** Os dialogs mostram o texto que
+vem do DRF em vez de um "erro ao salvar" genérico, porque é ali que as
+invariantes se explicam: "Ana já tem fatura na competência 03/2026",
+vigência sobreposta, "fatura cancelada não recebe pagamento". Está
+centralizado em `features/financeiro/erros.ts`.
+
+**Detalhe em dialog, não em rota.** Clicar na linha abre o detalhamento,
+os pagamentos e os encargos do dia, com estorno por pagamento. Evita uma
+segunda tela no padrão visual pra manter. O dialog de pagamento é aberto
+pela **página**, não por dentro do de detalhe: dois dialogs abertos
+brigam por foco e travam o scroll.
+
+**"Nova fatura" existe de propósito**, mesmo com a geração automática
+sendo a via normal: cobre o mês em que o cron ainda não rodou (ou não
+está configurado — é o caso hoje, antes da OVH) e a cobrança extra fora
+do ciclo. O formulário sugere valor e vencimento a partir do plano, com
+o mesmo clamp de mês curto, mas a régua que vale é a do backend.
+
+Badges de status seguem o molde de ocorrência (`DESIGN.md` §6.1.1): é
+estado de documento, não a paleta de presença.
+
+---
+
+## 8. Fatias
 
 | # | Escopo | Status |
 |---|---|---|
@@ -406,7 +450,8 @@ Decisões já tomadas pra quando a fatia 4 começar:
 | 3 | `services.py` + geração recorrente + job de vencidas | **entregue** |
 | 4 | `gateways/base.py` + `asaas.py` | pendente |
 | 5 | Webhook + conciliação + notificação ao responsável | pendente |
-| 6 | Frontend (ficha financeira, listagem da secretaria) | pendente |
+| 6 | Frontend — faturas e planos | **entregue** |
+| 6b | Frontend — ficha financeira do aluno | pendente |
 
 A permissão ficou decidida na fatia 2: financeiro é **só direção**
 (`IsAdminOrDiretor`, que já cobre secretaria e coordenador). Professor e
@@ -418,7 +463,7 @@ fatura no portal do responsável.
 
 ---
 
-## 8. Estado
+## 9. Estado
 
 **Fatias 1, 2 e 3 entregues.** O módulo está funcional ponta a ponta sem
 gateway: os quatro modelos, a API REST sob `/api/v1/`, e o `services.py`
@@ -430,7 +475,11 @@ gera as faturas todo dia 1, a secretaria registra o Pix ou o dinheiro que
 recebeu e o status acompanha. O que falta é a cobrança sair
 automaticamente (fatias 4 e 5) e a tela (fatia 6).
 
+**Fatia 6 entregue** (faturas e planos no frontend): a escola opera o
+módulo inteiro pela UI, sem passar pelo `/admin/`.
+
 Próximo passo é a fatia 4 (client do Asaas), **bloqueada** enquanto
 `docs.asaas.com` estiver negado pela política de rede do ambiente de
 desenvolvimento — o adapter precisa ser escrito contra o contrato real,
-não de memória.
+não de memória. A 6b (ficha financeira do aluno) está livre e é a
+candidata natural enquanto isso.

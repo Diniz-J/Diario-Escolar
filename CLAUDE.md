@@ -159,8 +159,9 @@ sobreposta é barrada só no `clean()`: limitação conhecida da v1, com o
 caminho da exclusion constraint (`daterange` + `EXCLUDE USING gist`)
 anotado no `FINANCEIRO.md` §3.2. Dinheiro é sempre `DecimalField`, com
 arredondamento comercial (`ROUND_HALF_UP`) centralizado em
-`arredondar_dinheiro()`. **Fatias 1, 2 e 3 entregues**
-(models/migration/admin + API REST + services e geração recorrente). A API é **só direção**
+`arredondar_dinheiro()`. **Fatias 1, 2, 3 e 6 entregues**
+(models/migration/admin + API REST + services e geração recorrente + as
+telas do financeiro). A API é **só direção**
 (`IsAdminOrDiretor` uniforme; professor e inspetor levam 403 até na
 leitura) e o que mexe em dinheiro é read-only — `status`/`valor_pago`/
 `data_pagamento` pertencem ao `services.py`, `id_externo`/
@@ -236,7 +237,7 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 
 ### Frontend — `frontend/src/`
 
-- **`features/<dominio>/hooks.ts`** — TanStack Query: `useXxx` (list), `useCreate`, `useUpdate`, `useDelete`/`useDeactivate`, com invalidação de cache + toast. Domínios: `alunos`, `auth`, `boletins`, `dashboard`, `disciplinas`, `escolas`, `lecionamentos`, `ocorrencias`, `planos-ensino`, `presenca`, `professores`, `turmas`, `usuarios`, `comunicados`.
+- **`features/<dominio>/hooks.ts`** — TanStack Query: `useXxx` (list), `useCreate`, `useUpdate`, `useDelete`/`useDeactivate`, com invalidação de cache + toast. Domínios: `alunos`, `auth`, `boletins`, `dashboard`, `disciplinas`, `escolas`, `lecionamentos`, `ocorrencias`, `planos-ensino`, `presenca`, `professores`, `turmas`, `usuarios`, `comunicados`, `financeiro`.
 - **`features/auth/`** — `AuthProvider`, `useAuth`, `usePermissoes` (regra de UI por perfil; `podeModificarCadastros` = admin/diretor), tokenStorage em localStorage, decode JWT. `user.escola_id` é o sinal usado pelos FormDialogs pra decidir se renderiza o select de escola.
 - **`lib/api.ts`** — axios único. Request interceptor injeta Bearer. Response interceptor: 401 → refresh → refaz request (promise compartilhada contra thundering herd).
 - **`lib/queryClient.ts`** — staleTime 30s, retry off pra 401/403.
@@ -244,7 +245,7 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 - **`components/AppLayout.tsx`** — shell: sidebar fixa olive-dark em ≥768px, drawer (`Sheet`) com hamburguer em <768px. Logo "Diário Diniz" em Fraunces no topo + perfil em mono uppercase + nav com barra ferrugem no ativo + rodapé com filete ferrugem + logout + versão.
 - **`components/ui/`** — shadcn (editável). `Sheet` e `Switch` foram adicionados manualmente (CLI travava em prompt).
 - **`index.css`** — paleta de marca em CSS variables no `:root` (`--olive`, `--olive-dark`, `--linho`, `--paper`, `--ferrugem`, `--tinta`, `--sepia`, `--creme`) + mapeamento dos tokens shadcn (`--background`, `--primary`, etc.) pra paleta. Light mode permanente (sem `.dark` block). `color-scheme: light` + meta tag desabilitam force-dark dos browsers.
-- **~25 pages** — Login, Dashboard, Alunos, Turmas (+detalhe), Disciplinas, Professores (+detalhe — ficha 360º), PlanosEnsino (+detalhe), Ocorrencias (+detalhe), Presenca (+detalhe), Avaliacoes (+detalhe), PeriodosAvaliativos, NotasFinais, DiarioAula, Boletim, Import, ContaSenha/EsqueciSenha/RedefinirSenha, NotFound, Placeholder. **Todas no padrão visual `DESIGN.md`** (Fraunces + filete ferrugem + eyebrow mono + `bg-paper`), inclusive listagens/detalhes/forms. Polidas em ondas: Login/Sidebar/Dashboard (PRs #50-#52), depois listagens e detalhes ao longo de jun/2026.
+- **~27 pages** — Login, Dashboard, Alunos, Turmas (+detalhe), Disciplinas, Professores (+detalhe — ficha 360º), PlanosEnsino (+detalhe), Ocorrencias (+detalhe), Presenca (+detalhe), Avaliacoes (+detalhe), PeriodosAvaliativos, NotasFinais, DiarioAula, Boletim, **Faturas + PlanosCobranca** (financeiro, sob um item só de sidebar com abas internas), Import, ContaSenha/EsqueciSenha/RedefinirSenha, NotFound, Placeholder. **Todas no padrão visual `DESIGN.md`** (Fraunces + filete ferrugem + eyebrow mono + `bg-paper`), inclusive listagens/detalhes/forms. Polidas em ondas: Login/Sidebar/Dashboard (PRs #50-#52), depois listagens e detalhes ao longo de jun/2026.
 - **`types/api.ts`** — interfaces espelhando os serializers (mantido à mão; drf-spectacular no backlog). Todos os `*Input` com FK `escola` têm o campo opcional (`escola?: number`) — backend deduz pelo JWT quando ausente.
 
 ### Padrões de UI consolidados
@@ -261,12 +262,16 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 - **Resolução de nome em registros antigos**: telas que apenas resolvem nome de aluno em ocorrência/presença/tarefa antigas (ex.: `OcorrenciasPage`, `OcorrenciaDetalhePage`, `TarefaDetalhePage`, `PresencaDetalhePage`, `UltimasOcorrenciasCard`) chamam `useAlunos()` SEM filtro de `ativo` — assim o nome de um aluno desativado depois ainda resolve.
 - **Auto-escopo de escola nos FormDialogs**: cada `*FormDialog.tsx` lê `user.escola_id` do `useAuth`. Quando o user tem escola, o select de escola some e o payload omite `escola` — backend deduz pelo JWT. Admin global (sem `escola_id`) ainda vê o select e envia explícito.
 - **Filete ferrugem como assinatura visual**: `h-px w-X bg-ferrugem` aparece debaixo de títulos em Login, Sidebar e Dashboard — marca de "encadernação" que conecta as telas visualmente.
+- **Dinheiro é string no front**: o `DecimalField` do DRF serializa `"1000.00"` pra não perder precisão em float, então os tipos declaram `string` e `formatarBRL` (em `features/financeiro/constants.ts`) só formata. **Nenhuma aritmética de dinheiro no front** — saldo, encargos e valor atualizado vêm calculados do backend.
+- **Data sem hora não passa por `new Date`**: `new Date("2026-03-10")` é lido como UTC e, em fuso negativo, volta como dia 9. `formatarData`/`formatarCompetencia` fazem split da string; e o default de "hoje" num input de data é montado campo a campo, porque `toISOString()` à noite viraria amanhã (data futura que o backend recusa).
+- **Mensagem de erro do backend como UI**: nos dialogs do financeiro o texto do DRF é mostrado em vez de um "erro ao salvar" genérico — é ali que as invariantes se explicam ("Ana já tem fatura na competência 03/2026", vigência sobreposta). Centralizado em `features/financeiro/erros.ts`.
 - **Status badges com paleta da marca** (em vez de red/amber/green/blue genérico do Tailwind):
   - Ocorrência aberta → terracota clarinho + texto destructive.
   - Ocorrência em andamento → mostarda clarinho + texto âmbar.
   - Ocorrência resolvida → olive clarinho + texto olive.
   - Ocorrência arquivada → muted neutro.
   - Presença P/A/J/R → olive / terracota / mostarda / petrol pastel (em `presenca/constants.ts`).
+  - Fatura pendente/pago/vencido/cancelado → mostarda / olive / destructive / muted (em `financeiro/constants.ts`). Segue o molde de **ocorrência** (`DESIGN.md` §6.1.1), não os pastels de presença: status de fatura é estado de documento. A mostarda é o 5º uso da "família mostarda" (§6.3), então a extração pra constante compartilhada que o `DESIGN.md` prometia está vencida — ficou fora do PR do financeiro de propósito (mexeria em quatro features fora do escopo).
 
 ### Infra / deploy (raiz)
 
@@ -573,8 +578,23 @@ contrato no meio do mês cobra o plano **mais antigo** que pega a
 competência — escolhido na aplicação, porque deixar o unique de banco
 decidir faria o valor do boleto depender da ordem de inserção.
 
+**Fatia 6 entregue** (frontend): `/financeiro` (faturas) e
+`/financeiro/planos`, sob um item só de sidebar com abas internas, escondido
+de professor e inspetor via `podeVerFinanceiro`. Detalhe da fatura em dialog
+(composição + pagamentos + encargos do dia, com estorno), registro de
+pagamento com valor sugerido pelo `valor_atualizado`, e "Nova fatura" avulsa
+— que existe porque o cron ainda não está configurado (vai junto da OVH) e
+sem ela a tela nasceria vazia. **Com isso a escola opera o módulo inteiro
+pela UI, sem `/admin/`.**
+
 Fatia 4 (client do Asaas) está **bloqueada** enquanto `docs.asaas.com`
-estiver negado pela política de rede do ambiente de desenvolvimento.
+estiver negado pela política de rede do ambiente de desenvolvimento. A 6b
+(ficha financeira do aluno) está livre.
+
+**Pendência operacional pra migração OVH**: as duas entradas de cron
+(`financeiro_gerar_faturas` dia 1, `financeiro_marcar_vencidas` diário)
+precisam ser configuradas no servidor novo — sem elas nenhuma fatura é
+gerada automaticamente. Comandos e horários sugeridos no `FINANCEIRO.md` §2.2.
 
 ### FASE 5 — Evolução SaaS
 14. **Multi-tenancy real** — middleware de tenant, RLS PostgreSQL, billing. Só após validação comercial.

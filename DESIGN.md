@@ -184,6 +184,23 @@ distintos:
 | `resolvida`    | Olive clarinho + olive escuro    |
 | `arquivada`    | `bg-muted` + `text-muted-foreground` |
 
+### 6.1.1 Fatura — mesmo molde da ocorrência
+
+Status de fatura é estado de documento, do mesmo tipo que
+`aberta`/`resolvida`, então segue a §6.1 e **não** os pastels de
+presença (§6.2), que são deliberadamente específicos da grade de
+chamada:
+
+| Status      | Visual                                |
+| ----------- | ------------------------------------- |
+| `pendente`  | Mostarda pastel + âmbar (família §6.3) |
+| `pago`      | `bg-olive/10` + `text-olive`          |
+| `vencido`   | `bg-destructive/15` + `text-destructive` |
+| `cancelado` | `bg-muted` + `text-muted-foreground`  |
+
+Em `features/financeiro/constants.ts`. Tokens onde existem; hex só na
+mostarda, que não tem token.
+
 ### 6.2 Presença — pastels terrosos
 
 Hex inline em `presenca/constants.ts`, deliberadamente fora dos tokens
@@ -213,10 +230,15 @@ urgência". Reaparece em:
 - `pages/AvaliacaoDetalhePage.tsx` — alerta "período não alocado"
   (versão translúcida `bg-[#FCE7BC]/40`).
 
+- `features/financeiro/constants.ts` — badge `pendente` da fatura (em
+  aberto, dentro do prazo).
+
 Por enquanto sem utility/token correspondente (pastel fora do shadcn
 default). Cada uso traz comentário inline justificando, no espírito da
-§6.2. Quando aparecer um 5º uso, vale extrair pra constante
-compartilhada.
+§6.2. **O financeiro é o 5º uso, então a extração prometida acima está
+vencida** — a constante compartilhada ficou de fora do PR do financeiro
+de propósito (mexeria em quatro features que não eram escopo), mas é a
+próxima coisa a fazer antes de um 6º uso aparecer.
 
 ---
 
