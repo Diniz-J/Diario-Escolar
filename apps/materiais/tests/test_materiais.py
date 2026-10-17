@@ -41,6 +41,11 @@ class _MateriaisSetup(TestCase):
             username="diretora", password="x", perfil=Usuario.Perfil.DIRETOR,
             escola=cls.escola,
         )
+        # Admin global: sem escola no JWT. O auto-escopo não injeta escola
+        # pra ele, então ele precisa mandar escola no payload.
+        cls.admin = Usuario.objects.create_user(
+            username="admin", password="x", perfil=Usuario.Perfil.ADMIN,
+        )
 
         cls.turma_b = cls._turma(cls.outra_escola, "1º A")
         cls.disciplina_b = Disciplina.objects.create(escola=cls.outra_escola, nome="Matemática")
@@ -129,6 +134,28 @@ class PublicarTests(_MateriaisSetup):
     def test_direcao_tambem_exige_lecionamento(self):
         self._como(self.diretora)
         self.assertEqual(self._publicar(professor=self.prof2.pk).status_code, 400)
+
+    def test_admin_global_sem_escola_devolve_400_nao_500(self):
+        """Regressão: o auto-escopo não injeta escola pro admin global.
+
+        Sem escola e sem unique cobrindo o campo, o save() caía no NOT
+        NULL e virava 500. Tem que ser 400 explícito, sem criar material.
+        """
+        self._como(self.admin)
+        resp = self._publicar()
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.assertIn("escola", resp.data)
+        self.assertFalse(
+            Material.objects.filter(titulo="Lista de exercícios").exists()
+        )
+
+    def test_admin_global_com_escola_explicita_publica(self):
+        self._como(self.admin)
+        resp = self._publicar(escola=self.escola.pk)
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(
+            Material.objects.get(pk=resp.data["id"]).escola, self.escola
+        )
 
     def test_turma_de_outra_escola_e_recusada(self):
         self._como(self.prof1.usuario)

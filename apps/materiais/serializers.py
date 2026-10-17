@@ -63,6 +63,15 @@ class MaterialSerializer(AutoEscopoEscolaSerializerMixin, serializers.ModelSeria
         professor = atual("professor")
 
         errors: dict[str, str] = {}
+        # Admin global (sem escola no JWT) publica sem escola: o mixin não
+        # injeta e, como `Material` não tem unique cobrindo `escola`, nada
+        # exigia o campo — o save() caía no NOT NULL e virava 500. Aqui
+        # vira 400 explícito, como o diário de aula já devolve pelo unique.
+        if escola is None:
+            raise serializers.ValidationError(
+                {"escola": "Este campo é obrigatório."}
+            )
+
         for nome, valor in (("turma", turma), ("disciplina", disciplina), ("professor", professor)):
             if valor and escola and valor.escola_id != escola.id:
                 errors[nome] = f"O campo {nome} deve pertencer à mesma escola do material."
