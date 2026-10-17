@@ -2,12 +2,6 @@ import { useEffect, useState } from "react";
 
 import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -100,6 +94,23 @@ export function ResponsaveisPage() {
   const totalCount = query.data?.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
+  // Mensagem do estado vazio por cenário — o "cadastro zerado" é o
+  // primeiro que uma escola nova vê, então ele aponta as duas saídas
+  // (cadastrar na hora ou semear a partir do cadastro dos alunos).
+  function tituloVazio(): string {
+    if (buscaAplicada) return "Nenhum responsável encontrado";
+    if (filtroSituacao !== FILTRO_TODOS) return "Nenhum responsável aqui";
+    return "Nenhum responsável cadastrado";
+  }
+
+  function detalheVazio(): string {
+    if (buscaAplicada)
+      return "A busca cobre nome, email e o nome do aluno. Tente outro termo.";
+    if (filtroSituacao !== FILTRO_TODOS)
+      return "Nenhuma conta nesta situação. Troque o filtro para ver as outras.";
+    return 'Use "Novo responsável" para cadastrar um, ou rode o comando de semeadura para criar as contas a partir do cadastro dos alunos.';
+  }
+
   // Convidar muda a situação da linha. Com um filtro de situação ativo, a
   // linha sai do subset; se era a única da página, ela deixa de existir e
   // o backend responde 404 (paginação do DRF) — a tela mostraria erro sem
@@ -143,25 +154,39 @@ export function ResponsaveisPage() {
       <NovoResponsavelDialog open={criando} onOpenChange={setCriando} />
 
       <div className="flex flex-wrap gap-3 items-end">
-        <Input
-          placeholder="Buscar por responsável, email ou aluno..."
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          className="max-w-xs"
-        />
-        <Select value={filtroSituacao} onValueChange={filtrarSituacao}>
-          <SelectTrigger className="w-52">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={FILTRO_TODOS}>Todas as situações</SelectItem>
-            {SITUACAO_OPTIONS.map((s) => (
-              <SelectItem key={s.value} value={s.value}>
-                {s.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="space-y-1.5">
+          <label
+            htmlFor="busca-responsavel"
+            className="block text-[11px] uppercase tracking-[0.18em] text-sepia"
+          >
+            Buscar
+          </label>
+          <Input
+            id="busca-responsavel"
+            placeholder="Nome, email ou aluno..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="w-64"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <span className="block text-[11px] uppercase tracking-[0.18em] text-sepia">
+            Situação
+          </span>
+          <Select value={filtroSituacao} onValueChange={filtrarSituacao}>
+            <SelectTrigger className="w-52">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={FILTRO_TODOS}>Todas as situações</SelectItem>
+              {SITUACAO_OPTIONS.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {query.isLoading ? (
@@ -175,38 +200,89 @@ export function ResponsaveisPage() {
           Não foi possível carregar os responsáveis.
         </p>
       ) : linhas.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {buscaAplicada || filtroSituacao !== FILTRO_TODOS
-            ? "Nenhum responsável neste filtro."
-            : "Nenhum responsável cadastrado. Use \"Novo responsável\" ou rode o comando de semeadura para criar as contas a partir do cadastro dos alunos."}
-        </p>
+        <div className="rounded-lg border border-border bg-paper p-6 space-y-2">
+          <p className="font-heading text-lg text-tinta">{tituloVazio()}</p>
+          <p className="text-sm text-sepia max-w-xl">{detalheVazio()}</p>
+        </div>
       ) : (
         <>
-          <div className="rounded-lg border border-border overflow-hidden">
+          <div className="rounded-lg border border-border bg-paper overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Responsável</TableHead>
-                  <TableHead className="hidden md:table-cell">Alunos</TableHead>
-                  <TableHead>Situação</TableHead>
-                  <TableHead className="hidden lg:table-cell">
+                  <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                    Responsável
+                  </TableHead>
+                  <TableHead className="hidden lg:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                    Alunos
+                  </TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                    Situação
+                  </TableHead>
+                  <TableHead className="hidden xl:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
                     Último acesso
                   </TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                  <TableHead className="text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                    Ações
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {linhas.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell>
+                  <TableRow
+                    key={r.id}
+                    // A linha abre os vínculos — o §7.1 manda a linha levar
+                    // ao detalhe, e aqui o dialog de vínculos É o detalhe
+                    // (não existe página de detalhe de responsável). Só
+                    // clicável pra quem pode gerir: o resto levaria a um
+                    // dialog que o backend recusa.
+                    className={[
+                      podeModificarCadastros ? "cursor-pointer" : "",
+                      // Conta desativada fica recuada visualmente (§7.1). Sem
+                      // badge `[ inativo ]` extra: a coluna Situação já diz
+                      // "Inativo", e repetir seria eyebrow em dobro (§8.6).
+                      r.situacao === "inativo" ? "opacity-60" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    onClick={
+                      podeModificarCadastros
+                        ? () => setVinculosAlvo(r)
+                        : undefined
+                    }
+                  >
+                    {/* `whitespace-normal` desliga o `whitespace-nowrap` que
+                        o TableCell do shadcn traz: sem isso nome e email
+                        ficam numa linha só e esticam a tabela. */}
+                    <TableCell className="whitespace-normal">
                       <span className="font-medium block">
                         {r.nome || "(sem nome)"}
                       </span>
-                      <span className="text-sm text-muted-foreground break-all">
+                      <span className="text-sm text-muted-foreground break-all whitespace-normal">
                         {r.email}
                       </span>
+                      {/* Em < lg a coluna "Alunos" não cabe, mas "de quem é
+                          este responsável" é a pergunta central da tela —
+                          esconder deixaria a linha sem sentido no celular.
+                          Então os filhos descem pra cá, compactos.
+                          `whitespace-normal` é obrigatório: o TableCell do
+                          shadcn traz `whitespace-nowrap`, e sem desligar isso
+                          dois filhos esticam a tabela além da viewport e
+                          jogam Situação e Ações pra trás do scroll
+                          horizontal — justo as duas colunas que a secretaria
+                          usa pra agir. */}
+                      {r.alunos.length > 0 && (
+                        <span className="lg:hidden mt-1 block text-xs text-sepia whitespace-normal">
+                          {r.alunos.map((a) => (
+                            <span key={a.id} className="block">
+                              {a.nome_completo}
+                              {a.turma ? ` · ${a.turma}` : ""}
+                            </span>
+                          ))}
+                        </span>
+                      )}
                     </TableCell>
-                    <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                    <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                       {r.alunos.length === 0
                         ? "—"
                         : r.alunos.map((a) => (
@@ -217,9 +293,13 @@ export function ResponsaveisPage() {
                             </span>
                           ))}
                     </TableCell>
-                    <TableCell>
+                    {/* `px-1` abaixo de sm: a 360px as tres colunas visiveis
+                        somam 4px a mais que a viewport, e o piso e o badge
+                        (nao quebra sem ficar ilegivel). Apertar o respiro
+                        lateral da celula resolve sem mexer no rotulo. */}
+                    <TableCell className="whitespace-normal px-1 sm:px-2">
                       <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${SITUACAO_BADGE[r.situacao]}`}
+                        className={`inline-flex whitespace-nowrap items-center rounded-full px-2 py-0.5 text-xs font-medium ${SITUACAO_BADGE[r.situacao]}`}
                       >
                         {r.situacao_display}
                       </span>
@@ -229,41 +309,26 @@ export function ResponsaveisPage() {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+                    <TableCell className="hidden xl:table-cell text-sm text-muted-foreground">
                       {formatarDataHora(r.ultimo_acesso)}
                     </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {PODE_CONVIDAR.includes(r.situacao) && (
-                          <Button
-                            size="sm"
-                            variant={
-                              r.situacao === "convidado" ? "outline" : "default"
-                            }
-                            onClick={() => setConvidarAlvo(r)}
-                          >
-                            {r.situacao === "convidado"
-                              ? "Reenviar"
-                              : "Convidar"}
-                          </Button>
-                        )}
-                        {podeModificarCadastros && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon-sm">
-                                ⋯
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => setVinculosAlvo(r)}
-                              >
-                                Gerenciar vínculos
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
-                      </div>
+                    {/* `stopPropagation` na célula: clicar em Convidar não
+                        deve abrir os vínculos por baixo (padrão do projeto). */}
+                    <TableCell
+                      className="text-right"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {PODE_CONVIDAR.includes(r.situacao) && (
+                        <Button
+                          size="sm"
+                          variant={
+                            r.situacao === "convidado" ? "outline" : "default"
+                          }
+                          onClick={() => setConvidarAlvo(r)}
+                        >
+                          {r.situacao === "convidado" ? "Reenviar" : "Convidar"}
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
