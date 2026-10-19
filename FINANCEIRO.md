@@ -356,6 +356,26 @@ como 500.
 alunos por 12 meses são 3.600 linhas por ano letivo), `PaginacaoPadrao`
 em planos e itens, que são listas curtas por aluno ou por fatura.
 
+**`GET /financeiro/alunos/<id>/`** (fatia 6b) devolve a ficha do aluno:
+totais mais os três históricos (contratos, faturas, pagamentos) numa
+requisição, numa `APIView` sem modelo próprio — molde de `boletins` e
+`relatorios`. Aluno de outra escola responde **404**, não 403: a
+existência de aluno alheio não é informação que este endpoint deva
+confirmar. (`boletins` responde 403 no mesmo caso; a divergência é
+consciente, e o 404 é o que os viewsets deste módulo já produzem pelo
+escopo do queryset.)
+
+**Os totais são somados em Python, sobre os métodos do modelo, nunca em
+SQL.** `Fatura.saldo()` trava em zero quando o pagamento foi a mais, e um
+`Sum(F("valor") - F("valor_pago"))` faria o excesso de uma fatura abater
+a dívida de outra — a ficha mostraria dívida menor que a real, e a escola
+cobraria menos do que deve. Reusar os métodos também garante que a ficha
+e a tela de faturas não discordem. O custo é carregar as faturas do aluno
+em memória, recorte naturalmente pequeno (uma por mês por contrato). Só
+`pago_no_ano` vem do banco, porque ali é soma simples de pagamentos, sem
+piso nem regra. Teste que fixa isso:
+`test_pagamento_a_mais_nao_abate_divida_de_outra_fatura`.
+
 ---
 
 ## 6. Integração com gateway
@@ -439,6 +459,18 @@ o mesmo clamp de mês curto, mas a régua que vale é a do backend.
 Badges de status seguem o molde de ocorrência (`DESIGN.md` §6.1.1): é
 estado de documento, não a paleta de presença.
 
+**Ficha do aluno (fatia 6b)** em `/financeiro/alunos/:id`: quatro
+contadores (em aberto, vencido, a cobrar hoje, pago no ano) sobre os três
+históricos, reusando o `MetricCard` do dashboard. Os dialogs de
+pagamento, detalhe e cancelamento são os mesmos da listagem, então a
+ficha não é só leitura — vê a dívida e resolve ali.
+
+Três entradas, de propósito, porque são três perguntas diferentes: o nome
+do aluno na lista de faturas (quem já está olhando uma cobrança), o ⋯ da
+`AlunosPage` (quem parte do cadastro) e o botão "Financeiro" na
+`TurmaDetalhePage`, que leva pra `/financeiro?turma=<id>` — situação da
+turma, não de um aluno. As três são de nível-diretor, como o endpoint.
+
 ---
 
 ## 8. Fatias
@@ -451,7 +483,7 @@ estado de documento, não a paleta de presença.
 | 4 | `gateways/base.py` + `asaas.py` | pendente |
 | 5 | Webhook + conciliação + notificação ao responsável | pendente |
 | 6 | Frontend — faturas e planos | **entregue** |
-| 6b | Frontend — ficha financeira do aluno | pendente |
+| 6b | Ficha financeira do aluno (endpoint + tela) | **entregue** |
 
 A permissão ficou decidida na fatia 2: financeiro é **só direção**
 (`IsAdminOrDiretor`, que já cobre secretaria e coordenador). Professor e
@@ -475,8 +507,9 @@ gera as faturas todo dia 1, a secretaria registra o Pix ou o dinheiro que
 recebeu e o status acompanha. O que falta é a cobrança sair
 automaticamente (fatias 4 e 5) e a tela (fatia 6).
 
-**Fatia 6 entregue** (faturas e planos no frontend): a escola opera o
-módulo inteiro pela UI, sem passar pelo `/admin/`.
+**Fatias 6 e 6b entregues**: a escola opera o módulo inteiro pela UI,
+sem passar pelo `/admin/`, e a ficha do aluno responde "quanto este aluno
+deve" com os totais somados no servidor.
 
 Próximo passo é a fatia 4 (client do Asaas), **bloqueada** enquanto
 `docs.asaas.com` estiver negado pela política de rede do ambiente de

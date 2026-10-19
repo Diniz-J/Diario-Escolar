@@ -349,3 +349,104 @@ def marcar_vencidas(hoje: date | None = None, escola_id: int | None = None) -> i
     )
     logger.info("Faturas marcadas como vencidas em %s: %s", hoje, len(vencidas))
     return len(vencidas)
+
+
+# ====================================================================== #
+# Ficha financeira do aluno                                              #
+# ====================================================================== #
+
+
+@dataclass
+class TotaisFicha:
+    """Consolidado da situação do aluno. Tudo em `Decimal`."""
+
+    em_aberto: Decimal
+    vencido: Decimal
+    encargos_hoje: Decimal
+    a_cobrar_hoje: Decimal
+    pago_no_ano: Decimal
+    faturas_abertas: int
+
+
+@dataclass
+class FichaFinanceira:
+    """O que a ficha do aluno mostra: consolidado mais os três históricos."""
+
+    aluno: object
+    totais: TotaisFicha
+    planos: list
+    faturas: list
+    pagamentos: list
+
+
+def ficha_financeira(aluno, hoje: date | None = None) -> FichaFinanceira:
+    """Monta a ficha financeira de um aluno, agregando on-the-fly.
+
+    Sem modelo próprio, no mesmo molde de `boletins` e `relatorios`: a
+    pergunta "quanto este aluno deve" não é um dado guardado, é uma
+    consulta sobre faturas e pagamentos.
+
+    **Os totais são somados em Python, sobre os métodos do modelo, e não
+    em SQL.** Dois motivos, nesta ordem:
+
+    1. `Fatura.saldo()` trava em zero quando o pagamento foi a mais, e
+       `encargos()` depende de multa e juros do plano mais os dias de
+       atraso de hoje. Um `Sum(F("valor") - F("valor_pago"))` no banco
+       faria o excesso de uma fatura abater o saldo de outra — a ficha
+       mostraria dívida menor do que a real.
+    2. Reusar os métodos garante que a ficha e a tela de faturas nunca
+       discordem. Uma soma reescrita em SQL é a maneira mais fácil de a
+       ficha dizer um número e o detalhe da fatura dizer outro.
+
+    O custo é carregar as faturas do aluno em memória, o que é um recorte
+    naturalmente pequeno (uma por mês por contrato).
+
+    `pago_no_ano` vem do banco porque ali é soma simples de pagamentos,
+    sem piso nem regra: não há o que divergir.
+    """
+    hoje = hoje or date.today()
+
+    faturas = list(
+        aluno.faturas.select_related("plano").order_by("-competencia", "-id")
+    )
+    # Cancelada não é dívida; paga não é dívida. Sobram pendente e vencido.
+    abertas = [
+        f
+        for f in faturas
+        if f.status in (Fatura.Status.PENDENTE, Fatura.Status.VENCIDO)
+    ]
+
+    em_aberto = sum((f.saldo() for f in abertas), Decimal("0.00"))
+    vencido = sum(
+        (f.saldo() for f in abertas if f.esta_vencida(hoje)), Decimal("0.00")
+    )
+    encargos = sum((f.encargos(hoje) for f in abertas), Decimal("0.00"))
+
+    pago_no_ano = Pagamento.objects.filter(
+        fatura__aluno=aluno, data__year=hoje.year
+    ).aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+
+    totais = TotaisFicha(
+        em_aberto=arredondar_dinheiro(em_aberto),
+        vencido=arredondar_dinheiro(vencido),
+        encargos_hoje=arredondar_dinheiro(encargos),
+        a_cobrar_hoje=arredondar_dinheiro(em_aberto + encargos),
+        pago_no_ano=arredondar_dinheiro(pago_no_ano),
+        faturas_abertas=len(abertas),
+    )
+
+    return FichaFinanceira(
+        aluno=aluno,
+        totais=totais,
+        # Inclui plano encerrado: a ficha é histórico, e saber que o aluno
+        # era bolsista até março explica a fatura de março.
+        planos=list(
+            aluno.planos_cobranca.order_by("-vigencia_inicio", "-id")
+        ),
+        faturas=faturas,
+        pagamentos=list(
+            Pagamento.objects.filter(fatura__aluno=aluno)
+            .select_related("fatura__aluno")
+            .order_by("-data", "-id")
+        ),
+    )

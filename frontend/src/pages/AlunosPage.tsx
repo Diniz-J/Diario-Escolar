@@ -56,7 +56,7 @@ export function AlunosPage() {
   );
   const turmasQuery = useTurmas();
   const updateMutation = useUpdateAluno();
-  const { podeModificarCadastros } = usePermissoes();
+  const { podeModificarCadastros, podeVerFinanceiro } = usePermissoes();
   const [relatorioOpen, setRelatorioOpen] = useState(false);
   const baixarBoletimPDF = useBaixarBoletimPDF();
   const [busca, setBusca] = useState("");
@@ -298,6 +298,17 @@ export function AlunosPage() {
                         >
                           Baixar boletim (PDF)
                         </DropdownMenuItem>
+                        {/* Ficha financeira é nível-diretor: o endpoint
+                            recusa professor e inspetor. */}
+                        {podeVerFinanceiro && (
+                          <DropdownMenuItem
+                            onClick={() =>
+                              navigate(`/financeiro/alunos/${aluno.id}`)
+                            }
+                          >
+                            Ficha financeira
+                          </DropdownMenuItem>
+                        )}
                         {podeModificarCadastros && (
                           <DropdownMenuItem onClick={() => setEditando(aluno)}>
                             Editar

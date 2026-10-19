@@ -14,6 +14,7 @@ import { DiarioAulaPage } from "@/pages/DiarioAulaPage";
 import { DisciplinasPage } from "@/pages/DisciplinasPage";
 import { EsqueciSenhaPage } from "@/pages/EsqueciSenhaPage";
 import { FaturasPage } from "@/pages/FaturasPage";
+import { FichaFinanceiraPage } from "@/pages/FichaFinanceiraPage";
 import { ImportPage } from "@/pages/ImportPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { MuralPage } from "@/pages/MuralPage";
@@ -93,6 +94,10 @@ export function AppRoutes() {
           <Route
             path="/financeiro/planos"
             element={<PlanosCobrancaPage />}
+          />
+          <Route
+            path="/financeiro/alunos/:id"
+            element={<FichaFinanceiraPage />}
           />
           <Route path="/boletim/:alunoId" element={<BoletimPage />} />
           <Route
