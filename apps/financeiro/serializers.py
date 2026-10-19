@@ -31,6 +31,20 @@ from apps.common.serializers import (
 from .models import Fatura, FaturaItem, Pagamento, PlanoCobranca, validar_link
 
 
+def erro_drf(exc: DjangoValidationError) -> serializers.ValidationError:
+    """Converte o `ValidationError` do Django no do DRF.
+
+    Preserva as chaves por campo, pra que o erro saia no campo certo do
+    formulário em vez de virar um `detail` genérico. Público porque a view
+    também precisa: o `services.py` valida com `full_clean()` (pra que a
+    regra valha pros três chamadores — API, command e webhook), e sem
+    esta tradução no limite da API a exceção do Django sobe como 500.
+    """
+    if hasattr(exc, "error_dict"):
+        return serializers.ValidationError(exc.message_dict)
+    return serializers.ValidationError({"detail": exc.messages})
+
+
 def _validar_pelo_clean(serializer, attrs: dict) -> dict:
     """Roda o `clean()` do modelo sobre uma cópia carregada com o payload.
 
@@ -54,9 +68,7 @@ def _validar_pelo_clean(serializer, attrs: dict) -> dict:
     try:
         obj.clean()
     except DjangoValidationError as exc:
-        if hasattr(exc, "error_dict"):
-            raise serializers.ValidationError(exc.message_dict) from exc
-        raise serializers.ValidationError({"detail": exc.messages}) from exc
+        raise erro_drf(exc) from exc
     return attrs
 
 
@@ -265,13 +277,12 @@ class FaturaItemSerializer(
 
 
 class PagamentoSerializer(serializers.ModelSerializer):
-    """Pagamento conciliado — somente leitura nesta fatia.
+    """Pagamento conciliado — representação de leitura.
 
-    Sem `AutoEscopoEscolaSerializerMixin` nem `validate_escola`: não há
-    caminho de escrita pra proteger. Registrar pagamento chega na fatia 3
-    junto de `services.registrar_pagamento()`, que é quem atualiza
-    `valor_pago` e `status` da fatura em transação — expor `POST` antes
-    disso criaria pagamento registrado com fatura intocada.
+    Sem `AutoEscopoEscolaSerializerMixin` nem `validate_escola`: este
+    serializer não escreve. Quem escreve é `PagamentoCreateSerializer`,
+    e mesmo ele não chama `save()` — delega em
+    `services.registrar_pagamento()`.
     """
 
     aluno_nome = serializers.CharField(
@@ -297,3 +308,42 @@ class PagamentoSerializer(serializers.ModelSerializer):
             "atualizado_em",
         ]
         read_only_fields = fields
+
+
+class PagamentoCreateSerializer(serializers.ModelSerializer):
+    """Entrada do registro manual de pagamento (secretaria recebeu).
+
+    Valida o payload e **não persiste**: a view entrega os dados a
+    `services.registrar_pagamento()`, que cria o pagamento e reconcilia a
+    fatura na mesma transação. Chamar `save()` aqui gravaria o pagamento
+    com a fatura intocada — o estado que `FINANCEIRO.md` §2.4 existe pra
+    impedir.
+
+    `escola` não é campo de entrada: sai da fatura, dentro do service.
+    O que precisa de guard é a fatura em si, senão um diretor registraria
+    pagamento numa fatura de outra escola (o escopo do queryset esconde
+    leitura, não bloqueia escrita).
+    """
+
+    # `validators=[]` desliga de propósito o `UniqueValidator` que o DRF
+    # monta sozinho a partir do `UniqueConstraint` do modelo. Com ele, o
+    # reenvio do mesmo pagamento (duplo clique no formulário, retry de
+    # rede) morreria em 400 antes de chegar ao service — e é justamente o
+    # service que sabe a resposta certa pra isso: devolver o pagamento
+    # que já existe. O constraint continua no banco como rede.
+    referencia_externa = serializers.CharField(
+        max_length=64, required=False, allow_blank=True, validators=[]
+    )
+
+    class Meta:
+        model = Pagamento
+        fields = ["id", "fatura", "valor", "data", "metodo", "referencia_externa"]
+        read_only_fields = ["id"]
+
+    def validate_fatura(self, value):
+        validate_escola_do_usuario(
+            value.escola,
+            self.context.get("request"),
+            "Você só pode registrar pagamento de fatura da sua própria escola.",
+        )
+        return value

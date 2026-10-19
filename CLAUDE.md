@@ -159,8 +159,8 @@ sobreposta é barrada só no `clean()`: limitação conhecida da v1, com o
 caminho da exclusion constraint (`daterange` + `EXCLUDE USING gist`)
 anotado no `FINANCEIRO.md` §3.2. Dinheiro é sempre `DecimalField`, com
 arredondamento comercial (`ROUND_HALF_UP`) centralizado em
-`arredondar_dinheiro()`. **Fatias 1 e 2 entregues**
-(models/migration/admin + API REST, 103 testes). A API é **só direção**
+`arredondar_dinheiro()`. **Fatias 1, 2 e 3 entregues**
+(models/migration/admin + API REST + services e geração recorrente). A API é **só direção**
 (`IsAdminOrDiretor` uniforme; professor e inspetor levam 403 até na
 leitura) e o que mexe em dinheiro é read-only — `status`/`valor_pago`/
 `data_pagamento` pertencem ao `services.py`, `id_externo`/
@@ -172,8 +172,19 @@ espelham as invariantes à mão (como `materiais`/`aulas` fazem): rodam o
 `clean()` do modelo sobre uma cópia carregada com o payload
 (`_validar_pelo_clean`), porque o `PlanoCobranca` tem cinco invariantes e
 duas cópias delas divergiriam. `DELETE` cancela a fatura, desativa o
-plano e apaga o item. Geração recorrente, gateway e webhook são as fatias
-seguintes.
+plano, apaga o item e **estorna** o pagamento. `services.py` concentra o
+que escreve dinheiro: `gerar_faturas` (idempotente, com
+`bulk_create_with_history`), `registrar_pagamento`/`estornar_pagamento`
+(em transação, com `select_for_update`, recalculando `valor_pago` em vez
+de incrementar — recálculo é idempotente e se autocorrige) e
+`marcar_vencidas`. Dois management commands pra cron
+(`financeiro_gerar_faturas`, `financeiro_marcar_vencidas`). Duas pegadinhas
+que custaram código e estão registradas no `FINANCEIRO.md` §5: o DRF monta
+um `UniqueValidator` a partir do `UniqueConstraint` de
+`referencia_externa` e mataria a idempotência do reenvio antes do service
+(o campo é declarado com `validators=[]`), e o `ValidationError` do Django
+que o service levanta sai como 500 se a view não traduzir (`erro_drf`).
+Gateway e webhook são as fatias seguintes.
 
 **`tarefas/`** — esqueleto vazio (só `__init__.py`/`apps.py`/`migrations`). Feature **removida** do produto; frontend não tem `TarefasPage` nem feature `tarefas/`. Diretório mantido pra não quebrar migrations históricas.
 
@@ -550,12 +561,20 @@ não reabrir discussão:
 Fatias: 1) models · 2) API DRF · 3) services + geração recorrente ·
 4) gateway Asaas · 5) webhook + conciliação + notificação · 6) frontend.
 
-**Fatias 1 e 2 entregues**: os quatro modelos (escopo por escola, audit
-log, admin com inlines na fatura) e a API REST sob `/api/v1/`
-(`planos-cobranca/`, `faturas/`, `fatura-itens/`, `pagamentos/` — este
-último somente leitura até a fatia 3 trazer a conciliação). Filtros por
-período, paginação compulsória nas listagens que crescem sem teto,
-permissão de direção. 103 testes.
+**Fatias 1, 2 e 3 entregues**: os quatro modelos (escopo por escola,
+audit log, admin com inlines na fatura), a API REST sob `/api/v1/`
+(`planos-cobranca/`, `faturas/`, `fatura-itens/`, `pagamentos/`) e o
+`services.py` com geração recorrente idempotente, conciliação (registro e
+estorno) e job de vencidas, mais dois management commands pra cron. 150
+testes. **O módulo já opera sem gateway**: a escola cadastra o plano, o
+cron gera as faturas e a secretaria registra o Pix ou o dinheiro que
+recebeu. Regra travada na geração (`FINANCEIRO.md` §2.8): na virada de
+contrato no meio do mês cobra o plano **mais antigo** que pega a
+competência — escolhido na aplicação, porque deixar o unique de banco
+decidir faria o valor do boleto depender da ordem de inserção.
+
+Fatia 4 (client do Asaas) está **bloqueada** enquanto `docs.asaas.com`
+estiver negado pela política de rede do ambiente de desenvolvimento.
 
 ### FASE 5 — Evolução SaaS
 14. **Multi-tenancy real** — middleware de tenant, RLS PostgreSQL, billing. Só após validação comercial.
