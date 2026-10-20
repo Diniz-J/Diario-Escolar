@@ -1,6 +1,6 @@
 import { Menu as MenuIcon } from "lucide-react";
-import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { useState } from "react";
+import { NavLink, Outlet } from "react-router-dom";
 
 import logoBadge from "@/assets/logo/diario-diniz-badge-claro.svg";
 import { Button } from "@/components/ui/button";
@@ -268,7 +268,6 @@ export function AppLayout() {
   const { user, logout } = useAuth();
   const { podeImportar, podeModificarCadastros, podeVerFinanceiro } =
     usePermissoes();
-  const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const perfilLabel = user?.perfil
@@ -279,11 +278,11 @@ export function AppLayout() {
   const podeUsarDiario =
     user?.perfil === "professor" || user?.perfil === "inspetor";
 
-  // Fecha o drawer toda vez que a rota muda — assim clicar num item na
-  // navegação mobile leva pra página e some sozinho.
-  useEffect(() => {
-    setDrawerOpen(false);
-  }, [location.pathname]);
+  // Nada de efeito fechando o drawer na troca de rota: os sete `NavLink`
+  // já chamam `onNavigate`, e a instância do drawer passa
+  // `() => setDrawerOpen(false)` nele — o clique no item é o que fecha,
+  // e é quem sabe disso. O "Sair" não precisa: o logout desmonta o
+  // layout inteiro.
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-background text-foreground">

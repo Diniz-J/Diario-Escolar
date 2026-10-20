@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -32,6 +32,19 @@ import { useTurmas } from "@/features/turmas/hooks";
 // Os campos textuais são todos opcionais — o usuário preenche aos poucos.
 // "Salvar" envia PATCH com todos os campos editáveis; "Desfazer" reseta
 // o estado local pro último dado do servidor.
+interface FormPlano {
+  ementa: string;
+  conteudo_programatico: string;
+  objetivos_gerais: string;
+  objetivos_especificos: string;
+  habilidades_bncc: string;
+  carga_horaria: string | number;
+  metodologia: string;
+  recursos: string;
+  avaliacao: string;
+  ativo: boolean;
+}
+
 export function PlanoEnsinoDetalhePage() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -45,37 +58,27 @@ export function PlanoEnsinoDetalhePage() {
   const [deleteAlvo, setDeleteAlvo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  // Estado local dos campos editáveis. Hidratado quando a query carrega
-  // e quando a mutação refeta — `useEffect` faz o sync.
-  const [form, setForm] = useState({
-    ementa: "",
-    conteudo_programatico: "",
-    objetivos_gerais: "",
-    objetivos_especificos: "",
-    habilidades_bncc: "",
-    carga_horaria: "" as string | number,
-    metodologia: "",
-    recursos: "",
-    avaliacao: "",
-    ativo: true,
-  });
-
-  useEffect(() => {
-    if (planoQuery.data) {
-      setForm({
-        ementa: planoQuery.data.ementa,
-        conteudo_programatico: planoQuery.data.conteudo_programatico,
-        objetivos_gerais: planoQuery.data.objetivos_gerais,
-        objetivos_especificos: planoQuery.data.objetivos_especificos,
-        habilidades_bncc: planoQuery.data.habilidades_bncc,
-        carga_horaria: planoQuery.data.carga_horaria ?? "",
-        metodologia: planoQuery.data.metodologia,
-        recursos: planoQuery.data.recursos,
-        avaliacao: planoQuery.data.avaliacao,
-        ativo: planoQuery.data.ativo,
-      });
-    }
-  }, [planoQuery.data]);
+  // `formEditado` guarda SÓ o que o professor alterou (`null` = não
+  // alterou nada); o form exibido cai no que veio da query. Antes um
+  // `useEffect` copiava a resposta pra cá a cada mudança de
+  // `planoQuery.data` — além do `setState` em efeito que a regra
+  // `react-hooks/set-state-in-effect` acusa, isso **descartava o que
+  // estava sendo escrito** em qualquer refetch, e aqui os campos são
+  // ementa e conteúdo programático, texto longo que ninguém quer
+  // redigitar.
+  const [formEditado, setFormEditado] = useState<FormPlano | null>(null);
+  const form: FormPlano = formEditado ?? {
+    ementa: planoQuery.data?.ementa ?? "",
+    conteudo_programatico: planoQuery.data?.conteudo_programatico ?? "",
+    objetivos_gerais: planoQuery.data?.objetivos_gerais ?? "",
+    objetivos_especificos: planoQuery.data?.objetivos_especificos ?? "",
+    habilidades_bncc: planoQuery.data?.habilidades_bncc ?? "",
+    carga_horaria: planoQuery.data?.carga_horaria ?? "",
+    metodologia: planoQuery.data?.metodologia ?? "",
+    recursos: planoQuery.data?.recursos ?? "",
+    avaliacao: planoQuery.data?.avaliacao ?? "",
+    ativo: planoQuery.data?.ativo ?? true,
+  };
 
   const plano = planoQuery.data;
   const turma = plano
@@ -189,7 +192,7 @@ export function PlanoEnsinoDetalhePage() {
                 id="ementa"
                 label="Ementa"
                 value={form.ementa}
-                onChange={(v) => setForm({ ...form, ementa: v })}
+                onChange={(v) => setFormEditado({ ...form, ementa: v })}
                 rows={3}
                 placeholder="Visão geral da disciplina no ano."
               />
@@ -198,7 +201,7 @@ export function PlanoEnsinoDetalhePage() {
                 label="Conteúdo programático"
                 value={form.conteudo_programatico}
                 onChange={(v) =>
-                  setForm({ ...form, conteudo_programatico: v })
+                  setFormEditado({ ...form, conteudo_programatico: v })
                 }
                 rows={6}
                 placeholder="Lista ordenada dos temas, um por linha."
@@ -207,7 +210,7 @@ export function PlanoEnsinoDetalhePage() {
                 id="objetivos_gerais"
                 label="Objetivos gerais"
                 value={form.objetivos_gerais}
-                onChange={(v) => setForm({ ...form, objetivos_gerais: v })}
+                onChange={(v) => setFormEditado({ ...form, objetivos_gerais: v })}
                 rows={3}
               />
               <Campo
@@ -215,7 +218,7 @@ export function PlanoEnsinoDetalhePage() {
                 label="Objetivos específicos"
                 value={form.objetivos_especificos}
                 onChange={(v) =>
-                  setForm({ ...form, objetivos_especificos: v })
+                  setFormEditado({ ...form, objetivos_especificos: v })
                 }
                 rows={4}
               />
@@ -223,7 +226,7 @@ export function PlanoEnsinoDetalhePage() {
                 id="habilidades_bncc"
                 label="Habilidades BNCC"
                 value={form.habilidades_bncc}
-                onChange={(v) => setForm({ ...form, habilidades_bncc: v })}
+                onChange={(v) => setFormEditado({ ...form, habilidades_bncc: v })}
                 rows={3}
                 placeholder="Códigos da BNCC, um por linha (ex.: EF06MA01)."
               />
@@ -235,7 +238,7 @@ export function PlanoEnsinoDetalhePage() {
                   min={0}
                   value={form.carga_horaria}
                   onChange={(e) =>
-                    setForm({ ...form, carga_horaria: e.target.value })
+                    setFormEditado({ ...form, carga_horaria: e.target.value })
                   }
                   className="max-w-[200px]"
                 />
@@ -247,14 +250,14 @@ export function PlanoEnsinoDetalhePage() {
                 id="metodologia"
                 label="Metodologia"
                 value={form.metodologia}
-                onChange={(v) => setForm({ ...form, metodologia: v })}
+                onChange={(v) => setFormEditado({ ...form, metodologia: v })}
                 rows={4}
               />
               <Campo
                 id="recursos"
                 label="Recursos"
                 value={form.recursos}
-                onChange={(v) => setForm({ ...form, recursos: v })}
+                onChange={(v) => setFormEditado({ ...form, recursos: v })}
                 rows={3}
                 placeholder="Livros, materiais, plataformas."
               />
@@ -262,7 +265,7 @@ export function PlanoEnsinoDetalhePage() {
                 id="avaliacao"
                 label="Avaliação"
                 value={form.avaliacao}
-                onChange={(v) => setForm({ ...form, avaliacao: v })}
+                onChange={(v) => setFormEditado({ ...form, avaliacao: v })}
                 rows={3}
                 placeholder="Critérios e instrumentos avaliativos."
               />
@@ -281,7 +284,7 @@ export function PlanoEnsinoDetalhePage() {
                     type="checkbox"
                     checked={form.ativo}
                     onChange={(e) =>
-                      setForm({ ...form, ativo: e.target.checked })
+                      setFormEditado({ ...form, ativo: e.target.checked })
                     }
                     className="rounded border-input"
                   />

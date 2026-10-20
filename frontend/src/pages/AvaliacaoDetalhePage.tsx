@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -53,22 +53,21 @@ export function AvaliacaoDetalhePage() {
   const lancarMutation = useLancarNotas(avaliacaoId ?? 0);
   const { podeModificarCadastros } = usePermissoes();
 
-  // `linhas`: estado controlado da tabela. Sincroniza com o backend
-  // sempre que `notasQuery.data` mudar (load inicial + após salvar).
+  // `linhas` guarda SÓ as linhas que o professor editou; o que não está
+  // aqui é lido direto do backend na renderização. Antes um `useEffect`
+  // copiava a resposta inteira pra cá a cada mudança de
+  // `notasQuery.data` — além do `setState` em efeito que a regra
+  // `react-hooks/set-state-in-effect` acusa, isso **descartava o que
+  // estava sendo digitado** em qualquer refetch: com `staleTime` de 30s
+  // e refetch no foco da janela, lançar notas e trocar de aba apagava o
+  // trabalho. Guardar só o diff resolve os dois.
   const [linhas, setLinhas] = useState<Record<number, LinhaEstado>>({});
   const [erroSubmit, setErroSubmit] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!notasQuery.data) return;
-    const novo: Record<number, LinhaEstado> = {};
-    for (const n of notasQuery.data) {
-      novo[n.id] = {
-        nota: n.nota ?? "",
-        observacao: n.observacao,
-      };
-    }
-    setLinhas(novo);
-  }, [notasQuery.data]);
+  // Valor exibido de uma linha: a edição, se houver, senão o do backend.
+  function linhaDe(n: NotaAvaliacao): LinhaEstado {
+    return linhas[n.id] ?? { nota: n.nota ?? "", observacao: n.observacao };
+  }
 
   const avaliacao = avaliacaoQuery.data;
 
@@ -292,7 +291,7 @@ export function AvaliacaoDetalhePage() {
                 </TableRow>
               ) : (
                 (notasQuery.data ?? []).map((n: NotaAvaliacao) => {
-                  const linha = linhas[n.id] ?? { nota: "", observacao: "" };
+                  const linha = linhaDe(n);
                   const invalido = notaInvalida(linha.nota);
                   const editavel = podeModificarCadastros;
                   return (
