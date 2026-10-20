@@ -452,7 +452,7 @@ brigam por foco e travam o scroll.
 
 **"Nova fatura" existe de propósito**, mesmo com a geração automática
 sendo a via normal: cobre o mês em que o cron ainda não rodou (ou não
-está configurado — é o caso hoje, antes da OVH) e a cobrança extra fora
+está configurado — é o caso hoje, em ambiente nenhum) e a cobrança extra fora
 do ciclo. O formulário sugere valor e vencimento a partir do plano, com
 o mesmo clamp de mês curto, mas a régua que vale é a do backend.
 

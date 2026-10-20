@@ -586,7 +586,7 @@ primeiras sob um item só de sidebar com abas internas, escondido
 de professor e inspetor via `podeVerFinanceiro`. Detalhe da fatura em dialog
 (composição + pagamentos + encargos do dia, com estorno), registro de
 pagamento com valor sugerido pelo `valor_atualizado`, e "Nova fatura" avulsa
-— que existe porque o cron ainda não está configurado (vai junto da OVH) e
+— que existe porque o cron ainda não está configurado em nenhum ambiente e
 sem ela a tela nasceria vazia. **Com isso a escola opera o módulo inteiro
 pela UI, sem `/admin/`.**
 
@@ -604,10 +604,11 @@ Fatia 4 (client do Asaas) está **bloqueada** enquanto `docs.asaas.com`
 estiver negado pela política de rede do ambiente de desenvolvimento — é a
 última pendente.
 
-**Pendência operacional pra migração OVH**: as duas entradas de cron
+**Pendência operacional de produção**: as duas entradas de cron
 (`financeiro_gerar_faturas` dia 1, `financeiro_marcar_vencidas` diário)
-precisam ser configuradas no servidor novo — sem elas nenhuma fatura é
-gerada automaticamente. Comandos e horários sugeridos no `FINANCEIRO.md` §2.2.
+precisam ser configuradas no servidor que hospedar o backend — sem elas
+nenhuma fatura é gerada automaticamente, e é a tela "Nova fatura" que
+cobre o buraco hoje. Comandos e horários sugeridos no `FINANCEIRO.md` §2.2.
 
 ### FASE 5 — Evolução SaaS
 14. **Multi-tenancy real** — middleware de tenant, RLS PostgreSQL, billing. Só após validação comercial.
@@ -630,16 +631,16 @@ gerada automaticamente. Comandos e horários sugeridos no `FINANCEIRO.md` §2.2.
 - ✅ **Listagens + detalhes + forms repaginados** (varredura jun/2026) — todas no padrão `DESIGN.md` §7 (header Fraunces + filete + eyebrow mono + `bg-paper` + badges tintados + dialogs com label mono).
 - ✅ **`DESIGN.md` durável** (356 linhas, raiz do repo) — fonte da verdade visual com tokens, tipografia, status badges, antecipações §7 e anti-patterns §8 (todos pagos). Atualizado em cada PR visual.
 
-### Higiene pós-deploy — atacar junto da migração OVH
-Pendências de segurança de produção ficam no `CLAUDE.local.md` (não versionado — repo é público). Resolvem junto da migração, quando o ambiente novo nasce com env vars novas.
+### Higiene pós-deploy — atacar quando o ambiente novo nascer
+Pendências de segurança de produção ficam no `CLAUDE.local.md` (não versionado — repo é público). Resolvem quando um ambiente novo nascer com env vars novas, seja a OVH depois da venda ou um Postgres free de reposição.
 - ✅ Frontend chama `/auth/logout/` no logout (invalida o refresh) — `AuthContext.tsx`.
 - 🟢 Placeholder "(YYYY-MM-DD)" da presença — cleanup cosmético.
 
-### Backup do Render (pré-migração) — feito
+### Backup do Render — feito (serve pra migração e pra salvar a demo)
 - Dump custom format gerado via `docker run --rm postgres:18 pg_dump -Fc` apontando pra External Database URL (Virginia). Saiu em `backups/render_*.dump` (~222 KB, 469 TOC entries, PG 18.3).
 - Smoke test do restore num container PG 18 local: passou em ~4s, contagens conferem (1 escola, 4 turmas, 50 alunos, 11 usuários, 7 ocorrências, 5 RegistroPresenca + 55 ItemPresenca, 2 RegistroAula, 2 PlanoEnsino).
 - `backups/` está no `.gitignore` (linha 34) — dump não vaza no commit.
-- Comando de seed reproduzível na OVH: `python manage.py popular_alunos_mock --escola-id 1 --turma "Mock 35" --quantidade 35` (PR #101). Idempotente.
+- Comando de seed reproduzível em qualquer ambiente novo: `python manage.py popular_alunos_mock --escola-id 1 --turma "Mock 35" --quantidade 35` (PR #101). Idempotente.
 
 ### Senhas / acesso — TUDO ENTREGUE
 - ✅ Tela "Trocar minha senha" (`ContaSenhaPage`).
@@ -648,7 +649,36 @@ Pendências de segurança de produção ficam no `CLAUDE.local.md` (não version
 - Limitação restante: usuários puros (diretor/secretaria/coordenador sem perfil de professor) ainda dependem do `/admin/` do Django — não têm página de gestão dedicada. Fica pra quando uma `UsuariosPage` aparecer no roadmap.
 
 ### Meta de curto prazo — STATUS
-Infra ✅, segurança operacional ✅, audit log ✅, comunicação por email **funcional em prod** ✅, **Sentry em prod ✅ (DSN setado + smoke test confirmado + captura de 4xx)**, **identidade visual completa ✅ (Login + Sidebar + Dashboard + listagens + detalhes + forms; DESIGN.md durável travado)**, auto-escopo de escola ✅, **diário de classe ✅ (5 fatias + redesenho do PDF #97)**, **fluxo de senha completo ✅ (próprio + esqueci + admin reseta de terceiro, PR #100)**, **performance ✅ (índices, annotates, bulk, prefetch + escopo obrigatório nos endpoints matriz)**. **Próximo objetivo crítico: migração pra OVH 🔴** — segue em Render free + Vercel. O Postgres free foi **reiniciado em out/2026**, então a validade de ~90 dias voltou a contar: **~30 dias de folga a partir de 2026-10-06** (vence por volta de 2026-11-05). É o prazo real da migração — passou disso, o banco expira de novo. Dump local já feito (PG 18 custom format, ~222KB), restore smoke-testado num container PG 18 local. Resta: provisionar VPS OVH, restaurar dump, ajustar `ALLOWED_HOSTS`/`CSRF_TRUSTED_ORIGINS`/`CORS_ALLOWED_ORIGINS`/`DATABASE_URL`, rotacionar `SECRET_KEY`, trocar `VITE_API_URL` no Vercel. Frontend continua no Vercel — só backend+banco saem do Render. Próximas frentes pós-OVH: fila assíncrona pra email (item 12), dashboard com mais métricas.
+Infra ✅, segurança operacional ✅, audit log ✅, comunicação por email **funcional em prod** ✅, **Sentry em prod ✅ (DSN setado + smoke test confirmado + captura de 4xx)**, **identidade visual completa ✅ (Login + Sidebar + Dashboard + listagens + detalhes + forms; DESIGN.md durável travado)**, auto-escopo de escola ✅, **diário de classe ✅ (5 fatias + redesenho do PDF #97)**, **fluxo de senha completo ✅ (próprio + esqueci + admin reseta de terceiro, PR #100)**, **performance ✅ (índices, annotates, bulk, prefetch + escopo obrigatório nos endpoints matriz)**. **Migração pra OVH: condicionada à venda** (decisão de out/2026). Não é
+pré-requisito pra vender — é consequência de ter vendido. Enquanto não
+houver escola pagante o sistema segue em Render free + Vercel, e a frente
+ativa é **produto**, não infra.
+
+O que **não** espera a venda é a sobrevivência da demo. O Postgres free do
+Render expira sozinho, e é ele que sustenta o ambiente que se mostra pra
+escola: se morrer antes de alguém fechar, o instrumento de venda vai com
+ele. O remédio não é a OVH — é provisionar outro Postgres free e restaurar,
+com o dump custom format que já existe (PG 18, ~222 KB, restore
+smoke-testado num container local) e o seed reproduzível
+(`popular_alunos_mock`). Meia hora de trabalho, não uma migração.
+
+**A data de expiração precisa ser conferida no painel do Render.** Este
+arquivo registrava duas afirmações que não fecham entre si: que a validade
+de ~90 dias voltou a contar com o restart de out/2026, e que vence "por
+volta de 2026-11-05". Noventa dias a partir de 2026-10-06 cairia em
+janeiro/2027, não em novembro. Até alguém abrir o painel, tratar a data
+como desconhecida em vez de assumir qualquer uma das duas — o tamanho da
+folga muda o quanto a demo aperta.
+
+Quando a venda acontecer, a migração já está mapeada: provisionar VPS OVH,
+restaurar dump, ajustar `ALLOWED_HOSTS`/`CSRF_TRUSTED_ORIGINS`/
+`CORS_ALLOWED_ORIGINS`/`DATABASE_URL`, rotacionar `SECRET_KEY`, trocar
+`VITE_API_URL` no Vercel e criar as duas entradas de cron do financeiro.
+Frontend continua no Vercel — só backend+banco saem do Render.
+
+Frentes ativas enquanto isso: **melhorias de frontend** (mapeamento
+iniciado em out/2026), fila assíncrona pra email (item 12), timeline do
+aluno (item 13), dashboard com mais métricas.
 
 ---
 
