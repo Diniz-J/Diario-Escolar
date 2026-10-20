@@ -24,6 +24,7 @@ import { usePermissoes } from "@/features/auth/usePermissoes";
 import { useDisciplinas } from "@/features/disciplinas/hooks";
 import { useEscolas } from "@/features/escolas/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
+import { hojeISO } from "@/lib/datas";
 import type { Avaliacao, AvaliacaoInput, AvaliacaoTipo } from "@/types/api";
 
 import { useCreateAvaliacao, useUpdateAvaliacao } from "./hooks";
@@ -40,8 +41,6 @@ const TIPOS: { value: AvaliacaoTipo; label: string }[] = [
   { value: "atividade", label: "Atividade" },
   { value: "participacao", label: "Participação" },
 ];
-
-const HOJE = () => new Date().toISOString().slice(0, 10);
 
 export function AvaliacaoFormDialog({
   open,
@@ -90,7 +89,7 @@ export function AvaliacaoFormDialog({
       setTitulo("");
       setDescricao("");
       setTipo("prova");
-      setData(HOJE());
+      setData(hojeISO());
       setNotaMaxima("10");
       setPeso("1");
       setTurmaId("");

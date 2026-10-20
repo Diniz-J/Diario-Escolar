@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { usePermissoes } from "@/features/auth/usePermissoes";
 import { useTurmas } from "@/features/turmas/hooks";
+import { hojeISO } from "@/lib/datas";
 import type { RegistroPresencaInput } from "@/types/api";
 
 import { useCreateRegistro } from "./hooks";
@@ -48,7 +49,7 @@ export function RegistroFormDialog({
   const turmasQuery = useTurmas();
   const createMutation = useCreateRegistro();
 
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeISO();
 
   const [turmaId, setTurmaId] = useState("");
   const [data, setData] = useState(hoje);

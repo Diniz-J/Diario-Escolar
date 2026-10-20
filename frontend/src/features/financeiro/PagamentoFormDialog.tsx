@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { hojeISO } from "@/lib/datas";
 import type { Fatura, PagamentoMetodo } from "@/types/api";
 
 import {
@@ -37,15 +38,6 @@ interface PagamentoFormDialogProps {
 
 const LABEL_CLASS = "text-[11px] uppercase tracking-[0.18em] text-sepia";
 
-function hoje(): string {
-  // `toISOString` converteria pra UTC e, de noite no Brasil, viraria o dia
-  // seguinte — data futura, que o backend recusa.
-  const agora = new Date();
-  const mes = String(agora.getMonth() + 1).padStart(2, "0");
-  const dia = String(agora.getDate()).padStart(2, "0");
-  return `${agora.getFullYear()}-${mes}-${dia}`;
-}
-
 export function PagamentoFormDialog({
   fatura,
   onOpenChange,
@@ -54,7 +46,7 @@ export function PagamentoFormDialog({
   // Default = valor atualizado (saldo + multa e juros de hoje), que é o
   // que a escola efetivamente cobra. Vem calculado do backend.
   const [valor, setValor] = useState(fatura?.valor_atualizado ?? "");
-  const [data, setData] = useState(hoje());
+  const [data, setData] = useState(hojeISO());
   const [metodo, setMetodo] = useState<PagamentoMetodo>("pix");
   const [referencia, setReferencia] = useState("");
   const [erro, setErro] = useState<string | null>(null);
@@ -141,7 +133,7 @@ export function PagamentoFormDialog({
                 <Input
                   id="pagamento-data"
                   type="date"
-                  max={hoje()}
+                  max={hojeISO()}
                   value={data}
                   onChange={(e) => setData(e.target.value)}
                 />
