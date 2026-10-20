@@ -352,9 +352,11 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 ## 5. Roadmap — status e próximos passos
 
 > Visão estratégica: validar operação real numa escola antes de expandir.
-> NÃO focar agora em: portal **do aluno** (login de aluno), app mobile nativo,
-> gamificação, LMS, IA, microserviços, Kubernetes, arquitetura
-> enterprise.
+> NÃO focar agora em: portal **do aluno** (login de aluno), app mobile
+> **nativo** (React Native etc.), gamificação, LMS, IA, microserviços,
+> Kubernetes, arquitetura enterprise. O veto é a app **nativa** reescrita;
+> empacotar o front atual como PWA é outra conversa — ver "App mobile (PWA)"
+> abaixo.
 > Em andamento (out/2026): portal **do responsável**, só leitura — ver FASE 6
 > e [`PORTAL.md`](./PORTAL.md). Não confundir os dois.
 > Em andamento (out/2026): **financeiro** — cobrança de mensalidade, ver
@@ -609,6 +611,46 @@ estiver negado pela política de rede do ambiente de desenvolvimento — é a
 precisam ser configuradas no servidor que hospedar o backend — sem elas
 nenhuma fatura é gerada automaticamente, e é a tela "Nova fatura" que
 cobre o buraco hoje. Comandos e horários sugeridos no `FINANCEIRO.md` §2.2.
+
+### App mobile (PWA) — consideração (out/2026), NÃO comprometido
+
+Ideia levantada pelo Diniz: empacotar o **frontend atual** como **PWA**
+(`manifest.json` + service worker, mesmo build já no Vercel) pra dois públicos
+que pertencem ao celular — o **responsável** (portal, leitura) e o **professor**
+na hora de **lançar presença** (chamada em sala). Não cruza o posicionamento:
+continua sendo responsável lendo + professor operando, não app do aluno, e PWA
+não é app nativo (o veto da visão estratégica é a reescrita nativa, não isto).
+
+O que já joga a favor (nada a construir):
+- Portal `/portal` é mobile-first, em chunk próprio (`React.lazy`).
+- A chamada (`PresencaDetalhePage`) já é responsiva e tem **optimistic update**.
+- "Ficar logado" já funciona: JWT `ACCESS 60min` / `REFRESH 7d` com
+  `ROTATE_REFRESH_TOKENS` + `BLACKLIST_AFTER_ROTATION`
+  ([`config/settings.py`](./config/settings.py) §SimpleJWT) + refresh automático
+  no 401 ([`frontend/src/lib/api.ts`](./frontend/src/lib/api.ts)). Token no
+  `localStorage` persiste entre aberturas; com a rotação, quem usa dentro de 7
+  dias **nunca reloga**. Passo barato pra "praticamente nunca sair": subir
+  `REFRESH_TOKEN_LIFETIME` pra ~30d.
+
+Divisor de esforço (a decisão que define o tamanho): a chamada precisa funcionar
+**offline** (sala sem sinal)? O optimistic update de hoje **não** é offline —
+assume a API no ar e faz rollback se cair.
+- **Com conexão na sala** → PWA simples, ~1-2 PRs (manifest + SW + polir touch da
+  lista de presença).
+- **Sem sinal na sala** → fila local (IndexedDB) + sync + conflito (a unique
+  `(escola, turma, data)` ancora o merge). Frente de semanas, não "de graça".
+
+Trade-off de segurança: refresh longo no `localStorage` amplia a janela de um
+token roubado (baixo risco pro pai só-leitura, maior pro professor que escreve).
+O endurecimento é **httpOnly cookie**, já previsto na FASE 5 item 15 — não é
+pré-requisito do PWA, é evolução.
+
+Degrau seguinte, só se pedirem loja/push nativo: **Capacitor** embrulha esse
+mesmo PWA num app publicável (iOS/Android). Web push no iOS é fraco — esse é o
+gatilho real pra Capacitor. React Native segue fora (reescrita, não compensa).
+
+Status: **consideração, nada iniciado.** Entra depois da migração OVH (prazo
+real; ver meta de curto prazo), que é prioridade.
 
 ### FASE 5 — Evolução SaaS
 14. **Multi-tenancy real** — middleware de tenant, RLS PostgreSQL, billing. Só após validação comercial.
