@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Pagination } from "@/components/Pagination";
@@ -25,11 +25,19 @@ export function PresencaPage() {
   const [dataFim, setDataFim] = useState("");
   const [page, setPage] = useState(1);
   // Reseta a paginação quando o range de datas server-side muda.
-  useEffect(() => {
-    setPage(1);
-  }, [dataInicio, dataFim]);
 
   // Range de datas filtrado server-side; busca por turma continua client-side.
+  // Reset de página no handler, não em efeito: cair numa página que não
+  // existe mais no subset novo é o que se evita, e `setState` dentro de
+  // `useEffect` encadeia render (regra `react-hooks/set-state-in-effect`).
+  // Mesmo idioma de `FaturasPage`.
+  function filtrar<T>(setter: (valor: T) => void) {
+    return (valor: T) => {
+      setter(valor);
+      setPage(1);
+    };
+  }
+
   const registrosQuery = useRegistrosPaginated(
     {
       ...(dataInicio ? { data_inicio: dataInicio } : {}),
@@ -113,7 +121,7 @@ export function PresencaPage() {
             type="date"
             value={dataInicio}
             max={dataFim || undefined}
-            onChange={(e) => setDataInicio(e.target.value)}
+            onChange={(e) => filtrar(setDataInicio)(e.target.value)}
             className="w-[160px]"
           />
         </div>
@@ -129,7 +137,7 @@ export function PresencaPage() {
             type="date"
             value={dataFim}
             min={dataInicio || undefined}
-            onChange={(e) => setDataFim(e.target.value)}
+            onChange={(e) => filtrar(setDataFim)(e.target.value)}
             className="w-[160px]"
           />
         </div>
@@ -140,6 +148,7 @@ export function PresencaPage() {
             onClick={() => {
               setDataInicio("");
               setDataFim("");
+              setPage(1);
             }}
           >
             Limpar datas

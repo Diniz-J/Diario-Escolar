@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Pagination } from "@/components/Pagination";
@@ -61,9 +61,17 @@ export function ComunicadosPage() {
 
   // Reseta pra página 1 quando o filtro server-side muda — senão pode
   // cair numa página que não existe no novo subset.
-  useEffect(() => {
-    setPage(1);
-  }, [filtroStatus]);
+
+  // Reset de página no handler, não em efeito: cair numa página que não
+  // existe mais no subset novo é o que se evita, e `setState` dentro de
+  // `useEffect` encadeia render (regra `react-hooks/set-state-in-effect`).
+  // Mesmo idioma de `FaturasPage`.
+  function filtrar<T>(setter: (valor: T) => void) {
+    return (valor: T) => {
+      setter(valor);
+      setPage(1);
+    };
+  }
 
   const comunicadosQuery = useComunicadosPaginated(
     filtroStatus !== FILTRO_TODOS
@@ -125,7 +133,7 @@ export function ComunicadosPage() {
           onChange={(e) => setBusca(e.target.value)}
           className="max-w-xs"
         />
-        <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+        <Select value={filtroStatus} onValueChange={filtrar(setFiltroStatus)}>
           <SelectTrigger className="w-48">
             <SelectValue />
           </SelectTrigger>
