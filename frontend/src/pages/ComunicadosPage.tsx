@@ -57,6 +57,9 @@ export function ComunicadosPage() {
   const [busca, setBusca] = useState("");
   const [page, setPage] = useState(1);
   const [formOpen, setFormOpen] = useState(false);
+  // Remonta o dialog a cada abertura pra que o estado nasça dos props,
+  // sem `useEffect` de repreenchimento. Idioma da `PlanosCobrancaPage`.
+  const [formKey, setFormKey] = useState(0);
   const [enviarAlvo, setEnviarAlvo] = useState<Comunicado | null>(null);
 
   // Reseta pra página 1 quando o filtro server-side muda — senão pode
@@ -116,11 +119,22 @@ export function ComunicadosPage() {
           </p>
         </div>
         {podeModificarCadastros && (
-          <Button onClick={() => setFormOpen(true)}>Novo comunicado</Button>
+          <Button
+            onClick={() => {
+              setFormKey((k) => k + 1);
+              setFormOpen(true);
+            }}
+          >
+            Novo comunicado
+          </Button>
         )}
       </header>
 
-      <ComunicadoFormDialog open={formOpen} onOpenChange={setFormOpen} />
+      <ComunicadoFormDialog
+        key={formKey}
+        open={formOpen}
+        onOpenChange={setFormOpen}
+      />
       <EnviarComunicadoDialog
         comunicado={enviarAlvo}
         onOpenChange={(aberto) => !aberto && setEnviarAlvo(null)}

@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -62,30 +62,21 @@ export function ComunicadoFormDialog({
 
   const editando = comunicado != null;
 
-  const [titulo, setTitulo] = useState("");
-  const [mensagem, setMensagem] = useState("");
-  const [destino, setDestino] = useState<ComunicadoDestino>("escola");
-  const [turmasSelecionadas, setTurmasSelecionadas] = useState<number[]>([]);
-  const [escolaId, setEscolaId] = useState<string>("");
+  // Estado nasce dos props — a página remonta o dialog (`key={formKey}`) a
+  // cada abertura, então não há `useEffect` pra repreencher. Mesmo idioma
+  // do `PlanoCobrancaFormDialog`.
+  const [titulo, setTitulo] = useState(comunicado?.titulo ?? "");
+  const [mensagem, setMensagem] = useState(comunicado?.mensagem ?? "");
+  const [destino, setDestino] = useState<ComunicadoDestino>(
+    comunicado?.destino ?? "escola",
+  );
+  const [turmasSelecionadas, setTurmasSelecionadas] = useState<number[]>(
+    comunicado?.turmas ?? [],
+  );
+  const [escolaId, setEscolaId] = useState<string>(
+    comunicado ? String(comunicado.escola) : "",
+  );
   const [erro, setErro] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setErro(null);
-    if (comunicado) {
-      setTitulo(comunicado.titulo);
-      setMensagem(comunicado.mensagem);
-      setDestino(comunicado.destino);
-      setTurmasSelecionadas(comunicado.turmas);
-      setEscolaId(String(comunicado.escola));
-    } else {
-      setTitulo("");
-      setMensagem("");
-      setDestino("escola");
-      setTurmasSelecionadas([]);
-      setEscolaId("");
-    }
-  }, [open, comunicado]);
 
   // Admin global opera em várias escolas: as turmas ofertadas têm que ser
   // as da escola escolhida, senão ele monta um comunicado que o backend

@@ -71,6 +71,9 @@ export function AlunosPage() {
   const [formOpen, setFormOpen] = useState(false);
   // Aluno em edição: null fecha o dialog; objeto abre em modo edição.
   const [editando, setEditando] = useState<Aluno | null>(null);
+  // Remonta o dialog a cada abertura pra que o estado nasça dos props,
+  // sem `useEffect` de repreenchimento. Idioma da `PlanosCobrancaPage`.
+  const [formKey, setFormKey] = useState(0);
   const [excluindo, setExcluindo] = useState<Aluno | null>(null);
 
   const turmasPorId = useMemo(() => {
@@ -99,6 +102,11 @@ export function AlunosPage() {
   // Unifica criação e edição no mesmo dialog: `editando=null` + `formOpen`
   // = modo criar; `editando=aluno` = modo editar.
   const dialogAberto = formOpen || editando !== null;
+  function abrirForm(aluno: Aluno | null) {
+    setEditando(aluno);
+    setFormKey((k) => k + 1);
+    setFormOpen(true);
+  }
   function fecharDialog(open: boolean) {
     if (!open) {
       setFormOpen(false);
@@ -140,7 +148,7 @@ export function AlunosPage() {
             </Button>
           )}
           {podeModificarCadastros && (
-            <Button onClick={() => setFormOpen(true)}>Novo aluno</Button>
+            <Button onClick={() => abrirForm(null)}>Novo aluno</Button>
           )}
         </div>
       </header>
@@ -154,6 +162,7 @@ export function AlunosPage() {
       />
 
       <AlunoFormDialog
+        key={formKey}
         open={dialogAberto}
         onOpenChange={fecharDialog}
         aluno={editando}
@@ -318,7 +327,7 @@ export function AlunosPage() {
                           </DropdownMenuItem>
                         )}
                         {podeModificarCadastros && (
-                          <DropdownMenuItem onClick={() => setEditando(aluno)}>
+                          <DropdownMenuItem onClick={() => abrirForm(aluno)}>
                             Editar
                           </DropdownMenuItem>
                         )}
