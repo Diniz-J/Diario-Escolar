@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Pagination } from "@/components/Pagination";
@@ -47,9 +47,6 @@ export function OcorrenciasPage() {
   const [page, setPage] = useState(1);
   // Reseta pra página 1 sempre que o filtro server-side muda — senão
   // pode cair numa página que não existe mais no novo subset.
-  useEffect(() => {
-    setPage(1);
-  }, [filtroStatus, dataInicio, dataFim]);
 
   // Filtros server-side: status + range de datas vão pro backend.
   // A busca por nome (aluno/turma) continua client-side.
@@ -84,6 +81,17 @@ export function OcorrenciasPage() {
     }
     return partes.length ? partes.join(" · ") : "Todas as ocorrências";
   }, [dataInicio, dataFim, filtroStatus]);
+  // Reset de página no handler, não em efeito: cair numa página que não
+  // existe mais no subset novo é o que se evita, e `setState` dentro de
+  // `useEffect` encadeia render (regra `react-hooks/set-state-in-effect`).
+  // Mesmo idioma de `FaturasPage`.
+  function filtrar<T>(setter: (valor: T) => void) {
+    return (valor: T) => {
+      setter(valor);
+      setPage(1);
+    };
+  }
+
   const alunosQuery = useAlunos();
   const turmasQuery = useTurmas();
 
@@ -158,7 +166,7 @@ export function OcorrenciasPage() {
           onChange={(e) => setBusca(e.target.value)}
           className="max-w-sm"
         />
-        <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+        <Select value={filtroStatus} onValueChange={filtrar(setFiltroStatus)}>
           <SelectTrigger className="w-44">
             <SelectValue />
           </SelectTrigger>
@@ -183,7 +191,7 @@ export function OcorrenciasPage() {
             type="date"
             value={dataInicio}
             max={dataFim || undefined}
-            onChange={(e) => setDataInicio(e.target.value)}
+            onChange={(e) => filtrar(setDataInicio)(e.target.value)}
             className="w-[160px]"
           />
         </div>
@@ -199,7 +207,7 @@ export function OcorrenciasPage() {
             type="date"
             value={dataFim}
             min={dataInicio || undefined}
-            onChange={(e) => setDataFim(e.target.value)}
+            onChange={(e) => filtrar(setDataFim)(e.target.value)}
             className="w-[160px]"
           />
         </div>
@@ -210,6 +218,7 @@ export function OcorrenciasPage() {
             onClick={() => {
               setDataInicio("");
               setDataFim("");
+              setPage(1);
             }}
           >
             Limpar datas

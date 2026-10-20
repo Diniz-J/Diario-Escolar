@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ExportarMenu } from "@/components/ExportarMenu";
@@ -42,14 +42,22 @@ export function AlunosPage() {
   const [page, setPage] = useState(1);
   // Reseta pra página 1 quando o filtro de inativos muda — senão pode
   // cair numa página que não existe mais no novo subset.
-  useEffect(() => {
-    setPage(1);
-  }, [mostrarInativos]);
 
   // Padrão: lista só ativos. Toggle "Mostrar inativos" inverte e o
   // backend devolve só os com `ativo=false` — soft delete deixa de
   // poluir a listagem do dia a dia, mas permanece acessível pra
   // pesquisar histórico ou reativar um aluno.
+  // Reset de página no handler, não em efeito: cair numa página que não
+  // existe mais no subset novo é o que se evita, e `setState` dentro de
+  // `useEffect` encadeia render (regra `react-hooks/set-state-in-effect`).
+  // Mesmo idioma de `FaturasPage`.
+  function filtrar<T>(setter: (valor: T) => void) {
+    return (valor: T) => {
+      setter(valor);
+      setPage(1);
+    };
+  }
+
   const alunosQuery = useAlunosPaginated(
     { ativo: !mostrarInativos },
     { page, page_size: PAGE_SIZE },
@@ -166,7 +174,7 @@ export function AlunosPage() {
           <Switch
             id="mostrar-inativos"
             checked={mostrarInativos}
-            onCheckedChange={setMostrarInativos}
+            onCheckedChange={filtrar(setMostrarInativos)}
           />
           <Label
             htmlFor="mostrar-inativos"
