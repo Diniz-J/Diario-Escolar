@@ -54,6 +54,9 @@ export function ProfessoresPage() {
   const [busca, setBusca] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editando, setEditando] = useState<Professor | null>(null);
+  // Remonta o dialog a cada abertura pra que o estado nasça dos props,
+  // sem `useEffect` de repreenchimento. Idioma da `PlanosCobrancaPage`.
+  const [formKey, setFormKey] = useState(0);
   const [desativando, setDesativando] = useState<Professor | null>(null);
 
   const disciplinasPorId = useMemo(() => {
@@ -96,6 +99,11 @@ export function ProfessoresPage() {
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const dialogAberto = formOpen || editando !== null;
+  function abrirForm(professor: Professor | null) {
+    setEditando(professor);
+    setFormKey((k) => k + 1);
+    setFormOpen(true);
+  }
   function fecharDialog(open: boolean) {
     if (!open) {
       setFormOpen(false);
@@ -115,12 +123,13 @@ export function ProfessoresPage() {
         <div className="flex items-center gap-2">
           <ExportarMenu entidade="professores" />
           {podeModificarCadastros && (
-            <Button onClick={() => setFormOpen(true)}>Novo professor</Button>
+            <Button onClick={() => abrirForm(null)}>Novo professor</Button>
           )}
         </div>
       </header>
 
       <ProfessorFormDialog
+        key={formKey}
         open={dialogAberto}
         onOpenChange={fecharDialog}
         professor={editando}
@@ -267,7 +276,7 @@ export function ProfessoresPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setEditando(p)}>
+                          <DropdownMenuItem onClick={() => abrirForm(p)}>
                             Editar
                           </DropdownMenuItem>
                           {/* Reset de senha via email — dispara o mesmo

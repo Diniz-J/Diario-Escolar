@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -49,19 +49,21 @@ export function RegistroAulaFormDialog({
   const createMutation = useCreateRegistroAula();
   const updateMutation = useUpdateRegistroAula();
 
-  const [conteudo, setConteudo] = useState("");
+  // O conteúdo vem de uma query de detalhe, que resolve DEPOIS do mount:
+  // inicializador leria `undefined` e a edição abriria vazia. Então o
+  // estado guarda só o que o professor digitou (`null` = ainda não
+  // digitou nada) e o valor exibido cai no buscado até lá. Mesmo
+  // princípio da escola/turma derivada nos outros dialogs, sem o
+  // `useEffect` que a regra `react-hooks/set-state-in-effect` acusa.
+  const [conteudoEditado, setConteudoEditado] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
   const registro = registroQuery.data;
   // Aula conferida pela direção é só leitura — o professor não reabre.
   const somenteLeitura = registro?.status === "conferido";
 
-  useEffect(() => {
-    if (open) {
-      setErro(null);
-      setConteudo(editando ? (registro?.conteudo ?? "") : "");
-    }
-  }, [open, editando, registro?.conteudo]);
+  const conteudo =
+    conteudoEditado ?? (editando ? (registro?.conteudo ?? "") : "");
 
   const enviando = createMutation.isPending || updateMutation.isPending;
 
@@ -127,7 +129,7 @@ export function RegistroAulaFormDialog({
             rows={8}
             value={conteudo}
             disabled={somenteLeitura || registroQuery.isLoading}
-            onChange={(e) => setConteudo(e.target.value)}
+            onChange={(e) => setConteudoEditado(e.target.value)}
             className="w-full rounded-md border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition resize-y disabled:opacity-70"
             placeholder="O que foi trabalhado nesta aula?"
           />

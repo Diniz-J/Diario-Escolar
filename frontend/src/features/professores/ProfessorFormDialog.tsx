@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -84,64 +84,42 @@ export function ProfessorFormDialog({
 
   const editando = professor != null;
 
-  const [escolaId, setEscolaId] = useState<string>("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  // Estado nasce dos props — a página remonta o dialog (`key={formKey}`) a
+  // cada abertura, então não há `useEffect` pra repreencher.
+  const partesDoNome = professor ? professor.nome_completo.split(" ") : [];
+  const [firstName, setFirstName] = useState(partesDoNome[0] ?? "");
+  const [lastName, setLastName] = useState(partesDoNome.slice(1).join(" "));
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [linhas, setLinhas] = useState<LinhaLecionamento[]>([]);
+  // `escolaId` e `linhasEditadas` guardam só o que o usuário mexeu; os
+  // valores que valem são derivados logo abaixo. Os dois dependem de
+  // query que resolve depois do mount, e sincronizar isso com `setState`
+  // num efeito é o que a regra `react-hooks/set-state-in-effect` acusa —
+  // era a razão de existir o segundo efeito deste arquivo, que esperava
+  // os lecionamentos chegarem só pra repovoar as linhas.
+  const [escolaId, setEscolaId] = useState<string>(
+    professor ? String(professor.escola) : "",
+  );
+  const [linhasEditadas, setLinhasEditadas] = useState<
+    LinhaLecionamento[] | null
+  >(null);
   const [erro, setErro] = useState<string | null>(null);
 
-  // Hidrata o form quando abre. Em edição, espera os lecionamentos do
-  // professor carregarem pra popular as linhas.
-  useEffect(() => {
-    if (!open) return;
-    setErro(null);
+  const escolas = escolasQuery.data;
+  const escolaEfetiva =
+    escolaId || (escolas?.length === 1 ? String(escolas[0].id) : "");
 
-    if (professor) {
-      const partes = professor.nome_completo.split(" ");
-      setFirstName(partes[0] ?? "");
-      setLastName(partes.slice(1).join(" "));
-      setEscolaId(String(professor.escola));
-      setUsername("");
-      setEmail("");
-      setPassword("");
-      // Linhas vêm dos lecionamentos persistidos. Se ainda carregando,
-      // outro `useEffect` abaixo sincroniza quando chegar.
-      setLinhas(
-        (lecionamentosQuery.data ?? []).map((l) => ({
-          id: l.id,
-          turmaId: String(l.turma),
-          disciplinaId: String(l.disciplina),
-        })),
-      );
-    } else {
-      const escolas = escolasQuery.data;
-      setEscolaId(escolas?.length === 1 ? String(escolas[0].id) : "");
-      setFirstName("");
-      setLastName("");
-      setUsername("");
-      setEmail("");
-      setPassword("");
-      setLinhas([]);
-    }
-  // `lecionamentosQuery.data` propositalmente fora — sync em outro effect.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, professor, escolasQuery.data]);
-
-  // Quando os lecionamentos terminam de carregar no modo edição, popula
-  // as linhas iniciais.
-  useEffect(() => {
-    if (!open || !professor || !lecionamentosQuery.data) return;
-    setLinhas(
-      lecionamentosQuery.data.map((l) => ({
+  // Em edição as linhas saem dos lecionamentos persistidos; `null` em
+  // `linhasEditadas` significa "o usuário ainda não mexeu".
+  const linhasDoProfessor: LinhaLecionamento[] = professor
+    ? (lecionamentosQuery.data ?? []).map((l) => ({
         id: l.id,
         turmaId: String(l.turma),
         disciplinaId: String(l.disciplina),
-      })),
-    );
-  }, [open, professor, lecionamentosQuery.data]);
+      }))
+    : [];
+  const linhas = linhasEditadas ?? linhasDoProfessor;
 
   const enviando =
     createUsuario.isPending ||
@@ -156,27 +134,30 @@ export function ProfessorFormDialog({
   // Filtra turmas da escola selecionada — admin com múltiplas escolas
   // não vê turmas de outra ao montar lecionamento.
   const turmasDaEscola = useMemo(() => {
-    if (!escolaId) return [];
-    const escolaIdNum = parseInt(escolaId, 10);
+    if (!escolaEfetiva) return [];
+    const escolaIdNum = parseInt(escolaEfetiva, 10);
     return (turmasQuery.data ?? []).filter(
       (t) => t.escola === escolaIdNum && t.ativa,
     );
-  }, [escolaId, turmasQuery.data]);
+  }, [escolaEfetiva, turmasQuery.data]);
 
   const disciplinasDaEscola = useMemo(() => {
-    if (!escolaId) return [];
-    const escolaIdNum = parseInt(escolaId, 10);
+    if (!escolaEfetiva) return [];
+    const escolaIdNum = parseInt(escolaEfetiva, 10);
     return (disciplinasQuery.data ?? []).filter(
       (d) => d.escola === escolaIdNum && d.ativa,
     );
-  }, [escolaId, disciplinasQuery.data]);
+  }, [escolaEfetiva, disciplinasQuery.data]);
 
   function adicionarLinha() {
-    setLinhas((prev) => [...prev, { id: null, turmaId: "", disciplinaId: "" }]);
+    setLinhasEditadas([
+      ...linhas,
+      { id: null, turmaId: "", disciplinaId: "" },
+    ]);
   }
 
   function removerLinha(index: number) {
-    setLinhas((prev) => prev.filter((_, i) => i !== index));
+    setLinhasEditadas(linhas.filter((_, i) => i !== index));
   }
 
   function atualizarLinha(
@@ -184,8 +165,8 @@ export function ProfessorFormDialog({
     campo: "turmaId" | "disciplinaId",
     valor: string,
   ) {
-    setLinhas((prev) =>
-      prev.map((l, i) => (i === index ? { ...l, [campo]: valor } : l)),
+    setLinhasEditadas(
+      linhas.map((l, i) => (i === index ? { ...l, [campo]: valor } : l)),
     );
   }
 
@@ -209,7 +190,7 @@ export function ProfessorFormDialog({
     // - admin global: o que ele selecionou no select de escola
     // - demais perfis: a do JWT (`user.escola_id`); select nem é renderizado
     const escolaIdNum = ehAdminGlobal
-      ? (escolaId ? parseInt(escolaId, 10) : NaN)
+      ? (escolaEfetiva ? parseInt(escolaEfetiva, 10) : NaN)
       : (user?.escola_id ?? NaN);
     if (Number.isNaN(escolaIdNum)) {
       setErro("Selecione uma escola.");
@@ -406,7 +387,7 @@ export function ProfessorFormDialog({
               </Label>
               <select
                 id="escola"
-                value={escolaId}
+                value={escolaEfetiva}
                 onChange={(e) => setEscolaId(e.target.value)}
                 className="w-full rounded-md border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
               >
@@ -430,7 +411,7 @@ export function ProfessorFormDialog({
                 variant="outline"
                 size="sm"
                 onClick={adicionarLinha}
-                disabled={!escolaId}
+                disabled={!escolaEfetiva}
               >
                 + Adicionar
               </Button>

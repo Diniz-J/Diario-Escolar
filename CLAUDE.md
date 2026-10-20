@@ -321,7 +321,7 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 ### Validação antes de PR
 - Backend: `python manage.py check && python manage.py test`.
 - Frontend: `npm --prefix frontend test && npm --prefix frontend run build`.
-- O CI roda os dois no job de frontend. O `npm run lint` **não** é gate ainda: tem 29 erros herdados (24 deles o mesmo `set-state-in-effect` nos FormDialogs), então entrar no CI hoje deixaria tudo vermelho — limpar e plugar é frente própria.
+- O CI roda os dois no job de frontend. O `npm run lint` **não** é gate ainda, mas está perto: caiu de 30 pra 13 problemas (out/2026). **Nenhum FormDialog sobra** — o padrão de casa pra eles é estado nascendo dos props mais `key={formKey}` na página, e quando a pré-seleção depende de query (escola única, turma única, lecionamentos, conteúdo de aula) o valor é **derivado**: o estado guarda só a escolha explícita do usuário. Faltam 7 `set-state-in-effect` (`AppLayout`, os 2 contexts de auth, `ImportPage`, `AvaliacaoDetalhePage`, `NotasFinaisPage`, `PlanoEnsinoDetalhePage`), 1 `exhaustive-deps` (`ImportPage`), 4 `react-refresh` (forma padrão do shadcn e dos contexts — é configuração, não código) e 1 `no-control-regex` no `NomeArquivoDialog`, onde o código **está correto** (sanitiza nome de arquivo) e o certo é um disable explicado.
 
 ### Código
 - Comentários **em português**. **Nunca emojis** em código ou respostas.

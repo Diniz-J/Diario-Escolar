@@ -63,6 +63,12 @@ export function DiarioAulaPage() {
   });
 
   const [dialogAberto, setDialogAberto] = useState(false);
+  // Remonta o dialog a cada abertura. O conteúdo da aula é derivado da
+  // query de detalhe com o que o professor digitou por cima, e sem a
+  // remontagem um rascunho não salvo apareceria na próxima abertura —
+  // inclusive em outra aula, porque `slotSelecionado` não é limpo ao
+  // fechar e o dialog continua montado.
+  const [formKey, setFormKey] = useState(0);
   const [slotSelecionado, setSlotSelecionado] = useState<AgendaSlot | null>(
     null,
   );
@@ -112,6 +118,7 @@ export function DiarioAulaPage() {
     // futura); só abre se já existe registro (ex.: editar rascunho).
     if (slot.futuro && slot.status === "vazio") return;
     setSlotSelecionado(slot);
+    setFormKey((k) => k + 1);
     setDialogAberto(true);
   }
 
@@ -255,6 +262,7 @@ export function DiarioAulaPage() {
 
       {slotSelecionado && lecionamentoSel && meuProfessor && (
         <RegistroAulaFormDialog
+          key={formKey}
           open={dialogAberto}
           onOpenChange={setDialogAberto}
           turma={lecionamentoSel.turma}

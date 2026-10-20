@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -60,13 +60,40 @@ export function OcorrenciaFormDialog({
   const editando = ocorrencia != null;
   const hoje = hojeISO();
 
-  const [turmaId, setTurmaId] = useState<string>("");
-  const [alunoId, setAlunoId] = useState<string>("");
-  const [professorId, setProfessorId] = useState<string>(PROFESSOR_NENHUM);
-  const [status, setStatus] = useState<OcorrenciaStatus>("aberta");
-  const [descricao, setDescricao] = useState("");
-  const [dataOcorrencia, setDataOcorrencia] = useState(hoje);
+  // Estado nasce dos props — a página remonta o dialog (`key={formKey}`) a
+  // cada abertura, então não há `useEffect` pra repreencher.
+  //
+  // A turma é a exceção: em edição ela sai da turma do ALUNO da
+  // ocorrência, e a lista de alunos chega depois do mount. Então o
+  // estado guarda só a escolha explícita e a turma efetiva é derivada,
+  // com `ocorrencia.turma` como fallback enquanto a lista não chega.
+  // Sincronizar isso num efeito é o que a regra
+  // `react-hooks/set-state-in-effect` acusa.
+  const [turmaEscolhida, setTurmaEscolhida] = useState<string>("");
+  const [alunoId, setAlunoId] = useState<string>(
+    ocorrencia ? String(ocorrencia.aluno) : "",
+  );
+  const [professorId, setProfessorId] = useState<string>(
+    ocorrencia?.professor != null
+      ? String(ocorrencia.professor)
+      : PROFESSOR_NENHUM,
+  );
+  const [status, setStatus] = useState<OcorrenciaStatus>(
+    ocorrencia?.status ?? "aberta",
+  );
+  const [descricao, setDescricao] = useState(ocorrencia?.descricao ?? "");
+  const [dataOcorrencia, setDataOcorrencia] = useState(
+    ocorrencia?.data_ocorrencia ?? hoje,
+  );
   const [erro, setErro] = useState<string | null>(null);
+
+  const turmaDaOcorrencia = ocorrencia
+    ? String(
+        alunosQuery.data?.find((a) => a.id === ocorrencia.aluno)?.turma ??
+          ocorrencia.turma,
+      )
+    : "";
+  const turmaId = turmaEscolhida || turmaDaOcorrencia;
 
   // Filtra alunos pela turma selecionada. Se nenhuma turma, lista vazia
   // — o select de aluno aparece desabilitado.
@@ -76,41 +103,11 @@ export function OcorrenciaFormDialog({
     return alunosQuery.data.filter((a) => a.turma === id);
   }, [turmaId, alunosQuery.data]);
 
-  useEffect(() => {
-    if (open) {
-      setErro(null);
-      if (ocorrencia) {
-        // Em edição: pré-seleciona a turma a partir do aluno da ocorrência.
-        const alunoOriginal = alunosQuery.data?.find(
-          (a) => a.id === ocorrencia.aluno,
-        );
-        setTurmaId(
-          String(alunoOriginal?.turma ?? ocorrencia.turma),
-        );
-        setAlunoId(String(ocorrencia.aluno));
-        setProfessorId(
-          ocorrencia.professor != null
-            ? String(ocorrencia.professor)
-            : PROFESSOR_NENHUM,
-        );
-        setStatus(ocorrencia.status);
-        setDescricao(ocorrencia.descricao);
-        setDataOcorrencia(ocorrencia.data_ocorrencia);
-      } else {
-        setTurmaId("");
-        setAlunoId("");
-        setProfessorId(PROFESSOR_NENHUM);
-        setStatus("aberta");
-        setDescricao("");
-        setDataOcorrencia(hoje);
-      }
-    }
-  }, [open, ocorrencia, alunosQuery.data, hoje]);
 
   // Se o usuário troca a turma, limpa o aluno (evita inconsistência
   // visual de manter aluno de outra turma no select).
   function handleTurmaChange(novoTurmaId: string) {
-    setTurmaId(novoTurmaId);
+    setTurmaEscolhida(novoTurmaId);
     setAlunoId("");
   }
 
