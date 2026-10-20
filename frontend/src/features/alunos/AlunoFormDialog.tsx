@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -51,38 +51,25 @@ export function AlunoFormDialog({
 
   const editando = aluno != null;
 
-  const [matricula, setMatricula] = useState("");
-  const [nomeCompleto, setNomeCompleto] = useState("");
-  const [dataNascimento, setDataNascimento] = useState("");
-  const [turmaId, setTurmaId] = useState<string>("");
-  const [ativo, setAtivo] = useState(true);
-  const [nomeResponsavel, setNomeResponsavel] = useState("");
-  const [emailResponsavel, setEmailResponsavel] = useState("");
+  // Estado nasce dos props — a página remonta o dialog (`key={formKey}`) a
+  // cada abertura, então não há `useEffect` pra repreencher. Mesmo idioma
+  // do `PlanoCobrancaFormDialog`.
+  const [matricula, setMatricula] = useState(aluno?.matricula ?? "");
+  const [nomeCompleto, setNomeCompleto] = useState(aluno?.nome_completo ?? "");
+  const [dataNascimento, setDataNascimento] = useState(
+    aluno?.data_nascimento ?? "",
+  );
+  const [turmaId, setTurmaId] = useState<string>(
+    aluno ? String(aluno.turma) : "",
+  );
+  const [ativo, setAtivo] = useState(aluno?.ativo ?? true);
+  const [nomeResponsavel, setNomeResponsavel] = useState(
+    aluno?.nome_responsavel ?? "",
+  );
+  const [emailResponsavel, setEmailResponsavel] = useState(
+    aluno?.email_responsavel ?? "",
+  );
   const [erro, setErro] = useState<string | null>(null);
-
-  // Repreenche o formulário quando abre em modo edição.
-  useEffect(() => {
-    if (open) {
-      setErro(null);
-      if (aluno) {
-        setMatricula(aluno.matricula);
-        setNomeCompleto(aluno.nome_completo);
-        setDataNascimento(aluno.data_nascimento ?? "");
-        setTurmaId(String(aluno.turma));
-        setAtivo(aluno.ativo);
-        setNomeResponsavel(aluno.nome_responsavel ?? "");
-        setEmailResponsavel(aluno.email_responsavel ?? "");
-      } else {
-        setMatricula("");
-        setNomeCompleto("");
-        setDataNascimento("");
-        setTurmaId("");
-        setAtivo(true);
-        setNomeResponsavel("");
-        setEmailResponsavel("");
-      }
-    }
-  }, [open, aluno]);
 
   const enviando = createMutation.isPending || updateMutation.isPending;
 

@@ -424,6 +424,7 @@ export function BoletimPage() {
       {/* Dialog único reaproveitado pros 3 tipos de export (PDF/CSV/XLSX).
           Aberto via `setExportAlvo` nos botões da header. */}
       <NomeArquivoDialog
+        key={`pdf-${nomeDefault("boletim")}`}
         open={exportAlvo === "pdf"}
         onOpenChange={(open) => !open && setExportAlvo(null)}
         nomeDefault={nomeDefault("boletim")}
@@ -434,6 +435,7 @@ export function BoletimPage() {
         onConfirmar={handleConfirmarDownload}
       />
       <NomeArquivoDialog
+        key={`csv-${nomeDefault("avaliacoes")}`}
         open={exportAlvo === "csv"}
         onOpenChange={(open) => !open && setExportAlvo(null)}
         nomeDefault={nomeDefault("avaliacoes")}
@@ -444,6 +446,7 @@ export function BoletimPage() {
         onConfirmar={handleConfirmarDownload}
       />
       <NomeArquivoDialog
+        key={`xlsx-${nomeDefault("avaliacoes")}`}
         open={exportAlvo === "xlsx"}
         onOpenChange={(open) => !open && setExportAlvo(null)}
         nomeDefault={nomeDefault("avaliacoes")}

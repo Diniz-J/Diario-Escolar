@@ -478,6 +478,7 @@ function DiarioTab({
       )}
 
       <NomeArquivoDialog
+        key={nomePdfDefault}
         open={pdfDialogAberto}
         onOpenChange={setPdfDialogAberto}
         nomeDefault={nomePdfDefault}

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -44,11 +44,9 @@ export function NomeArquivoDialog({
 }: NomeArquivoDialogProps) {
   const [nome, setNome] = useState(nomeDefault);
 
-  // Re-sincroniza quando o dialog reabre com um default diferente
-  // (ex.: trocou de período).
-  useEffect(() => {
-    if (open) setNome(nomeDefault);
-  }, [open, nomeDefault]);
+  // Sem efeito de re-sincronia: quem chama passa `key={nomeDefault}`, então
+  // trocar o default (ex.: outro período) remonta o dialog e o estado nasce
+  // do prop novo. Mesmo mecanismo do `key={formKey}` da `PlanosCobrancaPage`.
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

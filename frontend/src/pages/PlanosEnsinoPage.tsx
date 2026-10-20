@@ -40,6 +40,9 @@ export function PlanosEnsinoPage() {
   const disciplinasQuery = useDisciplinas();
   const [busca, setBusca] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  // Remonta o dialog a cada abertura pra que o estado nasça dos props,
+  // sem `useEffect` de reset. Idioma da `PlanosCobrancaPage`.
+  const [formKey, setFormKey] = useState(0);
 
   const turmasPorId = useMemo(() => {
     const map = new Map<number, string>();
@@ -71,6 +74,11 @@ export function PlanosEnsinoPage() {
   const totalCount = planosQuery.data?.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
+  function abrirForm() {
+    setFormKey((k) => k + 1);
+    setCreateOpen(true);
+  }
+
   return (
     <div className="p-4 md:p-8 space-y-6">
       <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -82,11 +90,12 @@ export function PlanosEnsinoPage() {
         </div>
         <div className="flex items-center gap-2">
           <ExportarMenu entidade="planos-ensino" />
-          <Button onClick={() => setCreateOpen(true)}>Novo plano</Button>
+          <Button onClick={abrirForm}>Novo plano</Button>
         </div>
       </header>
 
       <PlanoEnsinoCreateDialog
+        key={formKey}
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={(id) => navigate(`/planos-ensino/${id}`)}

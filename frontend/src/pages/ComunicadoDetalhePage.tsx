@@ -75,6 +75,9 @@ export function ComunicadoDetalhePage() {
   const turmasQuery = useTurmas();
 
   const [editOpen, setEditOpen] = useState(false);
+  // Remonta o dialog a cada abertura pra que o estado nasça dos props,
+  // sem `useEffect` de repreenchimento. Idioma da `PlanosCobrancaPage`.
+  const [formKey, setFormKey] = useState(0);
   const [enviarOpen, setEnviarOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [filtroDest, setFiltroDest] = useState<string>(FILTRO_TODOS);
@@ -165,7 +168,13 @@ export function ComunicadoDetalhePage() {
 
         {podeModificarCadastros && comunicado.editavel && (
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setEditOpen(true)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFormKey((k) => k + 1);
+                setEditOpen(true);
+              }}
+            >
               Editar
             </Button>
             <Button
@@ -181,6 +190,7 @@ export function ComunicadoDetalhePage() {
       </header>
 
       <ComunicadoFormDialog
+        key={formKey}
         open={editOpen}
         onOpenChange={setEditOpen}
         comunicado={comunicado}

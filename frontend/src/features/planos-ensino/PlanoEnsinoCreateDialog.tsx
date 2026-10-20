@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -49,13 +49,8 @@ export function PlanoEnsinoCreateDialog({
   const [disciplinaId, setDisciplinaId] = useState("");
   const [erro, setErro] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (open) {
-      setErro(null);
-      setTurmaId("");
-      setDisciplinaId("");
-    }
-  }, [open]);
+  // Sem efeito de limpeza: a página remonta o dialog (`key={formKey}`) a
+  // cada abertura, então o estado já nasce vazio.
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
