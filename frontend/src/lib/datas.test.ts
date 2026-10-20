@@ -1,3 +1,8 @@
+// `process.env.TZ` precisa dos tipos do Node, e o `tsconfig.app.json`
+// declara só `vite/client` — de propósito, pra não vazar global de Node
+// pro código de browser. A referência abaixo os traz só neste arquivo.
+/// <reference types="node" />
+
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { hojeISO } from "./datas";
