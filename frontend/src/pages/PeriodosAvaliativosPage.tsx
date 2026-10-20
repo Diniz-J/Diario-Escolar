@@ -67,8 +67,16 @@ export function PeriodosAvaliativosPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editando, setEditando] = useState<PeriodoAvaliativo | null>(null);
+  // Remonta o dialog a cada abertura pra que o estado nasça dos props,
+  // sem `useEffect` de repreenchimento. Idioma da `PlanosCobrancaPage`.
+  const [formKey, setFormKey] = useState(0);
 
   const dialogAberto = formOpen || editando !== null;
+  function abrirForm(periodo: PeriodoAvaliativo | null) {
+    setEditando(periodo);
+    setFormKey((k) => k + 1);
+    setFormOpen(true);
+  }
   function fecharDialog(open: boolean) {
     if (!open) {
       setFormOpen(false);
@@ -112,12 +120,13 @@ export function PeriodosAvaliativosPage() {
         </div>
         <div className="flex items-center gap-2">
           {podeModificarCadastros && (
-            <Button onClick={() => setFormOpen(true)}>Novo período</Button>
+            <Button onClick={() => abrirForm(null)}>Novo período</Button>
           )}
         </div>
       </header>
 
       <PeriodoAvaliativoFormDialog
+        key={formKey}
         open={dialogAberto}
         onOpenChange={fecharDialog}
         periodo={editando}
@@ -215,7 +224,7 @@ export function PeriodosAvaliativosPage() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => setEditando(p)}>
+                                <DropdownMenuItem onClick={() => abrirForm(p)}>
                                   Editar
                                 </DropdownMenuItem>
                                 {p.ativo ? (

@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -61,47 +61,34 @@ export function AvaliacaoFormDialog({
 
   const editando = avaliacao != null;
 
-  const [titulo, setTitulo] = useState("");
-  const [descricao, setDescricao] = useState("");
-  const [tipo, setTipo] = useState<AvaliacaoTipo>("prova");
-  const [data, setData] = useState("");
-  const [notaMaxima, setNotaMaxima] = useState("10");
-  const [peso, setPeso] = useState("1");
-  const [turmaId, setTurmaId] = useState("");
-  const [disciplinaId, setDisciplinaId] = useState("");
-  const [escolaId, setEscolaId] = useState("");
+  // Estado nasce dos props — a página remonta o dialog (`key={formKey}`) a
+  // cada abertura, então não há `useEffect` pra repreencher.
+  const [titulo, setTitulo] = useState(avaliacao?.titulo ?? "");
+  const [descricao, setDescricao] = useState(avaliacao?.descricao ?? "");
+  const [tipo, setTipo] = useState<AvaliacaoTipo>(avaliacao?.tipo ?? "prova");
+  const [data, setData] = useState(avaliacao?.data ?? hojeISO());
+  const [notaMaxima, setNotaMaxima] = useState(avaliacao?.nota_maxima ?? "10");
+  const [peso, setPeso] = useState(avaliacao?.peso ?? "1");
+  const [turmaId, setTurmaId] = useState(
+    avaliacao ? String(avaliacao.turma) : "",
+  );
+  const [disciplinaId, setDisciplinaId] = useState(
+    avaliacao ? String(avaliacao.disciplina) : "",
+  );
+  // `escolaId` guarda só a escolha explícita; o valor que vale é o
+  // derivado abaixo. A lista de escolas chega depois do mount, e
+  // sincronizá-la com `setState` num efeito é o que a regra
+  // `react-hooks/set-state-in-effect` acusa.
+  const [escolaId, setEscolaId] = useState(
+    avaliacao ? String(avaliacao.escola) : "",
+  );
   const [erro, setErro] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    setErro(null);
-    if (avaliacao) {
-      setTitulo(avaliacao.titulo);
-      setDescricao(avaliacao.descricao);
-      setTipo(avaliacao.tipo);
-      setData(avaliacao.data);
-      setNotaMaxima(avaliacao.nota_maxima);
-      setPeso(avaliacao.peso);
-      setTurmaId(String(avaliacao.turma));
-      setDisciplinaId(String(avaliacao.disciplina));
-      setEscolaId(String(avaliacao.escola));
-    } else {
-      setTitulo("");
-      setDescricao("");
-      setTipo("prova");
-      setData(hojeISO());
-      setNotaMaxima("10");
-      setPeso("1");
-      setTurmaId("");
-      setDisciplinaId("");
-      // Pré-seleção só faz sentido pra admin global (só ele vê o
-      // campo). Quando há 1 escola, já vai marcada.
-      const escolas = escolasQuery.data;
-      setEscolaId(
-        ehAdminGlobal && escolas?.length === 1 ? String(escolas[0].id) : "",
-      );
-    }
-  }, [open, avaliacao, escolasQuery.data, ehAdminGlobal]);
+  // Pré-seleção só faz sentido pra admin global (só ele vê o campo).
+  const escolas = escolasQuery.data;
+  const escolaEfetiva =
+    escolaId ||
+    (ehAdminGlobal && escolas?.length === 1 ? String(escolas[0].id) : "");
 
   const enviando = createMutation.isPending || updateMutation.isPending;
 
@@ -113,7 +100,7 @@ export function AvaliacaoFormDialog({
       setErro("Selecione turma e disciplina.");
       return;
     }
-    if (ehAdminGlobal && !escolaId) {
+    if (ehAdminGlobal && !escolaEfetiva) {
       setErro("Selecione uma escola.");
       return;
     }
@@ -122,8 +109,8 @@ export function AvaliacaoFormDialog({
       // `escola` no payload só pra admin global. Demais perfis: backend
       // deduz via AutoEscopoEscolaMixin a partir do JWT — não enviamos
       // mesmo que o estado local tenha algo (defesa contra bug futuro).
-      ...(ehAdminGlobal && escolaId
-        ? { escola: parseInt(escolaId, 10) }
+      ...(ehAdminGlobal && escolaEfetiva
+        ? { escola: parseInt(escolaEfetiva, 10) }
         : {}),
       turma: parseInt(turmaId, 10),
       disciplina: parseInt(disciplinaId, 10),
@@ -244,7 +231,7 @@ export function AvaliacaoFormDialog({
               <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
                 Escola
               </Label>
-              <Select value={escolaId} onValueChange={setEscolaId}>
+              <Select value={escolaEfetiva} onValueChange={setEscolaId}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecione a escola" />
                 </SelectTrigger>

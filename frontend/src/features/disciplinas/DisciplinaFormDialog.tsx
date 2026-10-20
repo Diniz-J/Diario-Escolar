@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -48,23 +48,22 @@ export function DisciplinaFormDialog({
 
   const editando = disciplina != null;
 
-  const [nome, setNome] = useState("");
-  const [escolaId, setEscolaId] = useState("");
+  // Estado nasce dos props — a página remonta o dialog (`key={formKey}`) a
+  // cada abertura, então não há `useEffect` pra repreencher.
+  const [nome, setNome] = useState(disciplina?.nome ?? "");
+  // `escolaId` guarda só a escolha explícita. O valor que vale é o
+  // derivado abaixo: a lista de escolas chega depois do mount, e
+  // sincronizá-la com `setState` num efeito é o que a regra
+  // `react-hooks/set-state-in-effect` acusa. Derivar dá o mesmo
+  // resultado sem render extra — e sem o estado poder divergir da lista.
+  const [escolaId, setEscolaId] = useState(
+    disciplina ? String(disciplina.escola) : "",
+  );
   const [erro, setErro] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (open) {
-      setErro(null);
-      if (disciplina) {
-        setNome(disciplina.nome);
-        setEscolaId(String(disciplina.escola));
-      } else {
-        setNome("");
-        const escolas = escolasQuery.data;
-        setEscolaId(escolas?.length === 1 ? String(escolas[0].id) : "");
-      }
-    }
-  }, [open, disciplina, escolasQuery.data]);
+  const escolas = escolasQuery.data;
+  const escolaEfetiva =
+    escolaId || (escolas?.length === 1 ? String(escolas[0].id) : "");
 
   const enviando = createMutation.isPending || updateMutation.isPending;
 
@@ -72,7 +71,7 @@ export function DisciplinaFormDialog({
     event.preventDefault();
     setErro(null);
 
-    if (ehAdminGlobal && !escolaId) {
+    if (ehAdminGlobal && !escolaEfetiva) {
       setErro("Selecione uma escola.");
       return;
     }
@@ -82,8 +81,8 @@ export function DisciplinaFormDialog({
     // `escola` no payload SÓ pra admin global. Outros perfis: backend
     // deduz via `AutoEscopoEscolaMixin` a partir do JWT.
     const payload: DisciplinaInput = {
-      ...(ehAdminGlobal && escolaId
-        ? { escola: parseInt(escolaId, 10) }
+      ...(ehAdminGlobal && escolaEfetiva
+        ? { escola: parseInt(escolaEfetiva, 10) }
         : {}),
       nome,
     };
@@ -149,7 +148,7 @@ export function DisciplinaFormDialog({
               <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
                 Escola
               </Label>
-              <Select value={escolaId} onValueChange={setEscolaId}>
+              <Select value={escolaEfetiva} onValueChange={setEscolaId}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecione uma escola" />
                 </SelectTrigger>

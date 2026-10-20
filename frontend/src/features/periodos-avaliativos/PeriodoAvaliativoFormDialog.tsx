@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -59,34 +59,29 @@ export function PeriodoAvaliativoFormDialog({
 
   const editando = periodo != null;
 
-  const [nome, setNome] = useState("");
-  const [ordem, setOrdem] = useState("");
-  const [anoLetivo, setAnoLetivo] = useState("");
-  const [dataInicio, setDataInicio] = useState("");
-  const [dataFim, setDataFim] = useState("");
-  const [escolaId, setEscolaId] = useState("");
+  // Estado nasce dos props — a página remonta o dialog (`key={formKey}`) a
+  // cada abertura, então não há `useEffect` pra repreencher.
+  const [nome, setNome] = useState(periodo?.nome ?? "");
+  const [ordem, setOrdem] = useState(
+    periodo ? String(periodo.ordem) : "",
+  );
+  const [anoLetivo, setAnoLetivo] = useState(
+    String(periodo?.ano_letivo ?? anoLetivoDefault ?? ANO_ATUAL),
+  );
+  const [dataInicio, setDataInicio] = useState(periodo?.data_inicio ?? "");
+  const [dataFim, setDataFim] = useState(periodo?.data_fim ?? "");
+  // `escolaId` guarda só a escolha explícita; o valor que vale é o
+  // derivado abaixo. A lista de escolas chega depois do mount, e
+  // sincronizá-la com `setState` num efeito é o que a regra
+  // `react-hooks/set-state-in-effect` acusa.
+  const [escolaId, setEscolaId] = useState(
+    periodo ? String(periodo.escola) : "",
+  );
   const [erro, setErro] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    setErro(null);
-    if (periodo) {
-      setNome(periodo.nome);
-      setOrdem(String(periodo.ordem));
-      setAnoLetivo(String(periodo.ano_letivo));
-      setDataInicio(periodo.data_inicio);
-      setDataFim(periodo.data_fim);
-      setEscolaId(String(periodo.escola));
-    } else {
-      setNome("");
-      setOrdem("");
-      setAnoLetivo(String(anoLetivoDefault ?? ANO_ATUAL));
-      setDataInicio("");
-      setDataFim("");
-      const escolas = escolasQuery.data;
-      setEscolaId(escolas?.length === 1 ? String(escolas[0].id) : "");
-    }
-  }, [open, periodo, anoLetivoDefault, escolasQuery.data]);
+  const escolas = escolasQuery.data;
+  const escolaEfetiva =
+    escolaId || (escolas?.length === 1 ? String(escolas[0].id) : "");
 
   const enviando = createMutation.isPending || updateMutation.isPending;
 
@@ -94,7 +89,7 @@ export function PeriodoAvaliativoFormDialog({
     event.preventDefault();
     setErro(null);
 
-    if (ehAdminGlobal && !escolaId) {
+    if (ehAdminGlobal && !escolaEfetiva) {
       setErro("Selecione uma escola.");
       return;
     }
@@ -115,8 +110,8 @@ export function PeriodoAvaliativoFormDialog({
     }
 
     const payload: PeriodoAvaliativoInput = {
-      ...(ehAdminGlobal && escolaId
-        ? { escola: parseInt(escolaId, 10) }
+      ...(ehAdminGlobal && escolaEfetiva
+        ? { escola: parseInt(escolaEfetiva, 10) }
         : {}),
       nome,
       ordem: ordemNum,
@@ -253,7 +248,7 @@ export function PeriodoAvaliativoFormDialog({
               <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
                 Escola
               </Label>
-              <Select value={escolaId} onValueChange={setEscolaId}>
+              <Select value={escolaEfetiva} onValueChange={setEscolaId}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecione uma escola" />
                 </SelectTrigger>
