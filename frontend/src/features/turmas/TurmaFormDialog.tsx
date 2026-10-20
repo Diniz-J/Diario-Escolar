@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -56,36 +56,28 @@ export function TurmaFormDialog({
 
   const editando = turma != null;
 
-  const [nome, setNome] = useState("");
-  const [turno, setTurno] = useState<Turno | "">("");
+  // Estado nasce dos props — a página remonta o dialog (`key={formKey}`) a
+  // cada abertura, então não há `useEffect` pra repreencher.
+  const [nome, setNome] = useState(turma?.nome ?? "");
+  const [turno, setTurno] = useState<Turno | "">(turma?.turno ?? "");
   const [anoLetivo, setAnoLetivo] = useState<string>(
-    String(new Date().getFullYear()),
+    String(turma?.ano_letivo ?? new Date().getFullYear()),
   );
-  const [escolaId, setEscolaId] = useState<string>("");
-  const [ativa, setAtiva] = useState(true);
+  // `escolaId` guarda só a escolha explícita; o valor que vale é o
+  // derivado abaixo. A lista de escolas chega depois do mount, e
+  // sincronizá-la com `setState` num efeito é o que a regra
+  // `react-hooks/set-state-in-effect` acusa.
+  const [escolaId, setEscolaId] = useState<string>(
+    turma ? String(turma.escola) : "",
+  );
+  const [ativa, setAtiva] = useState(turma?.ativa ?? true);
   const [erro, setErro] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (open) {
-      setErro(null);
-      if (turma) {
-        setNome(turma.nome);
-        setTurno(turma.turno);
-        setAnoLetivo(String(turma.ano_letivo));
-        setEscolaId(String(turma.escola));
-        setAtiva(turma.ativa);
-      } else {
-        setNome("");
-        setTurno("");
-        setAnoLetivo(String(new Date().getFullYear()));
-        // Pré-seleciona a única escola disponível (usuários comuns só
-        // veem a sua via EscopoEscolaMixin do backend).
-        const escolas = escolasQuery.data;
-        setEscolaId(escolas?.length === 1 ? String(escolas[0].id) : "");
-        setAtiva(true);
-      }
-    }
-  }, [open, turma, escolasQuery.data]);
+  // Pré-seleciona a única escola disponível (usuário comum só vê a sua,
+  // via EscopoEscolaMixin do backend).
+  const escolas = escolasQuery.data;
+  const escolaEfetiva =
+    escolaId || (escolas?.length === 1 ? String(escolas[0].id) : "");
 
   const enviando = createMutation.isPending || updateMutation.isPending;
 
@@ -97,7 +89,7 @@ export function TurmaFormDialog({
       setErro("Selecione um turno.");
       return;
     }
-    if (ehAdminGlobal && !escolaId) {
+    if (ehAdminGlobal && !escolaEfetiva) {
       setErro("Selecione uma escola.");
       return;
     }
@@ -111,8 +103,8 @@ export function TurmaFormDialog({
       // `escola` SÓ pra admin global. Demais perfis: backend deduz
       // via JWT (AutoEscopoEscolaMixin). Mesmo defensivo: se outro
       // perfil tiver `escolaId` no estado por algum bug, NÃO envia.
-      ...(ehAdminGlobal && escolaId
-        ? { escola: parseInt(escolaId, 10) }
+      ...(ehAdminGlobal && escolaEfetiva
+        ? { escola: parseInt(escolaEfetiva, 10) }
         : {}),
       nome,
       turno,
@@ -224,7 +216,7 @@ export function TurmaFormDialog({
               <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
                 Escola
               </Label>
-              <Select value={escolaId} onValueChange={setEscolaId}>
+              <Select value={escolaEfetiva} onValueChange={setEscolaId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione uma escola" />
                 </SelectTrigger>

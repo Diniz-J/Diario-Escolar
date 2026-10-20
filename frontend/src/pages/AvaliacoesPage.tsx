@@ -48,6 +48,9 @@ export function AvaliacoesPage() {
   const [busca, setBusca] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editando, setEditando] = useState<Avaliacao | null>(null);
+  // Remonta o dialog a cada abertura pra que o estado nasça dos props,
+  // sem `useEffect` de repreenchimento. Idioma da `PlanosCobrancaPage`.
+  const [formKey, setFormKey] = useState(0);
 
   const filtradas = useMemo(() => {
     const lista = avaliacoesQuery.data ?? [];
@@ -62,6 +65,11 @@ export function AvaliacoesPage() {
   }, [avaliacoesQuery.data, busca]);
 
   const dialogAberto = formOpen || editando !== null;
+  function abrirForm(avaliacao: Avaliacao | null) {
+    setEditando(avaliacao);
+    setFormKey((k) => k + 1);
+    setFormOpen(true);
+  }
   function fecharDialog(open: boolean) {
     if (!open) {
       setFormOpen(false);
@@ -84,11 +92,12 @@ export function AvaliacoesPage() {
           </p>
         </div>
         {podeModificarCadastros && (
-          <Button onClick={() => setFormOpen(true)}>Nova avaliação</Button>
+          <Button onClick={() => abrirForm(null)}>Nova avaliação</Button>
         )}
       </header>
 
       <AvaliacaoFormDialog
+        key={formKey}
         open={dialogAberto}
         onOpenChange={fecharDialog}
         avaliacao={editando}
@@ -197,7 +206,7 @@ export function AvaliacoesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setEditando(a)}>
+                          <DropdownMenuItem onClick={() => abrirForm(a)}>
                             Editar
                           </DropdownMenuItem>
                           <DropdownMenuItem

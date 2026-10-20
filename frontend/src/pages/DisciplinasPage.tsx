@@ -37,6 +37,9 @@ export function DisciplinasPage() {
   const [busca, setBusca] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editando, setEditando] = useState<Disciplina | null>(null);
+  // Remonta o dialog a cada abertura pra que o estado nasça dos props,
+  // sem `useEffect` de repreenchimento. Idioma da `PlanosCobrancaPage`.
+  const [formKey, setFormKey] = useState(0);
   const [excluindo, setExcluindo] = useState<Disciplina | null>(null);
 
   const disciplinasFiltradas = useMemo(() => {
@@ -50,6 +53,11 @@ export function DisciplinasPage() {
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const dialogAberto = formOpen || editando !== null;
+  function abrirForm(disciplina: Disciplina | null) {
+    setEditando(disciplina);
+    setFormKey((k) => k + 1);
+    setFormOpen(true);
+  }
   function fecharDialog(open: boolean) {
     if (!open) {
       setFormOpen(false);
@@ -69,12 +77,13 @@ export function DisciplinasPage() {
         <div className="flex items-center gap-2">
           <ExportarMenu entidade="disciplinas" />
           {podeModificarCadastros && (
-            <Button onClick={() => setFormOpen(true)}>Nova disciplina</Button>
+            <Button onClick={() => abrirForm(null)}>Nova disciplina</Button>
           )}
         </div>
       </header>
 
       <DisciplinaFormDialog
+        key={formKey}
         open={dialogAberto}
         onOpenChange={fecharDialog}
         disciplina={editando}
@@ -144,7 +153,7 @@ export function DisciplinasPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setEditando(d)}>
+                          <DropdownMenuItem onClick={() => abrirForm(d)}>
                             Editar
                           </DropdownMenuItem>
                           <DropdownMenuItem

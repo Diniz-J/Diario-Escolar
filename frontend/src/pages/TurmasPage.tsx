@@ -43,6 +43,9 @@ export function TurmasPage() {
   const [busca, setBusca] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editando, setEditando] = useState<Turma | null>(null);
+  // Remonta o dialog a cada abertura pra que o estado nasça dos props,
+  // sem `useEffect` de repreenchimento. Idioma da `PlanosCobrancaPage`.
+  const [formKey, setFormKey] = useState(0);
   const [excluindo, setExcluindo] = useState<Turma | null>(null);
 
   const alunosPorTurma = useMemo(() => {
@@ -68,6 +71,11 @@ export function TurmasPage() {
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const dialogAberto = formOpen || editando !== null;
+  function abrirForm(turma: Turma | null) {
+    setEditando(turma);
+    setFormKey((k) => k + 1);
+    setFormOpen(true);
+  }
   function fecharDialog(open: boolean) {
     if (!open) {
       setFormOpen(false);
@@ -87,12 +95,13 @@ export function TurmasPage() {
         <div className="flex items-center gap-2">
           <ExportarMenu entidade="turmas" />
           {podeModificarCadastros && (
-            <Button onClick={() => setFormOpen(true)}>Nova turma</Button>
+            <Button onClick={() => abrirForm(null)}>Nova turma</Button>
           )}
         </div>
       </header>
 
       <TurmaFormDialog
+        key={formKey}
         open={dialogAberto}
         onOpenChange={fecharDialog}
         turma={editando}
@@ -205,7 +214,7 @@ export function TurmasPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setEditando(turma)}>
+                          <DropdownMenuItem onClick={() => abrirForm(turma)}>
                             Editar
                           </DropdownMenuItem>
                           <DropdownMenuItem
