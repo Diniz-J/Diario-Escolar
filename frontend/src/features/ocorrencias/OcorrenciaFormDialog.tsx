@@ -24,6 +24,7 @@ import { useAlunos } from "@/features/alunos/hooks";
 import { usePermissoes } from "@/features/auth/usePermissoes";
 import { useProfessores } from "@/features/professores/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
+import { hojeISO } from "@/lib/datas";
 import type { Ocorrencia, OcorrenciaInput, OcorrenciaStatus } from "@/types/api";
 
 import { STATUS_OPTIONS } from "./constants";
@@ -57,7 +58,7 @@ export function OcorrenciaFormDialog({
   const updateMutation = useUpdateOcorrencia();
 
   const editando = ocorrencia != null;
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeISO();
 
   const [turmaId, setTurmaId] = useState<string>("");
   const [alunoId, setAlunoId] = useState<string>("");

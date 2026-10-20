@@ -241,6 +241,7 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 - **`features/auth/`** — `AuthProvider`, `useAuth`, `usePermissoes` (regra de UI por perfil; `podeModificarCadastros` = admin/diretor), tokenStorage em localStorage, decode JWT. `user.escola_id` é o sinal usado pelos FormDialogs pra decidir se renderiza o select de escola.
 - **`lib/api.ts`** — axios único. Request interceptor injeta Bearer. Response interceptor: 401 → refresh → refaz request (promise compartilhada contra thundering herd).
 - **`lib/queryClient.ts`** — staleTime 30s, retry off pra 401/403.
+- **`lib/datas.ts`** — `hojeISO()`, o "hoje" dos inputs de data. Existe porque `new Date().toISOString().slice(0, 10)` converte pra UTC e, das 21h em diante num fuso negativo, devolve **amanhã** — e ocorrência e chamada recusam data futura no backend, então o turno noturno recebia formulário que o servidor rejeitava (o `max` do input vinha errado junto, então o browser nem barrava). Monta campo a campo pelos getters locais. Tem teste com fuso e relógio fixos (`datas.test.ts`) que reprova a implementação antiga.
 - **`lib/download.ts`** — `baixarArquivo()`: download autenticado via Blob (`window.location` perderia o Bearer). Usado por boletim, diário e relatórios; antes era copy-paste em dois `hooks.ts`. Desembrulha o corpo de erro, que com `responseType: "blob"` chega como Blob — sem isso a mensagem que o backend escreve (recorte grande demais pro PDF, por exemplo) nunca chega no toast. Equivalente no backend: `apps/common/pdf.py` (`render_pdf`, `caminho_logo`, `slug_arquivo`), que as três views de PDF compartilham.
 - **`components/AppLayout.tsx`** — shell: sidebar fixa olive-dark em ≥768px, drawer (`Sheet`) com hamburguer em <768px. Logo "Diário Diniz" em Fraunces no topo + perfil em mono uppercase + nav com barra ferrugem no ativo + rodapé com filete ferrugem + logout + versão.
 - **`components/ui/`** — shadcn (editável). `Sheet` e `Switch` foram adicionados manualmente (CLI travava em prompt).
@@ -319,7 +320,8 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 
 ### Validação antes de PR
 - Backend: `python manage.py check && python manage.py test`.
-- Frontend: `npm --prefix frontend run build`.
+- Frontend: `npm --prefix frontend test && npm --prefix frontend run build`.
+- O CI roda os dois no job de frontend. O `npm run lint` **não** é gate ainda: tem 29 erros herdados (24 deles o mesmo `set-state-in-effect` nos FormDialogs), então entrar no CI hoje deixaria tudo vermelho — limpar e plugar é frente própria.
 
 ### Código
 - Comentários **em português**. **Nunca emojis** em código ou respostas.

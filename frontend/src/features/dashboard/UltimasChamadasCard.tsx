@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRegistros } from "@/features/presenca/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
+import { hojeISO } from "@/lib/datas";
 import { cn } from "@/lib/utils";
 
 interface UltimasChamadasCardProps {
@@ -18,11 +19,9 @@ interface LinhaUltimaChamada {
   diasAtras: number | null;
 }
 
-const HOJE_ISO = () => new Date().toISOString().slice(0, 10);
-
 function diasDesde(isoData: string): number {
   // Comparação só de data (sem hora) — evita off-by-one por fuso.
-  const hoje = new Date(HOJE_ISO() + "T00:00:00");
+  const hoje = new Date(hojeISO() + "T00:00:00");
   const passado = new Date(isoData + "T00:00:00");
   const diffMs = hoje.getTime() - passado.getTime();
   return Math.floor(diffMs / (1000 * 60 * 60 * 24));
