@@ -39,6 +39,7 @@ import {
   useComunicadoDestinatarios,
 } from "@/features/comunicados/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
+import { formatarDataHora } from "@/lib/datas";
 import type { ComunicadoDestinatarioStatus } from "@/types/api";
 
 const FILTRO_TODOS = "__all__";
@@ -53,17 +54,6 @@ const DEST_STATUS_OPTIONS: {
   { value: "enviando", label: "Não confirmados" },
   { value: "pendente", label: "Pendentes" },
 ];
-
-function formatarDataHora(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 export function ComunicadoDetalhePage() {
   const params = useParams<{ id: string }>();

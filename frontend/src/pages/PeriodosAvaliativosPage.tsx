@@ -24,6 +24,7 @@ import {
   usePeriodosAvaliativos,
   useReactivatePeriodoAvaliativo,
 } from "@/features/periodos-avaliativos/hooks";
+import { formatarDataPura } from "@/lib/datas";
 import type { PeriodoAvaliativo, PeriodoEstado } from "@/types/api";
 
 // Rótulo PT-BR pra cada estado. Hoje todos os períodos voltam como
@@ -42,11 +43,6 @@ const CLASSE_ESTADO: Record<PeriodoEstado, string> = {
   em_uso: "bg-[#FCE7BC] text-[#854D0E]",
   fechado: "bg-[#D7DCC1] text-[#3A4524]",
 };
-
-function formatarDataBR(iso: string): string {
-  const [ano, mes, dia] = iso.split("-");
-  return `${dia}/${mes}/${ano}`;
-}
 
 // Tela de configuração da régua de avaliação da escola. Acesso restrito
 // a admin/diretor/secretaria (gating via `podeModificarCadastros`).
@@ -203,10 +199,10 @@ export function PeriodosAvaliativosPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-sepia tabular-nums">
-                          {formatarDataBR(p.data_inicio)}
+                          {formatarDataPura(p.data_inicio)}
                         </TableCell>
                         <TableCell className="text-sepia tabular-nums">
-                          {formatarDataBR(p.data_fim)}
+                          {formatarDataPura(p.data_fim)}
                         </TableCell>
                         <TableCell>
                           <span

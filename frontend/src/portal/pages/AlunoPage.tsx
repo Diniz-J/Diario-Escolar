@@ -9,6 +9,7 @@ import {
 } from "@/features/portal/hooks";
 import type { PortalMaterial } from "@/features/portal/types";
 
+import { formatarDataPura, formatarDiaDaDataHora } from "@/lib/datas";
 import { BoletimFilho } from "../components/BoletimFilho";
 
 type Aba = "boletim" | "ocorrencias" | "mural";
@@ -137,7 +138,7 @@ function Ocorrencias({ alunoId }: { alunoId: number }) {
         >
           <div className="flex items-baseline justify-between gap-3">
             <span className="text-sm text-muted-foreground">
-              {formatarData(o.data_ocorrencia)}
+              {formatarDataPura(o.data_ocorrencia)}
             </span>
             <span className="text-xs text-sepia shrink-0">
               {o.status_display}
@@ -204,7 +205,7 @@ function Mural({ alunoId, ativo }: { alunoId: number; ativo: boolean }) {
           <LinkMaterial material={m} />
           <p className="text-xs text-muted-foreground">
             {m.professor ? `${m.professor} · ` : ""}
-            {formatarData(m.publicado_em)}
+            {formatarDiaDaDataHora(m.publicado_em)}
           </p>
         </li>
       ))}
@@ -233,8 +234,4 @@ function LinkMaterial({ material }: { material: PortalMaterial }) {
       Abrir material
     </a>
   );
-}
-
-function formatarData(iso: string): string {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString("pt-BR");
 }

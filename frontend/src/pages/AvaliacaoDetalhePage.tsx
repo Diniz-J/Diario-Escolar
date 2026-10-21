@@ -18,6 +18,7 @@ import {
   useLancarNotas,
   useNotasDaAvaliacao,
 } from "@/features/avaliacoes/hooks";
+import { formatarDataPura } from "@/lib/datas";
 import { cn } from "@/lib/utils";
 import type { LancarNotaItem, NotaAvaliacao } from "@/types/api";
 
@@ -26,11 +27,6 @@ import type { LancarNotaItem, NotaAvaliacao } from "@/types/api";
 interface LinhaEstado {
   nota: string; // "" significa "não lançada"
   observacao: string;
-}
-
-function formatarDataBR(iso: string): string {
-  const [ano, mes, dia] = iso.split("-");
-  return `${dia}/${mes}/${ano}`;
 }
 
 function formatarTimestamp(iso: string | null): string {
@@ -172,7 +168,7 @@ export function AvaliacaoDetalhePage() {
               <span className="text-[10px] uppercase tracking-wider text-sepia/60 mr-1">
                 Data
               </span>
-              {formatarDataBR(avaliacao.data)}
+              {formatarDataPura(avaliacao.data)}
             </span>
             <span>
               <span className="text-[10px] uppercase tracking-wider text-sepia/60 mr-1">

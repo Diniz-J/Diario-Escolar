@@ -29,21 +29,11 @@ import {
   SITUACAO_OPTIONS,
 } from "@/features/responsaveis/constants";
 import { useResponsaveisPaginated } from "@/features/responsaveis/hooks";
+import { formatarDataHora } from "@/lib/datas";
 import type { ResponsavelSituacao, ResponsavelStaff } from "@/types/api";
 
 const FILTRO_TODOS = "__all__";
 const PAGE_SIZE = 20;
-
-function formatarDataHora(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 export function ResponsaveisPage() {
   const [filtroSituacao, setFiltroSituacao] = useState<string>(FILTRO_TODOS);

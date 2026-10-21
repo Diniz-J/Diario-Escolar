@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRegistros } from "@/features/presenca/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
-import { hojeISO } from "@/lib/datas";
+import { formatarDataPura, hojeISO } from "@/lib/datas";
 import { cn } from "@/lib/utils";
 
 interface UltimasChamadasCardProps {
@@ -25,11 +25,6 @@ function diasDesde(isoData: string): number {
   const passado = new Date(isoData + "T00:00:00");
   const diffMs = hoje.getTime() - passado.getTime();
   return Math.floor(diffMs / (1000 * 60 * 60 * 24));
-}
-
-function formatarDataBR(iso: string): string {
-  const [ano, mes, dia] = iso.split("-");
-  return `${dia}/${mes}/${ano}`;
 }
 
 // Mostra a data da chamada mais recente por turma. Quando nenhuma turma
@@ -120,7 +115,7 @@ export function UltimasChamadasCard({
                   )}
                 >
                   {l.ultimaData
-                    ? `${formatarDataBR(l.ultimaData)} · ${l.diasAtras}d`
+                    ? `${formatarDataPura(l.ultimaData)} · ${l.diasAtras}d`
                     : "sem chamada"}
                 </span>
               </li>

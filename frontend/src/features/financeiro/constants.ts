@@ -63,14 +63,6 @@ export function formatarBRL(valor: string): string {
   });
 }
 
-// `new Date("2026-03-10")` é interpretado como UTC e, em fuso negativo
-// (Brasil), volta como dia 9. Estes campos são DateField puro, sem hora,
-// então o split é mais correto que qualquer coisa com `Date`.
-export function formatarData(iso: string): string {
-  const [ano, mes, dia] = iso.split("-");
-  return `${dia}/${mes}/${ano}`;
-}
-
 export function formatarCompetencia(iso: string): string {
   const [ano, mes] = iso.split("-");
   return `${mes}/${ano}`;
