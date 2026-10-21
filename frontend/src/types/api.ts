@@ -684,6 +684,9 @@ export type VinculoResponsavelInput = {
 export type ResponsavelCriacaoInput = {
   nome: string;
   email: string;
+  // Só dígitos. Opcional: o portal nunca precisou de CPF, e só quem vai
+  // emitir cobrança preenche (o gateway exige documento do pagador).
+  cpf?: string;
   escola?: number;
 };
 
@@ -695,6 +698,7 @@ export interface ResponsavelCriado {
   id: number;
   nome: string;
   email: string;
+  cpf: string;
   escola: number;
 }
 
@@ -702,6 +706,8 @@ export interface ResponsavelStaff {
   id: number;
   nome: string;
   email: string;
+  // Só dígitos, vazio quando não cadastrado.
+  cpf: string;
   ativo: boolean;
   situacao: ResponsavelSituacao;
   situacao_display: string;
