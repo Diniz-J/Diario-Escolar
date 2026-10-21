@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,13 +48,13 @@ export function ImportPage() {
   const escolasQuery = useEscolasElegiveisImportacao();
   const escolas = escolasQuery.data ?? [];
 
-  // Auto-seleciona quando há só uma escola elegível — operação típica
-  // do dia a dia quando só uma escola contratou o pacote.
-  useEffect(() => {
-    if (!escolaId && escolas.length === 1) {
-      setEscolaId(String(escolas[0].id));
-    }
-  }, [escolaId, escolas]);
+  // Auto-seleciona quando há só uma escola elegível — operação típica do
+  // dia a dia quando só uma escola contratou o pacote. Derivado em vez de
+  // sincronizado por efeito: a lista chega depois do mount, e `setState`
+  // dentro de efeito é o que a regra `react-hooks/set-state-in-effect`
+  // acusa. `escolaId` guarda só a escolha explícita.
+  const escolaEfetiva =
+    escolaId || (escolas.length === 1 ? String(escolas[0].id) : "");
 
   const importar = useImportar();
   const baixarTemplate = useBaixarTemplate();
@@ -71,7 +71,7 @@ export function ImportPage() {
 
   async function executar(confirmar: boolean) {
     setErro(null);
-    if (!escolaId) {
+    if (!escolaEfetiva) {
       setErro("Selecione a escola alvo antes de continuar.");
       return;
     }
@@ -84,7 +84,7 @@ export function ImportPage() {
         entidade,
         arquivo,
         confirmar,
-        escolaId: Number(escolaId),
+        escolaId: Number(escolaEfetiva),
         extras: mostrarExtras
           ? { turno_padrao: turnoPadrao, ano_letivo_padrao: anoPadrao }
           : undefined,
@@ -161,7 +161,7 @@ export function ImportPage() {
             Escola alvo
           </Label>
           <Select
-            value={escolaId}
+            value={escolaEfetiva}
             onValueChange={setEscolaId}
             disabled={escolas.length === 0}
           >
@@ -279,10 +279,10 @@ export function ImportPage() {
                 baixarTemplate.mutate({
                   entidade,
                   formato: "csv",
-                  escolaId: Number(escolaId),
+                  escolaId: Number(escolaEfetiva),
                 })
               }
-              disabled={!escolaId || baixarTemplate.isPending}
+              disabled={!escolaEfetiva || baixarTemplate.isPending}
             >
               Baixar modelo CSV
             </Button>
@@ -294,10 +294,10 @@ export function ImportPage() {
                 exportar.mutate({
                   entidade,
                   formato: "csv",
-                  escolaId: Number(escolaId),
+                  escolaId: Number(escolaEfetiva),
                 })
               }
-              disabled={!escolaId || exportar.isPending}
+              disabled={!escolaEfetiva || exportar.isPending}
             >
               Exportar atual
             </Button>
@@ -306,7 +306,7 @@ export function ImportPage() {
             <Button
               type="submit"
               variant="outline"
-              disabled={!escolaId || importar.isPending}
+              disabled={!escolaEfetiva || importar.isPending}
             >
               {importar.isPending && !resultado?.persistido
                 ? "Analisando..."
@@ -314,7 +314,7 @@ export function ImportPage() {
             </Button>
             <Button
               type="button"
-              disabled={!escolaId || !semErros || importar.isPending}
+              disabled={!escolaEfetiva || !semErros || importar.isPending}
               onClick={() => void executar(true)}
             >
               {importar.isPending && resultado != null

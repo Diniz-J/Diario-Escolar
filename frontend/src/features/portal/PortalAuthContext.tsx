@@ -41,15 +41,20 @@ export function PortalAuthProvider({
 }: {
   children: React.ReactNode;
 }) {
+  // Sem token não há sessão pra validar, e esse caso é resolvido no
+  // primeiro render em vez de dentro do efeito: o `carregar` abaixo faz
+  // `setState` ANTES de qualquer await quando falta token, e `setState`
+  // sincrono dentro de efeito é o que a regra
+  // `react-hooks/set-state-in-effect` acusa. Lido uma vez, não a cada
+  // render.
+  const [temToken] = useState(() => getPortalAccessToken() != null);
   const [responsavel, setResponsavel] = useState<Responsavel | null>(null);
-  const [carregando, setCarregando] = useState(true);
+  const [carregando, setCarregando] = useState(temToken);
 
+  // Só é chamado quando há token (ver o efeito abaixo), então não repete a
+  // checagem: sem ela, o primeiro statement é o `await`, e nenhum
+  // `setState` acontece de forma sincrona dentro do efeito.
   const carregar = useCallback(async () => {
-    if (!getPortalAccessToken()) {
-      setResponsavel(null);
-      setCarregando(false);
-      return;
-    }
     try {
       const { data } = await portalApi.get<Responsavel>("/me/");
       setResponsavel(data);
@@ -63,8 +68,12 @@ export function PortalAuthProvider({
   }, []);
 
   useEffect(() => {
+    // Sem token o estado já nasceu resolvido; `carregar` só roda quando
+    // há sessão pra validar, e aí todo `setState` dele vem depois do
+    // `await` da chamada a `/me/`.
+    if (!temToken) return;
     void carregar();
-  }, [carregar]);
+  }, [carregar, temToken]);
 
   const entrar = useCallback(
     async (email: string, password: string) => {
