@@ -43,6 +43,9 @@ export function OcorrenciasPage() {
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  // Remonta o dialog a cada abertura pra que o estado nasça dos props,
+  // sem `useEffect` de repreenchimento. Idioma da `PlanosCobrancaPage`.
+  const [formKey, setFormKey] = useState(0);
   const [exportOpen, setExportOpen] = useState(false);
   const [page, setPage] = useState(1);
   // Reseta pra página 1 sempre que o filtro server-side muda — senão
@@ -146,11 +149,22 @@ export function OcorrenciasPage() {
           <Button variant="outline" onClick={() => setExportOpen(true)}>
             Exportar
           </Button>
-          <Button onClick={() => setFormOpen(true)}>Nova ocorrência</Button>
+          <Button
+            onClick={() => {
+              setFormKey((k) => k + 1);
+              setFormOpen(true);
+            }}
+          >
+            Nova ocorrência
+          </Button>
         </div>
       </header>
 
-      <OcorrenciaFormDialog open={formOpen} onOpenChange={setFormOpen} />
+      <OcorrenciaFormDialog
+        key={formKey}
+        open={formOpen}
+        onOpenChange={setFormOpen}
+      />
       <ExportarOcorrenciasDialog
         open={exportOpen}
         onOpenChange={setExportOpen}
