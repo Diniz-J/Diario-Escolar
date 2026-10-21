@@ -27,9 +27,9 @@ import {
   STATUS_FATURA,
   formatarBRL,
   formatarCompetencia,
-  formatarData,
 } from "@/features/financeiro/constants";
 import { useFichaFinanceira } from "@/features/financeiro/hooks";
+import { formatarDataPura } from "@/lib/datas";
 import type { Fatura, PlanoCobranca } from "@/types/api";
 
 const EYEBROW = "text-[11px] uppercase tracking-[0.18em] text-sepia";
@@ -194,8 +194,8 @@ export function FichaFinanceiraPage() {
                   <p className="text-xs text-sepia">
                     {descricaoDesconto(plano)} ·{" "}
                     {plano.vigencia_fim
-                      ? `${formatarData(plano.vigencia_inicio)} a ${formatarData(plano.vigencia_fim)}`
-                      : `desde ${formatarData(plano.vigencia_inicio)}`}
+                      ? `${formatarDataPura(plano.vigencia_inicio)} a ${formatarDataPura(plano.vigencia_fim)}`
+                      : `desde ${formatarDataPura(plano.vigencia_inicio)}`}
                     {!plano.ativo && " · encerrado"}
                   </p>
                 </div>
@@ -251,7 +251,7 @@ export function FichaFinanceiraPage() {
                         {formatarCompetencia(fatura.competencia)}
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
-                        {formatarData(fatura.vencimento)}
+                        {formatarDataPura(fatura.vencimento)}
                       </TableCell>
                       <TableCell className="text-right">
                         {formatarBRL(fatura.valor)}
@@ -321,7 +321,7 @@ export function FichaFinanceiraPage() {
                 className="flex flex-wrap items-baseline justify-between gap-2 py-2.5 text-sm"
               >
                 <span>
-                  {formatarData(pagamento.data)} ·{" "}
+                  {formatarDataPura(pagamento.data)} ·{" "}
                   {METODO_LABEL[pagamento.metodo]}
                   <span className="text-sepia">
                     {" "}

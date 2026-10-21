@@ -24,6 +24,7 @@ import {
   useAvaliacoes,
   useDeactivateAvaliacao,
 } from "@/features/avaliacoes/hooks";
+import { formatarDataPura } from "@/lib/datas";
 import type { Avaliacao, AvaliacaoTipo } from "@/types/api";
 
 // Paleta dos tipos alinhada com a identidade do projeto — pastels
@@ -34,11 +35,6 @@ const TIPO_STYLE: Record<AvaliacaoTipo, string> = {
   atividade: "bg-[#C4D4D2] text-[#1F3A37]", // petrol claro
   participacao: "bg-[#D7DCC1] text-[#3A4524]", // olive
 };
-
-function formatarDataBR(iso: string): string {
-  const [ano, mes, dia] = iso.split("-");
-  return `${dia}/${mes}/${ano}`;
-}
 
 export function AvaliacoesPage() {
   const avaliacoesQuery = useAvaliacoes({ ativo: true });
@@ -192,7 +188,7 @@ export function AvaliacoesPage() {
                     {a.disciplina_nome}
                   </TableCell>
                   <TableCell className="text-sepia tabular-nums">
-                    {formatarDataBR(a.data)}
+                    {formatarDataPura(a.data)}
                   </TableCell>
                   <TableCell className="text-right text-sepia tabular-nums font-mono text-sm">
                     {a.notas_lancadas}/{a.total_alunos}

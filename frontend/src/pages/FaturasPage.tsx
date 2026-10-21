@@ -36,10 +36,10 @@ import {
   competenciaDoMes,
   formatarBRL,
   formatarCompetencia,
-  formatarData,
 } from "@/features/financeiro/constants";
 import { useFaturasPaginated } from "@/features/financeiro/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
+import { formatarDataPura } from "@/lib/datas";
 import type { Fatura, FaturaStatus } from "@/types/api";
 
 const FILTRO_TODOS = "__all__";
@@ -268,7 +268,7 @@ export function FaturasPage() {
                         {formatarCompetencia(fatura.competencia)}
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
-                        {formatarData(fatura.vencimento)}
+                        {formatarDataPura(fatura.vencimento)}
                       </TableCell>
                       <TableCell className="text-right">
                         {formatarBRL(fatura.valor)}

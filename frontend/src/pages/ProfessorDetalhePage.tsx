@@ -45,6 +45,7 @@ import { useOcorrencias } from "@/features/ocorrencias/hooks";
 import { useProfessor } from "@/features/professores/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
 import { useEnviarResetSenha } from "@/features/usuarios/hooks";
+import { formatarDataHora, formatarDataPura } from "@/lib/datas";
 import type { Lecionamento, RegistroAula, RegistroAulaStatus } from "@/types/api";
 
 // Ficha 360º do professor (visão da direção). Tabs:
@@ -79,22 +80,6 @@ const MESES = [
   "Novembro",
   "Dezembro",
 ];
-
-// "2026-06-16" -> "16/06/2026"
-function formatarData(iso: string): string {
-  return new Date(iso + "T00:00:00").toLocaleDateString("pt-BR");
-}
-
-// ISO datetime -> "16/06/2026 14:30"
-function formatarDataHora(iso: string): string {
-  return new Date(iso).toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 // Agrupa as aulas por mês (YYYY-MM) preservando a ordem cronológica que o
 // backend já entrega (-data). Cada grupo vira uma seção com cabeçalho.
@@ -512,7 +497,7 @@ function AulaItem({
     <li className="rounded-md border border-border bg-paper px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-sm font-medium text-tinta tabular-nums">
-          {formatarData(aula.data)}
+          {formatarDataPura(aula.data)}
         </span>
         <span className="text-sm text-sepia">
           {turmasPorId.get(aula.turma) ?? `Turma #${aula.turma}`}
@@ -704,7 +689,7 @@ function OcorrenciasTab({
               onClick={() => navigate(`/ocorrencias/${o.id}`)}
             >
               <TableCell className="tabular-nums whitespace-nowrap">
-                {formatarData(o.data_ocorrencia)}
+                {formatarDataPura(o.data_ocorrencia)}
               </TableCell>
               <TableCell className="hidden md:table-cell">
                 {turmasPorId.get(o.turma) ?? `#${o.turma}`}

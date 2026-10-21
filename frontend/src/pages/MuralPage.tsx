@@ -37,14 +37,11 @@ import {
 } from "@/features/materiais/hooks";
 import { useProfessores } from "@/features/professores/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
+import { formatarDiaDaDataHora } from "@/lib/datas";
 import type { Material } from "@/types/api";
 
 const FILTRO_TODOS = "__all__";
 const PAGE_SIZE = 20;
-
-function formatarData(iso: string): string {
-  return new Date(iso).toLocaleDateString("pt-BR");
-}
 
 // O backend só aceita http/https (API e admin), mas material inserido por
 // shell ou importação sem `full_clean` passaria. Um `javascript:` aqui
@@ -290,7 +287,7 @@ export function MuralPage() {
                       </TableCell>
                     )}
                     <TableCell className="hidden sm:table-cell text-muted-foreground text-sm">
-                      {formatarData(m.publicado_em)}
+                      {formatarDiaDaDataHora(m.publicado_em)}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>

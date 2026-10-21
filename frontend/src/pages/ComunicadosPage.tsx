@@ -30,22 +30,11 @@ import {
   STATUS_OPTIONS,
 } from "@/features/comunicados/constants";
 import { useComunicadosPaginated } from "@/features/comunicados/hooks";
+import { formatarDataHora } from "@/lib/datas";
 import type { Comunicado, ComunicadoStatus } from "@/types/api";
 
 const FILTRO_TODOS = "__all__";
 const PAGE_SIZE = 20;
-
-function formatarDataHora(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 export function ComunicadosPage() {
   const navigate = useNavigate();

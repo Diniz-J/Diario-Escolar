@@ -22,12 +22,13 @@ import {
 } from "@/components/ui/table";
 import { FinanceiroTabs } from "@/features/financeiro/FinanceiroTabs";
 import { PlanoCobrancaFormDialog } from "@/features/financeiro/PlanoCobrancaFormDialog";
-import { formatarBRL, formatarData } from "@/features/financeiro/constants";
+import { formatarBRL } from "@/features/financeiro/constants";
 import {
   useDesativarPlanoCobranca,
   usePlanosCobrancaPaginated,
   useReativarPlanoCobranca,
 } from "@/features/financeiro/hooks";
+import { formatarDataPura } from "@/lib/datas";
 import type { PlanoCobranca } from "@/types/api";
 
 const PAGE_SIZE = 20;
@@ -43,9 +44,9 @@ function descricaoDesconto(plano: PlanoCobranca): string {
 }
 
 function descricaoVigencia(plano: PlanoCobranca): string {
-  const inicio = formatarData(plano.vigencia_inicio);
+  const inicio = formatarDataPura(plano.vigencia_inicio);
   return plano.vigencia_fim
-    ? `${inicio} a ${formatarData(plano.vigencia_fim)}`
+    ? `${inicio} a ${formatarDataPura(plano.vigencia_fim)}`
     : `desde ${inicio}`;
 }
 

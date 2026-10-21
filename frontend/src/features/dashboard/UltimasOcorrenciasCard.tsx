@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAlunos } from "@/features/alunos/hooks";
 import { useOcorrencias } from "@/features/ocorrencias/hooks";
+import { formatarDataPura } from "@/lib/datas";
 import type { OcorrenciaStatus } from "@/types/api";
 
 interface UltimasOcorrenciasCardProps {
@@ -24,11 +25,6 @@ const STATUS_STYLE: Record<OcorrenciaStatus, string> = {
   // muted — paleta neutra da própria marca.
   arquivada: "bg-muted text-sepia",
 };
-
-function formatarDataBR(iso: string): string {
-  const [ano, mes, dia] = iso.split("-");
-  return `${dia}/${mes}/${ano}`;
-}
 
 // Lista as 5 ocorrências mais recentes da escola (ou da turma filtrada).
 // O backend já devolve ordenado por data desc, então é só fatiar.
@@ -81,7 +77,7 @@ export function UltimasOcorrenciasCard({
                 title={alunosPorId.get(o.aluno) ?? `Aluno #${o.aluno}`}
               >
                 <span className="text-sepia tabular-nums mr-2 font-mono text-xs">
-                  {formatarDataBR(o.data_ocorrencia)}
+                  {formatarDataPura(o.data_ocorrencia)}
                 </span>
                 <span>
                   {alunosPorId.get(o.aluno) ?? `Aluno #${o.aluno}`}
