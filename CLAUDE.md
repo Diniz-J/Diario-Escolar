@@ -119,7 +119,7 @@ porque o `clean()` não tem o que reclamar. **Fatia 6 entregue**: frontend do
 portal sob `/portal`, em chunk próprio (`React.lazy` no `App.tsx` separa a
 árvore do staff da do portal), sessão independente em
 `features/portal/` (storage `portal_*`, `portalApi` que guarda o refresh
-rotacionado, `PortalAuthContext` lendo `/portal/me/`) e seis telas
+rotacionado, `PortalAuthContext` lendo `/portal/me/` por **query do TanStack**, não por `useEffect`: a identidade vira cache com `enabled` ligado à presença de token, `staleTime` infinito e `retry` off, e `entrar` semeia o cache com o `/me/` que acabou de responder) e seis telas
 mobile-first em `src/portal/`. Backend entregue até a fatia 5:
 autenticação isolada (`/api/v1/portal/auth/`, tokens com `tipo=responsavel`
 e `responsavel_id` — o staff recusa), convite e senha (`ConviteResponsavel`,
@@ -321,7 +321,7 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 ### Validação antes de PR
 - Backend: `python manage.py check && python manage.py test`.
 - Frontend: `npm --prefix frontend test && npm --prefix frontend run build`.
-- O CI roda os dois no job de frontend. O `npm run lint` **não** é gate ainda: caiu de 30 pra **7 problemas** (out/2026). **Nenhum FormDialog e nenhuma página sobram** — o padrão de casa é estado nascendo dos props mais `key={formKey}`, e quando o valor depende de query (escola/turma única, lecionamentos, conteúdo de aula, grade de notas, form do plano) ele é **derivado**: o estado guarda só o que o usuário tocou. Sobram: 4 `react-refresh` (forma padrão do shadcn e dos contexts — configuração, não código), 1 `no-control-regex` no `NomeArquivoDialog` (o código **está correto**, sanitiza nome de arquivo; cabe disable explicado) e 2 `set-state-in-effect` que pedem decisão de desenho, não substituição: `PortalAuthContext` (busca o `/me/` no mount — a regra recusa isso por desenho, então é migrar pro TanStack Query ou disable documentado) e `NotasFinaisPage` (dispara uma **escrita** a partir dos três selects, com os gatilhos espalhados).
+- O CI roda os dois no job de frontend. O `npm run lint` **não** é gate ainda: caiu de 30 pra **6 problemas** (out/2026). O padrão de casa pros FormDialogs é estado nascendo dos props mais `key={formKey}`, e quando o valor depende de query (escola/turma única, lecionamentos, conteúdo de aula, grade de notas, form do plano) ele é **derivado**: o estado guarda só o que o usuário tocou. Sobram: 4 `react-refresh` (forma padrão do shadcn e dos contexts — configuração, não código), 1 `no-control-regex` no `NomeArquivoDialog` (o código **está correto**, sanitiza nome de arquivo; cabe disable explicado) e 1 `set-state-in-effect` no `NotasFinaisPage`, que é decisão de desenho: o efeito dispara uma **escrita** (POST que inicializa as linhas) a partir dos três selects, então mover pros handlers significa três gatilhos que só devem disparar com o trio completo — ou discutir se essa inicialização idempotente não deveria ser query em vez de mutation.
 
 ### Código
 - Comentários **em português**. **Nunca emojis** em código ou respostas.
