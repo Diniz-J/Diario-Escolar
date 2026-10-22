@@ -141,6 +141,12 @@ export function ImportPage() {
         </p>
       </header>
 
+      {escolasQuery.isError && (
+        <p className="text-sm px-3 py-2 rounded-md bg-paper border border-border text-destructive">
+          Não foi possível carregar as escolas elegíveis. Recarregue a página.
+        </p>
+      )}
+
       {escolasQuery.isSuccess && escolas.length === 0 && (
         <p className="text-sm px-3 py-2 rounded-md bg-paper border border-border text-sepia">
           Nenhuma escola elegível ao pacote de importação em lote. Habilite o

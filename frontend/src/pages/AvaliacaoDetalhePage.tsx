@@ -134,11 +134,17 @@ export function AvaliacaoDetalhePage() {
         </Link>
       </div>
 
-      {avaliacaoQuery.isLoading || !avaliacao ? (
+      {avaliacaoQuery.isLoading ? (
         <div className="space-y-2">
           <Skeleton className="h-8 w-1/2" />
           <Skeleton className="h-4 w-1/3" />
         </div>
+      ) : avaliacaoQuery.isError || !avaliacao ? (
+        // Sem este ramo o `!avaliacao` do loading deixava o skeleton girando
+        // pra sempre quando a requisição falhava.
+        <p className="text-sm text-destructive">
+          Não foi possível carregar a avaliação.
+        </p>
       ) : (
         <header className="space-y-3">
           <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
@@ -276,6 +282,16 @@ export function AvaliacaoDetalhePage() {
                     </TableCell>
                   </TableRow>
                 ))
+              ) : notasQuery.isError ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={4}
+                    className="text-center text-destructive py-8"
+                  >
+                    Não foi possível carregar a grade de notas. Recarregue a
+                    página antes de lançar.
+                  </TableCell>
+                </TableRow>
               ) : (notasQuery.data?.length ?? 0) === 0 ? (
                 <TableRow>
                   <TableCell

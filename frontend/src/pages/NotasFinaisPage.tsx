@@ -359,6 +359,19 @@ export function NotasFinaisPage() {
                       </TableCell>
                     </TableRow>
                   ))
+                ) : inicializarMutation.isError ? (
+                  // As linhas nascem de um POST, não de uma query: se ele
+                  // falha, `notas` fica vazia e o estado vazio acusaria a
+                  // turma de não ter aluno.
+                  <TableRow>
+                    <TableCell
+                      colSpan={4}
+                      className="text-center text-destructive py-8"
+                    >
+                      Não foi possível carregar as notas do período.
+                      Recarregue a página antes de lançar.
+                    </TableCell>
+                  </TableRow>
                 ) : notas.length === 0 ? (
                   <TableRow>
                     <TableCell
