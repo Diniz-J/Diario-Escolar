@@ -41,3 +41,9 @@ tablib[xlsx]>=3.5,<4.0
 # libcairo (mudou pro Skia), mas ainda precisa de libpango/harfbuzz no
 # sistema. Ver Dockerfile (apt install) e DEPLOY.md.
 weasyprint>=62,<64
+# Client HTTP do gateway de cobrança (Asaas). Não existe SDK Python
+# maduro deles — os que existem têm pouquíssima adoção e a maturidade do
+# ecossistema está no PHP (`FINANCEIRO.md` §6), então o client é nosso e
+# fino. httpx e não requests: dá transport injetável, que é o que permite
+# testar o adaptador inteiro sem rede.
+httpx>=0.27,<0.29
