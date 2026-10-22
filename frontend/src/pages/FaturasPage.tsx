@@ -219,6 +219,11 @@ export function FaturasPage() {
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
         </div>
+      ) : faturasQuery.isError ? (
+        <p className="text-sm text-destructive">
+          Não foi possível carregar as faturas. Recarregue a página — a lista
+          vazia aqui não significa que não há cobrança em aberto.
+        </p>
       ) : faturas.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           Nenhuma fatura neste recorte.
