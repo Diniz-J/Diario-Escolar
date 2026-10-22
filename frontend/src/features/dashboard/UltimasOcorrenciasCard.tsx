@@ -39,6 +39,8 @@ export function UltimasOcorrenciasCard({
   const alunosQuery = useAlunos();
 
   const carregando = ocorrenciasQuery.isLoading || alunosQuery.isLoading;
+  // Só a query de ocorrências define o estado de erro: se a de alunos
+  // falhar, a lista ainda sai — o nome cai no fallback "Aluno #id".
 
   const alunosPorId = useMemo(() => {
     const m = new Map<number, string>();
@@ -62,6 +64,10 @@ export function UltimasOcorrenciasCard({
           <Skeleton className="h-5 w-full" />
           <Skeleton className="h-5 w-3/4" />
         </div>
+      ) : ocorrenciasQuery.isError ? (
+        <p className="text-sm text-destructive">
+          Não foi possível carregar as ocorrências.
+        </p>
       ) : recentes.length === 0 ? (
         <p className="text-sm text-sepia">Nenhuma ocorrência registrada.</p>
       ) : (

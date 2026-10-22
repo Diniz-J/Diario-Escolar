@@ -152,6 +152,7 @@ export function DashboardPage() {
           }
           href={linkOcorrencias}
           carregando={ocorrenciasQuery.isLoading}
+          erro={ocorrenciasQuery.isError}
           tomDestaque={ocorrenciasAbertas.total > 0}
         />
 
@@ -167,6 +168,7 @@ export function DashboardPage() {
           }
           href={linkAlunos}
           carregando={alunosQuery.isLoading}
+          erro={alunosQuery.isError}
         />
 
         {podeModificarCadastros && (
@@ -180,6 +182,7 @@ export function DashboardPage() {
             }
             href="/professores"
             carregando={aulasPendentesQuery.isLoading}
+            erro={aulasPendentesQuery.isError}
             tomDestaque={aulasPendentes > 0}
           />
         )}
@@ -188,7 +191,19 @@ export function DashboardPage() {
         <UltimasOcorrenciasCard turmaFiltrada={turmaFiltro} />
       </div>
 
-      {!turmasQuery.data?.length && !turmasQuery.isLoading && (
+      {/* A falha tem que vir antes do estado vazio: sem lista de turmas,
+          "Nenhuma turma cadastrada" é indistinguível de "a API caiu", e a
+          segunda leitura manda cadastrar o que já existe. */}
+      {turmasQuery.isError ? (
+        <div className="bg-paper rounded-lg border border-border p-6">
+          <p className="font-heading text-lg text-tinta mb-1">
+            Não foi possível carregar as turmas
+          </p>
+          <p className="text-sm text-destructive">
+            O filtro por turma ficou indisponível. Recarregue a página.
+          </p>
+        </div>
+      ) : !turmasQuery.data?.length && !turmasQuery.isLoading ? (
         <div className="bg-paper rounded-lg border border-border p-6">
           <p className="font-heading text-lg text-tinta mb-1">
             Nenhuma turma cadastrada
@@ -197,7 +212,7 @@ export function DashboardPage() {
             Cadastre uma turma em "Turmas" pra começar a popular o dashboard.
           </p>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
