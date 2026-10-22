@@ -42,6 +42,9 @@ export function UltimasChamadasCard({
   );
 
   const carregando = turmasQuery.isLoading || registrosQuery.isLoading;
+  // As duas são essenciais: `linhas` volta vazia se qualquer uma faltar,
+  // então sem este ramo a falha apareceria como "Nenhuma turma ativa".
+  const erro = turmasQuery.isError || registrosQuery.isError;
 
   const linhas: LinhaUltimaChamada[] = useMemo(() => {
     if (!turmasQuery.data || !registrosQuery.data) return [];
@@ -91,6 +94,10 @@ export function UltimasChamadasCard({
           <Skeleton className="h-5 w-full" />
           <Skeleton className="h-5 w-3/4" />
         </div>
+      ) : erro ? (
+        <p className="text-sm text-destructive">
+          Não foi possível carregar as chamadas.
+        </p>
       ) : linhas.length === 0 ? (
         <p className="text-sm text-sepia">Nenhuma turma ativa.</p>
       ) : (

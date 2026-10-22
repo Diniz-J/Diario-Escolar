@@ -152,6 +152,11 @@ export function PlanosCobrancaPage() {
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
         </div>
+      ) : planosQuery.isError ? (
+        <p className="text-sm text-destructive">
+          Não foi possível carregar os planos. Recarregue a página antes de
+          cadastrar — o contrato do aluno pode já existir.
+        </p>
       ) : planos.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           {mostrarEncerrados

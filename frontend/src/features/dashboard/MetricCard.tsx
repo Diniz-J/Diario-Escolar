@@ -12,6 +12,10 @@ interface MetricCardProps {
   // Quando passado, o card vira clicável e leva pra rota indicada.
   href?: string;
   carregando?: boolean;
+  // Quando true, a query que alimenta o card falhou. Sem isso o card
+  // mostraria o zero do `?? 0` como se fosse a resposta do servidor —
+  // "0 ocorrências em aberto" com a API fora do ar.
+  erro?: boolean;
   // Quando true, marca o card com a tira ferrugem à esquerda — indica
   // que tem algo que pede atenção (pendente, atrasado, etc.). Usado
   // hoje no card de ocorrências em aberto quando há > 0.
@@ -34,6 +38,7 @@ export function MetricCard({
   sublinha,
   href,
   carregando,
+  erro,
   tomDestaque,
 }: MetricCardProps) {
   const conteudo = (
@@ -53,10 +58,16 @@ export function MetricCard({
           <Skeleton className="h-12 w-24" />
         ) : (
           <p className="font-heading text-[44px] md:text-[52px] leading-none text-tinta tabular-nums">
-            {valor}
+            {erro ? "—" : valor}
           </p>
         )}
-        {sublinha && <div className="text-xs text-sepia">{sublinha}</div>}
+        {erro ? (
+          <div className="text-xs text-destructive">
+            Não foi possível carregar.
+          </div>
+        ) : (
+          sublinha && <div className="text-xs text-sepia">{sublinha}</div>
+        )}
       </div>
     </div>
   );
