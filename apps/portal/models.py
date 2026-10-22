@@ -35,6 +35,7 @@ from django.utils import timezone
 from simple_history.models import HistoricalRecords
 
 from apps.common.models import BaseModelEscopado, TimeStampedModel
+from apps.common.validators import apenas_digitos, validar_cpf
 from apps.common.texto import normalizar_email
 from apps.escola.models import Aluno, Escola
 
@@ -61,6 +62,23 @@ class Responsavel(AbstractBaseUser, BaseModelEscopado):
     # pessoa, não da relação com cada filho — ninguém pediu granularidade
     # por filho, e ela multiplicaria a UI sem caso de uso.
     recebe_notificacao = models.BooleanField(default=True)
+    # Documento do pagador, exigido pelo gateway de cobrança pra cadastrar
+    # o cliente lá (`FINANCEIRO.md` §6). Mora aqui, e não no `Aluno` nem
+    # no `PlanoCobranca`, porque quem paga é a pessoa — o aluno não é
+    # parte do contrato e o plano pode trocar sem o pagador mudar.
+    #
+    # `blank` porque toda conta existente nasceu sem ele e o portal não
+    # precisa de CPF pra funcionar: só a cobrança precisa, e a cobrança é
+    # opt-in da escola. Quem for cobrar preenche; quem não for, ignora.
+    # `max_length=14` dá espaço pra máscara chegar do formulário — o
+    # `save()` guarda só os dígitos.
+    cpf = models.CharField(
+        max_length=14,
+        blank=True,
+        validators=[validar_cpf],
+        verbose_name="CPF",
+        help_text="Documento do pagador. Exigido só para emitir cobrança.",
+    )
 
     # Sobrescreve o campo herdado para expor `escola.responsaveis` no reverse.
     escola = models.ForeignKey(
@@ -105,6 +123,11 @@ class Responsavel(AbstractBaseUser, BaseModelEscopado):
         `ItemPresenca.save()`, que força a escola do registro pai.
         """
         self.email = normalizar_email(self.email)
+        # CPF guardado só com dígitos: é o formato que o gateway espera e
+        # evita que a mesma pessoa exista como "123.456.789-09" e
+        # "12345678909". Diverge do `Escola.cnpj`, que guarda a máscara —
+        # lá não há consumidor externo exigindo formato.
+        self.cpf = apenas_digitos(self.cpf)
         # Conta criada sem senha (ex.: pelo admin, onde o campo é só
         # leitura) ficaria com `""` — que o Django considera senha
         # *utilizável*. O convite recusaria ("já ativou"), o lote pularia e
