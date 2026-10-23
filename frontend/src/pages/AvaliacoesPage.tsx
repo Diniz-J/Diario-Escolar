@@ -197,7 +197,11 @@ export function AvaliacoesPage() {
                     {podeModificarCadastros && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon-sm">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="Ações da avaliação"
+                          >
                             ⋯
                           </Button>
                         </DropdownMenuTrigger>

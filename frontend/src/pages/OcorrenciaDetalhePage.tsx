@@ -132,7 +132,11 @@ export function OcorrenciaDetalhePage() {
               ))}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="Ações da ocorrência"
+                  >
                     ⋯
                   </Button>
                 </DropdownMenuTrigger>

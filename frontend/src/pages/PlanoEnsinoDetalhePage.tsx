@@ -155,7 +155,11 @@ export function PlanoEnsinoDetalhePage() {
           {plano && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Ações do plano de ensino"
+                >
                   ⋯
                 </Button>
               </DropdownMenuTrigger>
