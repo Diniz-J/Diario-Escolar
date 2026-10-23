@@ -207,12 +207,23 @@ Hex inline em `presenca/constants.ts`, deliberadamente fora dos tokens
 pra marcar a especificidade (e porque pastels não existem no shadcn
 default):
 
-| Status         | Fundo / Texto                  |
-| -------------- | ------------------------------ |
-| `P` Presente   | `#D7DCC1` / `#3A4524` (olive)  |
-| `A` Ausente    | `#F4DAD3` / `#7C2D1A` (terracota) |
-| `J` Justificado| `#FCE7BC` / `#854D0E` (mostarda)  |
-| `R` Retardatário | `#C4D4D2` / `#1F3A37` (petrol) |
+| Status         | Fundo / Texto                  | Hover     |
+| -------------- | ------------------------------ | --------- |
+| `P` Presente   | `#CFD4B8` / `#3A4524` (olive)  | `#BFC6A6` |
+| `A` Ausente    | `#EFD2C8` / `#7C2D1A` (terracota) | `#E5BFB1` |
+| `J` Justificado| `#F8DBAE` / `#854D0E` (mostarda)  | `#F2CB8E` |
+| `R` Retardatário | `#BCCDCB` / `#1F3A37` (petrol) | `#A8BEBB` |
+
+**A coluna de hover é a razão de esta família não convergir com os
+badges**: aqui são botões da chamada, que o professor clica; badge não tem
+estado de hover. Os tons de fundo são por isso um passo mais saturados que
+os dos badges, e só o tom de texto coincide.
+
+Esta tabela trazia, até out/2026, os tons dos **badges** (`#D7DCC1`,
+`#F4DAD3`, `#FCE7BC`, `#C4D4D2`) no lugar dos da chamada — escrita olhando
+o conjunto errado. Foi alinhada ao código. Aqueles valores não são
+inválidos, só moram noutro lugar: `UltimasOcorrenciasCard`,
+`AvaliacoesPage` (tipos de avaliação) e `PeriodosAvaliativosPage`.
 
 Regra: sempre comentar no código que aquele hex é deliberado, com
 referência à decisão (parágrafo desta seção, idealmente).
