@@ -298,7 +298,11 @@ export function AlunosPage() {
                   >
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Ações do aluno"
+                        >
                           ⋯
                         </Button>
                       </DropdownMenuTrigger>

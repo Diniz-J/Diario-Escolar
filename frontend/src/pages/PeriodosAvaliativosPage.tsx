@@ -215,7 +215,11 @@ export function PeriodosAvaliativosPage() {
                           {podeModificarCadastros && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon-sm">
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  aria-label="Ações do período"
+                                >
                                   ⋯
                                 </Button>
                               </DropdownMenuTrigger>
