@@ -20,25 +20,31 @@ const NOTAS_PERIODO_KEY = ["notas-periodo"] as const;
 // `inicializar` é POST que garante a existência de NotaPeriodo vazia
 // pra cada aluno ativo da turma. Idempotente — chamar duas vezes não
 // duplica. Devolve a lista pronta pra montar a tabela.
-export function useInicializarNotasPeriodo() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (
-      filtro: NotasPeriodoFiltro,
-    ): Promise<NotaPeriodo[]> => {
+//
+// **Query, apesar de ser POST.** O verbo é POST porque o endpoint pode
+// criar linha, mas o significado é "busca-ou-cria": a tela não tem o que
+// mostrar antes dele, e o resultado é o mesmo em toda chamada. Como
+// mutation ele precisava de um efeito pra disparar quando os três
+// selects fechassem — que é o `set-state-in-effect` que o lint acusava,
+// e a cascata de render que ele previne. Como query, quem dispara é a
+// mudança da `queryKey`, que é justamente o trio.
+//
+// Consequência de ser query: o refetch no foco da janela também refaz o
+// POST. É inofensivo pela idempotência e desejável pela coluna "última
+// edição", que fica fresca quando outra pessoa lançou no meio.
+export function useNotasPeriodoInicializadas(
+  filtro: NotasPeriodoFiltro | null,
+) {
+  return useQuery({
+    queryKey: [...NOTAS_PERIODO_KEY, "inicializadas", filtro ?? {}],
+    enabled: filtro !== null,
+    queryFn: async (): Promise<NotaPeriodo[]> => {
       const { data } = await api.post<NotaPeriodo[]>(
         "/notas-periodo/inicializar/",
         filtro,
       );
       return data;
     },
-    onSuccess: (data, variables) => {
-      // Atualiza o cache da query de listagem com a mesma combinação
-      // de filtros — assim a tela renderiza imediatamente sem refetch.
-      qc.setQueryData([...NOTAS_PERIODO_KEY, variables], data);
-    },
-    onError: () =>
-      toast.error("Não foi possível carregar as notas finais."),
   });
 }
 
