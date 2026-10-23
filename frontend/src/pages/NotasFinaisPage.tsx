@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,8 +22,8 @@ import {
 import { useAvaliacoes } from "@/features/avaliacoes/hooks";
 import { useDisciplinas } from "@/features/disciplinas/hooks";
 import {
-  useInicializarNotasPeriodo,
   useLancarNotasFinais,
+  useNotasPeriodoInicializadas,
 } from "@/features/notas-finais/hooks";
 import { usePeriodosAvaliativos } from "@/features/periodos-avaliativos/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
@@ -64,48 +64,51 @@ export function NotasFinaisPage() {
   const turmasQuery = useTurmas();
   const disciplinasQuery = useDisciplinas();
   const periodosQuery = usePeriodosAvaliativos({ ativo: true });
-  const inicializarMutation = useInicializarNotasPeriodo();
   const lancarMutation = useLancarNotasFinais();
 
   const [turmaId, setTurmaId] = useState("");
   const [disciplinaId, setDisciplinaId] = useState("");
   const [periodoId, setPeriodoId] = useState("");
-  const [notas, setNotas] = useState<NotaPeriodo[]>([]);
-  const [linhas, setLinhas] = useState<Record<number, LinhaEstado>>({});
+  // Só o que o usuário digitou. O resto vem da query — guardar a tabela
+  // inteira em estado era o que obrigava a sincronizar por efeito.
+  const [edicoes, setEdicoes] = useState<Record<number, LinhaEstado>>({});
   const [erroSubmit, setErroSubmit] = useState<string | null>(null);
 
   const filtroCompleto =
     turmaId !== "" && disciplinaId !== "" && periodoId !== "";
 
-  // Carrega/inicializa notas sempre que os 3 selects estão preenchidos.
-  useEffect(() => {
-    if (!filtroCompleto) {
-      setNotas([]);
-      setLinhas({});
-      return;
-    }
-    inicializarMutation.mutate(
-      {
-        turma: parseInt(turmaId, 10),
-        disciplina: parseInt(disciplinaId, 10),
-        periodo: parseInt(periodoId, 10),
-      },
-      {
-        onSuccess: (dados) => {
-          setNotas(dados);
-          const novo: Record<number, LinhaEstado> = {};
-          for (const n of dados) {
-            novo[n.id] = {
-              nota_final: n.nota_final ?? "",
-              observacao: n.observacao,
-            };
-          }
-          setLinhas(novo);
-        },
-      },
+  // A query dispara sozinha quando o trio muda: a `queryKey` é o filtro.
+  const notasQuery = useNotasPeriodoInicializadas(
+    filtroCompleto
+      ? {
+          turma: parseInt(turmaId, 10),
+          disciplina: parseInt(disciplinaId, 10),
+          periodo: parseInt(periodoId, 10),
+        }
+      : null,
+  );
+  const notas = useMemo(() => notasQuery.data ?? [], [notasQuery.data]);
+
+  // Trocar qualquer select troca o conjunto de alunos; edição pendente
+  // da combinação anterior não vale pra nova. Limpar nos handlers, e
+  // não num efeito, é o que mantém a tela sem sincronização implícita.
+  function trocarFiltro(set: (v: string) => void) {
+    return (valor: string) => {
+      setEdicoes({});
+      setErroSubmit(null);
+      set(valor);
+    };
+  }
+
+  // Valor exibido: o que o usuário digitou, ou o que veio do servidor.
+  function valorDaLinha(n: NotaPeriodo): LinhaEstado {
+    return (
+      edicoes[n.id] ?? {
+        nota_final: n.nota_final ?? "",
+        observacao: n.observacao,
+      }
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [turmaId, disciplinaId, periodoId]);
+  }
 
   // Avaliações daquela combinação — mostra notas individuais como
   // referência ao lado de cada aluno.
@@ -124,7 +127,7 @@ export function NotasFinaisPage() {
   const itensSujos: LancarNotaFinalItem[] = useMemo(() => {
     const sujos: LancarNotaFinalItem[] = [];
     for (const n of notas) {
-      const atual = linhas[n.id];
+      const atual = edicoes[n.id];
       if (!atual) continue;
       const notaBackend = n.nota_final ?? "";
       const obsBackend = n.observacao;
@@ -140,10 +143,16 @@ export function NotasFinaisPage() {
       }
     }
     return sujos;
-  }, [linhas, notas]);
+  }, [edicoes, notas]);
 
-  function atualizarLinha(notaId: number, patch: Partial<LinhaEstado>) {
-    setLinhas((prev) => ({ ...prev, [notaId]: { ...prev[notaId], ...patch } }));
+  function atualizarLinha(n: NotaPeriodo, patch: Partial<LinhaEstado>) {
+    setEdicoes((prev) => {
+      const base = prev[n.id] ?? {
+        nota_final: n.nota_final ?? "",
+        observacao: n.observacao,
+      };
+      return { ...prev, [n.id]: { ...base, ...patch } };
+    });
   }
 
   async function handleSalvar() {
@@ -161,27 +170,11 @@ export function NotasFinaisPage() {
           `${resp.falhas.length} linha${resp.falhas.length > 1 ? "s" : ""} falharam. Nada foi salvo.`,
         );
       } else {
-        // Refaz inicializar pra carregar `ultima_edicao` atualizada.
-        inicializarMutation.mutate(
-          {
-            turma: parseInt(turmaId, 10),
-            disciplina: parseInt(disciplinaId, 10),
-            periodo: parseInt(periodoId, 10),
-          },
-          {
-            onSuccess: (dados) => {
-              setNotas(dados);
-              const novo: Record<number, LinhaEstado> = {};
-              for (const n of dados) {
-                novo[n.id] = {
-                  nota_final: n.nota_final ?? "",
-                  observacao: n.observacao,
-                };
-              }
-              setLinhas(novo);
-            },
-          },
-        );
+        // Salvou: as edições viraram o valor do servidor, então limpar
+        // devolve a tabela pro que o refetch trouxer — inclusive a
+        // coluna "última edição", que é o motivo de recarregar.
+        setEdicoes({});
+        notasQuery.refetch();
       }
     } catch (err) {
       console.error(err);
@@ -225,7 +218,7 @@ export function NotasFinaisPage() {
           <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
             Turma
           </Label>
-          <Select value={turmaId} onValueChange={setTurmaId}>
+          <Select value={turmaId} onValueChange={trocarFiltro(setTurmaId)}>
             <SelectTrigger className="bg-paper border-border">
               <SelectValue placeholder="Selecione a turma" />
             </SelectTrigger>
@@ -242,7 +235,7 @@ export function NotasFinaisPage() {
           <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
             Disciplina
           </Label>
-          <Select value={disciplinaId} onValueChange={setDisciplinaId}>
+          <Select value={disciplinaId} onValueChange={trocarFiltro(setDisciplinaId)}>
             <SelectTrigger className="bg-paper border-border">
               <SelectValue placeholder="Selecione a disciplina" />
             </SelectTrigger>
@@ -259,7 +252,7 @@ export function NotasFinaisPage() {
           <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
             Período
           </Label>
-          <Select value={periodoId} onValueChange={setPeriodoId}>
+          <Select value={periodoId} onValueChange={trocarFiltro(setPeriodoId)}>
             <SelectTrigger className="bg-paper border-border">
               <SelectValue placeholder="Selecione o período" />
             </SelectTrigger>
@@ -342,7 +335,7 @@ export function NotasFinaisPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {inicializarMutation.isPending ? (
+                {notasQuery.isLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i}>
                       <TableCell>
@@ -359,10 +352,9 @@ export function NotasFinaisPage() {
                       </TableCell>
                     </TableRow>
                   ))
-                ) : inicializarMutation.isError ? (
-                  // As linhas nascem de um POST, não de uma query: se ele
-                  // falha, `notas` fica vazia e o estado vazio acusaria a
-                  // turma de não ter aluno.
+                ) : notasQuery.isError ? (
+                  // Sem esta faixa, a falha cairia no estado vazio abaixo
+                  // e a tela acusaria a turma de não ter aluno.
                   <TableRow>
                     <TableCell
                       colSpan={4}
@@ -383,10 +375,7 @@ export function NotasFinaisPage() {
                   </TableRow>
                 ) : (
                   notas.map((n) => {
-                    const linha = linhas[n.id] ?? {
-                      nota_final: "",
-                      observacao: "",
-                    };
+                    const linha = valorDaLinha(n);
                     return (
                       <TableRow key={n.id}>
                         <TableCell>
@@ -401,7 +390,7 @@ export function NotasFinaisPage() {
                             inputMode="decimal"
                             value={linha.nota_final}
                             onChange={(e) =>
-                              atualizarLinha(n.id, {
+                              atualizarLinha(n, {
                                 nota_final: e.target.value,
                               })
                             }
@@ -416,7 +405,7 @@ export function NotasFinaisPage() {
                             type="text"
                             value={linha.observacao}
                             onChange={(e) =>
-                              atualizarLinha(n.id, {
+                              atualizarLinha(n, {
                                 observacao: e.target.value,
                               })
                             }
