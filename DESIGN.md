@@ -198,8 +198,8 @@ chamada:
 | `vencido`   | `bg-destructive/15` + `text-destructive` |
 | `cancelado` | `bg-muted` + `text-muted-foreground`  |
 
-Em `features/financeiro/constants.ts`. Tokens onde existem; hex só na
-mostarda, que não tem token.
+Em `features/financeiro/constants.ts`. Tudo em token — a mostarda ganhou
+o seu (§6.3).
 
 ### 6.2 Presença — pastels terrosos
 
@@ -233,12 +233,29 @@ urgência". Reaparece em:
 - `features/financeiro/constants.ts` — badge `pendente` da fatura (em
   aberto, dentro do prazo).
 
-Por enquanto sem utility/token correspondente (pastel fora do shadcn
-default). Cada uso traz comentário inline justificando, no espírito da
-§6.2. **O financeiro é o 5º uso, então a extração prometida acima está
-vencida** — a constante compartilhada ficou de fora do PR do financeiro
-de propósito (mexeria em quatro features que não eram escopo), mas é a
-próxima coisa a fazer antes de um 6º uso aparecer.
+**Extraído (out/2026).** O par virou token na paleta, como qualquer cor
+de marca: `--mostarda` / `--ambar` no `:root` do `index.css`, expostos
+como utility por `@theme inline`. O uso agora é
+**`bg-mostarda text-ambar`**, e a variante translúcida do alerta é
+`bg-mostarda/40` (o Tailwind 4 resolve a opacidade de token via
+`color-mix`, então não precisa de hex pra isso).
+
+Quando foi extraído já eram **nove** usos, não os cinco que esta seção
+listava: além dos quatro acima, `features/ocorrencias` (o original),
+`features/comunicados` (três — `enviando` do comunicado e `pendente` +
+`enviando` do destinatário), `features/responsaveis` (`sem_convite`),
+`features/dashboard/UltimasOcorrenciasCard`, `pages/AvaliacoesPage`
+(tipo `trabalho`) e `pages/PeriodosAvaliativosPage` (`em_uso`).
+
+A regra da §6.2 (comentar hex deliberado) **não se aplica mais** a estes
+usos — o nome do token já diz o que a cor é. Ela segue valendo pros
+pastels que continuam em hex.
+
+**A presença ficou fora de propósito** (§6.2): os tons dela são outros
+(`#F8DBAE` com hover `#F2CB8E` no `J`, por exemplo — tem estado de hover,
+que badge não tem), e só o tom de texto `#854D0E` coincide. Trazer a
+presença pra cá exigiria decidir se os dois conjuntos devem convergir
+visualmente, que é decisão de desenho, não de refactor.
 
 ---
 
