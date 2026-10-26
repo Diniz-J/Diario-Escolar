@@ -150,7 +150,9 @@ Marcador alternativo (pingo ferrugem) na marca da sidebar:
 - Container `p-4 md:p-10 space-y-8`.
 - Header: saudação Fraunces 28-34px + filete + perfil eyebrow.
 - Filtro de visão: label mono + `Select` shadcn em `bg-paper`.
-- Grid `md:grid-cols-2 gap-5` com 2 `MetricCard` + 2 cards de listagem.
+- Grid `md:grid-cols-2 gap-5` com 4 `MetricCard` (ocorrências em
+  aberto, alunos ativos, presença média, alunos reincidentes; mais
+  "aulas aguardando visto", só pra direção) + 2 cards de listagem.
 - `MetricCard` **não usa shadcn `Card`** — é um card próprio com fundo
   `bg-paper`, valor em Fraunces ~50px, sublinha em sépia com separador
   `·` em cor `border`. Variante `tomDestaque` muda o valor pra ferrugem.
