@@ -10,6 +10,7 @@ import {
   formatarDataPura,
   formatarDiaDaDataHora,
   hojeISO,
+  isoDiasAtras,
 } from "./datas";
 
 // Estes testes só fazem sentido em fuso negativo — é lá que a conversão
@@ -52,6 +53,31 @@ describe("hojeISO", () => {
     vi.setSystemTime(new Date(2026, 0, 5, 23, 59));
 
     expect(hojeISO()).toBe("2026-01-05");
+  });
+});
+
+describe("isoDiasAtras", () => {
+  it("volta a janela sem cair no dia seguinte à noite", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 2, 10, 21, 30));
+
+    // O caminho ingênuo (toISOString) devolveria 2026-02-09 aqui, um dia
+    // a mais, e a janela de 30 dias nasceria torta.
+    expect(isoDiasAtras(30)).toBe("2026-02-08");
+  });
+
+  it("atravessa virada de ano", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 0, 5, 9, 0));
+
+    expect(isoDiasAtras(10)).toBe("2025-12-26");
+  });
+
+  it("zero dias é hoje", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 2, 10, 9, 0));
+
+    expect(isoDiasAtras(0)).toBe(hojeISO());
   });
 });
 
