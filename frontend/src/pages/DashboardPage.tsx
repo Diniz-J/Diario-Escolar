@@ -12,6 +12,7 @@ import { useRegistrosAula } from "@/features/aulas/hooks";
 import { useAlunos } from "@/features/alunos/hooks";
 import { useAuth } from "@/features/auth/useAuth";
 import { usePermissoes } from "@/features/auth/usePermissoes";
+import { useMetricasDashboard } from "@/features/dashboard/hooks";
 import { MetricCard } from "@/features/dashboard/MetricCard";
 import { UltimasChamadasCard } from "@/features/dashboard/UltimasChamadasCard";
 import { UltimasOcorrenciasCard } from "@/features/dashboard/UltimasOcorrenciasCard";
@@ -30,6 +31,14 @@ const PERFIL_LABEL: Record<string, string> = {
 // Valor especial do <Select> que representa "sem filtro de turma". O
 // Radix Select não aceita value="" então usamos um literal explícito.
 const TODAS = "todas";
+
+// O percentual chega como string ("75.00") porque é DecimalField no DRF.
+// Aqui só troca o separador decimal: arredondar pra caber no card seria
+// reportar um número que o backend não calculou, e o card é o resumo de
+// uma métrica legal (o mínimo de 75% da LDB).
+function formatarPercentual(valor: string): string {
+  return `${valor.replace(".", ",")}%`;
+}
 
 // Dashboard — destino padrão após o login. Renderizado dentro do
 // AppLayout (sidebar e botão Sair ficam por conta de lá).
@@ -81,6 +90,14 @@ export function DashboardPage() {
     podeModificarCadastros,
   );
   const aulasPendentes = aulasPendentesQuery.data?.length ?? 0;
+
+  // Presença média e reincidência: agregados do backend. Não dá pra
+  // derivar das listagens como os cards acima fazem — a primeira
+  // exigiria baixar todo o ItemPresenca da escola, a segunda agrupar
+  // ocorrência por aluno no cliente.
+  const metricasQuery = useMetricasDashboard(turmaFiltro);
+  const metricas = metricasQuery.data;
+  const janelaDias = metricas?.janela.dias ?? 30;
 
   const totalAlunos = alunosQuery.data?.length ?? 0;
   const turmasComAluno = useMemo(() => {
@@ -186,6 +203,43 @@ export function DashboardPage() {
             tomDestaque={aulasPendentes > 0}
           />
         )}
+
+        <MetricCard
+          titulo="Presença média"
+          valor={
+            metricas ? formatarPercentual(metricas.presenca.percentual_medio) : "—"
+          }
+          sublinha={
+            metricas?.presenca.total_itens
+              ? `${metricas.presenca.total_chamadas} chamada${
+                  metricas.presenca.total_chamadas > 1 ? "s" : ""
+                } nos últimos ${janelaDias} dias`
+              : // Sem chamada o percentual é 0 por definição, e o card
+                // tem que dizer que falta dado — senão acusa 0% de
+                // presença numa escola que só não fez chamada ainda.
+                `Nenhuma chamada nos últimos ${janelaDias} dias`
+          }
+          href="/presenca"
+          carregando={metricasQuery.isLoading}
+          erro={metricasQuery.isError}
+          tomDestaque={metricas?.presenca.abaixo_do_limite ?? false}
+        />
+
+        <MetricCard
+          titulo="Alunos reincidentes"
+          valor={metricas?.reincidencia.alunos_reincidentes ?? 0}
+          sublinha={
+            metricas
+              ? metricas.reincidencia.alunos_reincidentes > 0
+                ? `${metricas.reincidencia.limiar}+ ocorrências em ${janelaDias} dias`
+                : `Ninguém repetiu nos últimos ${janelaDias} dias`
+              : undefined
+          }
+          href={linkOcorrencias}
+          carregando={metricasQuery.isLoading}
+          erro={metricasQuery.isError}
+          tomDestaque={(metricas?.reincidencia.alunos_reincidentes ?? 0) > 0}
+        />
 
         <UltimasChamadasCard turmaFiltrada={turmaFiltro} />
         <UltimasOcorrenciasCard turmaFiltrada={turmaFiltro} />
