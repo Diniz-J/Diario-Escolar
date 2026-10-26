@@ -452,7 +452,7 @@ A lista priorizada por fases vive em [`CLAUDE.md`](./CLAUDE.md) (seção Roadmap
 
 - **Robustez:** paginação no backend (DRF `PageNumberPagination`) antes do volume real, logging estruturado JSON.
 - **Produto:** PDF do Boletim (WeasyPrint), export de Ocorrências/Presença (escopo operacional), métricas avançadas no dashboard (reincidência, presença média). **Diário de classe (`RegistroAula`)** com backend pronto (app `aulas`) — pendente o front (diário do professor, ficha do professor com tabs + export PDF, card de conferência no dashboard).
-- **Comunicação:** telefone do responsável (outro canal, outro provedor), fila assíncrona dedicada (Celery/Dramatiq/RQ) quando o volume crescer, timeline do aluno (consumindo HistoricalRecords + ocorrências + presença).
+- **Comunicação:** telefone do responsável (outro canal, outro provedor), fila assíncrona dedicada (Celery/Dramatiq/RQ) quando o volume crescer.
 - **Senhas:** trocar a própria senha, reset por e-mail (agora viável via Brevo), admin resetar senha de terceiro pela UI.
 - **Dev experience:** drf-spectacular (gera client TypeScript), `repositories.py` por app, linting unificado (`ruff` + ESLint no fluxo).
 - **SaaS futuro:** multi-tenancy real (middleware + RLS + billing), httpOnly cookies, LGPD formal.

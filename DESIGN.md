@@ -155,7 +155,28 @@ Marcador alternativo (pingo ferrugem) na marca da sidebar:
   `bg-paper`, valor em Fraunces ~50px, sublinha em sépia com separador
   `·` em cor `border`. Variante `tomDestaque` muda o valor pra ferrugem.
 
-### 5.4 Header de página padrão (proposto, ver §7)
+### 5.4 Bloco de evento (`AlunoTimelinePage.tsx`)
+
+Leitura cronológica, não listagem: nem tabela nem card de métrica.
+
+- Cada evento é um bloco `bg-paper rounded-lg border p-4` com uma **tira
+  de 3px à esquerda** (`w-[3px] rounded-full`), colorida por *tipo* de
+  evento — ferrugem pra ocorrência, sépia pra presença, `border` neutro
+  pra mudança de cadastro. A tira é o que separa "aconteceu com o aluno"
+  de "mudou o registro dele" sem precisar de ícone (§8.7).
+- Dentro do bloco: linha de eyebrows (data + tipo + badge de status
+  quando houver), título em Fraunces text-lg, detalhe em
+  `text-muted-foreground`, e rodapé em sépia com turma e autor. O
+  eyebrow de tipo some na ocorrência, onde o título já diz a palavra.
+- O badge de status **reusa `STATUS_BADGE` de ocorrências** em vez de
+  abrir paleta nova — ver §8.1.
+- Agrupamento por mês com o nome do mês em eyebrow, mesmo padrão do
+  diário na ficha do professor.
+- Bloco com destino vira `<Link>` e ganha `hover:border-ferrugem/40`;
+  evento sem página própria (cadastro) fica `<div>`, sem afford de
+  clique.
+
+### 5.5 Header de página padrão (proposto, ver §7)
 
 Mesma fórmula da Dashboard:
 
@@ -248,7 +269,7 @@ Próximas ondas de redesign herdam destas decisões para não regredir.
 
 ### 7.1 Listas (Alunos, Turmas, Disciplinas, Professores, Ocorrências, etc)
 
-**Header da página** segue §5.4 (eyebrow + título Fraunces + filete +
+**Header da página** segue §5.5 (eyebrow + título Fraunces + filete +
 contexto). À direita ou na linha de baixo: botão primário
 `"Novo X"` em `bg-olive text-creme`.
 
