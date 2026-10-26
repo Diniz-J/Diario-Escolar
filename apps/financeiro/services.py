@@ -22,6 +22,14 @@ from django.db.models import Q, Sum
 from django.utils import timezone
 from simple_history.utils import bulk_create_with_history, bulk_update_with_history
 
+from .gateways import (
+    CobrancaGateway,
+    DadosCobranca,
+    DadosPagador,
+    ErroDeGateway,
+    Pagador,
+    SituacaoCobranca,
+)
 from .models import Fatura, FaturaItem, Pagamento, PlanoCobranca, arredondar_dinheiro
 
 logger = logging.getLogger(__name__)
@@ -449,4 +457,232 @@ def ficha_financeira(aluno, hoje: date | None = None) -> FichaFinanceira:
             .select_related("fatura__aluno")
             .order_by("-data", "-id")
         ),
+    )
+
+
+# ====================================================================== #
+# Emissão de cobrança no gateway                                         #
+# ====================================================================== #
+
+
+class EmissaoRecusadaError(Exception):
+    """A emissão não pode acontecer, e o motivo não é o provedor.
+
+    Cobre cadastro incompleto (plano sem pagador, pagador sem CPF) e
+    estado que não admite cobrança (fatura paga ou cancelada). Separado de
+    `ErroDeGateway` porque retentar não resolve: a correção é na tela, não
+    na rede. A mensagem é a que a secretaria lê pra saber o que fazer.
+    """
+
+
+def _dados_do_pagador(plano: PlanoCobranca) -> DadosPagador:
+    """Monta o cadastro do pagador, ou explica o que falta preencher.
+
+    O CPF é exigido aqui, e não em `_pagador_no_gateway`, de propósito: só
+    quem ainda **não** tem cadastro no provedor precisa dele. Checar antes
+    bloquearia a emissão de uma família já cadastrada por causa de um CPF
+    que o provedor não vai mais pedir.
+
+    A checagem existe porque o provedor recusaria com mensagem em inglês
+    sobre `cpfCnpj` — inútil pra quem está operando a secretaria.
+    """
+    pagador = plano.pagador
+    if not pagador.cpf:
+        raise EmissaoRecusadaError(
+            f"O responsável {pagador.nome} está sem CPF, que o gateway "
+            "exige para emitir cobrança."
+        )
+    return DadosPagador(
+        nome=pagador.nome,
+        documento=pagador.cpf,
+        email=pagador.email,
+        # O nosso id vai junto pra que o cadastro de lá seja reconciliável
+        # com o nosso sem depender do nome, que repete.
+        referencia_externa=str(pagador.pk),
+    )
+
+
+def _pagador_no_gateway(plano: PlanoCobranca, gateway: CobrancaGateway) -> Pagador:
+    """Devolve o pagador do provedor, criando o cadastro na primeira vez.
+
+    O id fica guardado em `Responsavel.id_externo_gateway` porque criar
+    cliente lá **não** é idempotente: sem guardar, cada emissão abriria
+    outro cadastro pra mesma família e o histórico dela ficaria espalhado
+    por vários clientes.
+
+    `update_fields` enxuto de propósito: salvar o `Responsavel` inteiro
+    aqui reescreveria `password` e `last_login` junto, e esta função não
+    tem nada a ver com a credencial de ninguém.
+    """
+    responsavel = plano.pagador
+    if responsavel is None:
+        raise EmissaoRecusadaError(
+            "Este plano não tem pagador definido. Escolha o responsável "
+            "que recebe a cobrança antes de emitir."
+        )
+    if responsavel.id_externo_gateway:
+        return Pagador(id_externo=responsavel.id_externo_gateway)
+
+    pagador = gateway.criar_pagador(_dados_do_pagador(plano))
+    responsavel.id_externo_gateway = pagador.id_externo
+    responsavel.save(update_fields=["id_externo_gateway", "atualizado_em"])
+    logger.info(
+        "Pagador %s cadastrado no gateway como %s",
+        responsavel.pk,
+        pagador.id_externo,
+    )
+    return pagador
+
+
+def emitir_cobranca(
+    fatura: Fatura, gateway: CobrancaGateway, metodo: str = ""
+) -> Fatura:
+    """Cria a cobrança no provedor e guarda o ponteiro dela na fatura.
+
+    **Idempotente pelo `id_externo`**: fatura que já foi emitida volta
+    como está, sem criar segunda cobrança. É o que torna seguro repetir o
+    command do lote e clicar duas vezes no botão — e a razão de a
+    verificação vir antes de qualquer chamada HTTP.
+
+    **Fora de transação, e de propósito.** A chamada é de rede: manter
+    uma transação aberta enquanto o Asaas responde prenderia o lock da
+    fatura pelo tempo deles, e no lote uma falha no aluno 40 desfaria os
+    39 que já tinham cobrança criada lá — cobrança que continuaria
+    existindo no provedor, agora órfã. Por isso o `save` é pontual, nos
+    dois campos que esta função escreve.
+
+    Fatura cancelada ou paga não vai pro gateway: emitir cobrança do que
+    a escola já baixou ou já recebeu é pedir dinheiro duas vezes.
+    """
+    if fatura.id_externo:
+        logger.info(
+            "Fatura %s já emitida no gateway (%s) — emissão ignorada",
+            fatura.pk,
+            fatura.id_externo,
+        )
+        return fatura
+
+    if fatura.status in (Fatura.Status.CANCELADO, Fatura.Status.PAGO):
+        raise EmissaoRecusadaError(
+            f"Fatura {fatura.get_status_display().lower()} não pode ser "
+            "enviada para cobrança."
+        )
+
+    plano = fatura.plano
+    pagador = _pagador_no_gateway(plano, gateway)
+
+    cobranca = gateway.criar_cobranca(
+        DadosCobranca(
+            pagador=pagador,
+            valor=fatura.valor,
+            vencimento=fatura.vencimento,
+            descricao=f"Mensalidade {fatura.competencia:%m/%Y} — {fatura.aluno}",
+            metodo=metodo,
+            # O id da fatura é o que permite achar a fatura a partir de um
+            # evento do provedor sem confiar no corpo dele.
+            referencia_externa=str(fatura.pk),
+            multa_percentual=plano.multa_percentual,
+            juros_mes_percentual=plano.juros_mes_percentual,
+        )
+    )
+
+    fatura.id_externo = cobranca.id_externo
+    fatura.link_pagamento = cobranca.link_pagamento
+    fatura.save(update_fields=["id_externo", "link_pagamento", "atualizado_em"])
+    logger.info(
+        "Cobrança %s criada no gateway para a fatura %s",
+        cobranca.id_externo,
+        fatura.pk,
+    )
+    return fatura
+
+
+def cancelar_cobranca(fatura: Fatura, gateway: CobrancaGateway) -> bool:
+    """Cancela no provedor a cobrança da fatura. Devolve se chegou a cancelar.
+
+    **Falha não propaga.** Quem chama é o cancelamento da fatura, que é
+    decisão administrativa já tomada: deixar o `DELETE` do provedor
+    derrubar a requisição faria a secretaria não conseguir cancelar uma
+    fatura por indisponibilidade de terceiro. O preço de engolir é a
+    família poder receber lembrete de uma cobrança baixada aqui — visível
+    no log e no Sentry, e corrigível na mão no painel deles.
+
+    Limpa `id_externo` e `link_pagamento` no sucesso: o link morto não
+    ajuda ninguém, e liberar o `id_externo` é o que permite reemitir a
+    competência depois sem bater no unique parcial da fatura.
+    """
+    if not fatura.id_externo:
+        return False
+    try:
+        gateway.cancelar_cobranca(fatura.id_externo)
+    except ErroDeGateway:
+        logger.exception(
+            "Falha ao cancelar no gateway a cobrança %s (fatura %s)",
+            fatura.id_externo,
+            fatura.pk,
+        )
+        return False
+
+    fatura.id_externo = ""
+    fatura.link_pagamento = ""
+    fatura.save(update_fields=["id_externo", "link_pagamento", "atualizado_em"])
+    return True
+
+
+# ====================================================================== #
+# Conciliação a partir do gateway                                        #
+# ====================================================================== #
+
+
+def conciliar_cobranca(
+    fatura: Fatura, gateway: CobrancaGateway
+) -> Pagamento | None:
+    """Reconsulta a cobrança no provedor e registra o pagamento, se houver.
+
+    **Reconsulta em vez de confiar no corpo do evento** (`FINANCEIRO.md`
+    §6). O corpo do webhook é entrada não autenticada em termos de
+    conteúdo: o token prova quem mandou, não que o valor ali é o valor
+    que entrou. Quem decide quanto foi pago é o `GET` na cobrança.
+
+    Devolve `None` quando não há o que conciliar — cobrança ainda
+    pendente, vencida, cancelada, ou num estado intermediário de
+    confirmação que pode virar estorno (o `CONFIRMED` do Asaas, que fica
+    até 72h assim). Nenhum desses é erro: é o caminho normal dos eventos
+    que não são liquidação.
+
+    A `referencia_externa` do pagamento é o **id da cobrança**, não o do
+    evento. É o que garante um pagamento por cobrança: dois eventos
+    diferentes do mesmo pagamento (confirmação e recebimento, ou a
+    reentrega de um deles) convergem pra mesma referência e o
+    `registrar_pagamento` devolve o pagamento que já existe em vez de
+    lançar outro.
+    """
+    cobranca = gateway.consultar_cobranca(fatura.id_externo)
+
+    if cobranca.situacao != SituacaoCobranca.PAGO:
+        logger.info(
+            "Fatura %s: cobrança %s em %s — nada a conciliar",
+            fatura.pk,
+            cobranca.id_externo,
+            cobranca.situacao.value,
+        )
+        return None
+
+    # Liquidada sem valor é resposta que não entendemos; registrar o valor
+    # de face seria inventar quanto entrou.
+    if cobranca.valor_pago is None:
+        raise ErroDeGateway(
+            f"Cobrança {cobranca.id_externo} veio paga sem valor pago."
+        )
+
+    return registrar_pagamento(
+        fatura,
+        valor=cobranca.valor_pago,
+        # Sem data do provedor, hoje: o pagamento existe e precisa de uma
+        # data: `Pagamento.data` é obrigatório, e recusar o lançamento por
+        # falta de um campo acessório deixaria a fatura aberta com
+        # dinheiro recebido.
+        data=cobranca.data_pagamento or date.today(),
+        metodo=cobranca.metodo or Pagamento.Metodo.OUTRO,
+        referencia_externa=cobranca.id_externo,
     )

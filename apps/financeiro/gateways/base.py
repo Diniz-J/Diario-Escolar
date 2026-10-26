@@ -128,6 +128,16 @@ class DadosCobranca:
 
     `referencia_externa` recebe o id da `Fatura`. É o que permite achar a
     fatura a partir de um evento do provedor sem confiar no corpo dele.
+
+    `multa_percentual` e `juros_mes_percentual` são as cláusulas do
+    `PlanoCobranca`, repassadas pro provedor calcular o encargo no
+    documento que a família paga. Vão aqui — e não ficam só no nosso
+    `Fatura.encargos()` — porque o encargo tem que estar **no boleto**:
+    sem isso o atraso sai cobrado pelo valor de face, e a escola que
+    contratou 2% de multa teria que cobrar a diferença à mão, que é
+    exatamente o trabalho manual que este módulo existe pra tirar.
+    Percentuais, não valores, porque é assim que a cláusula é escrita e é
+    o que o provedor espera (o cálculo sobre os dias de atraso é dele).
     """
 
     pagador: Pagador
@@ -136,6 +146,8 @@ class DadosCobranca:
     descricao: str = ""
     metodo: str = ""
     referencia_externa: str = ""
+    multa_percentual: Decimal = Decimal("0.00")
+    juros_mes_percentual: Decimal = Decimal("0.00")
 
 
 @dataclass(frozen=True)
@@ -148,6 +160,12 @@ class Cobranca:
 
     `valor_pago` vem `None` enquanto não há liquidação; zero seria
     ambíguo com estorno total.
+
+    `metodo` é o meio pelo qual a cobrança foi paga, nos valores de
+    `Pagamento.Metodo`, e vem vazio enquanto ninguém pagou. Existe porque
+    a conciliação precisa gravar o meio no `Pagamento`, e quem sabe disso
+    é o provedor: a cobrança criada como "pagador escolhe" só revela o
+    meio quando a família escolhe.
     """
 
     id_externo: str
@@ -157,6 +175,7 @@ class Cobranca:
     link_pagamento: str = ""
     valor_pago: Decimal | None = None
     data_pagamento: date | None = None
+    metodo: str = ""
 
 
 class CobrancaGateway(ABC):

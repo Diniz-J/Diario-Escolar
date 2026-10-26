@@ -80,6 +80,9 @@ class PlanoCobrancaSerializer(
     aluno_nome = serializers.CharField(
         source="aluno.nome_completo", read_only=True
     )
+    pagador_nome = serializers.CharField(
+        source="pagador.nome", read_only=True, default=""
+    )
     # Derivado: mensalidade já com o desconto aplicado. `DecimalField` (e
     # não `SerializerMethodField`) pra sair com as mesmas duas casas em
     # string dos outros campos de dinheiro — um método devolvendo
@@ -95,6 +98,8 @@ class PlanoCobrancaSerializer(
             "escola",
             "aluno",
             "aluno_nome",
+            "pagador",
+            "pagador_nome",
             "valor_mensalidade",
             "dia_vencimento",
             "desconto_tipo",

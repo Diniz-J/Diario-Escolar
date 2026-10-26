@@ -421,6 +421,16 @@ ASAAS_BASE_URL = config(
     "ASAAS_BASE_URL", default="https://api-sandbox.asaas.com/v3"
 )
 ASAAS_TIMEOUT = config("ASAAS_TIMEOUT", default=10, cast=int)
+# Token que **eles** mandam no header `asaas-access-token` de cada
+# webhook, com o valor que configuramos no cadastro do hook no painel
+# deles. NÃO é a `ASAAS_API_KEY` — a documentação diz explicitamente pra
+# não reusar a chave da API aqui, e são dois sentidos diferentes: a chave
+# autentica a nossa saída, este token autentica a entrada deles.
+#
+# Sem ele configurado o endpoint recusa tudo, em vez de aceitar sem
+# conferir: o webhook é a única rota do projeto sem autenticação, e aceitar
+# corpo não validado ali deixaria qualquer um marcar fatura como paga.
+ASAAS_WEBHOOK_TOKEN = config("ASAAS_WEBHOOK_TOKEN", default="")
 
 SENTRY_DSN = config("SENTRY_DSN", default="")
 if SENTRY_DSN and not TESTING:

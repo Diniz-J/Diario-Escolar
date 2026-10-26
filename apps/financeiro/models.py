@@ -40,7 +40,7 @@ from django.db import models
 from django.db.models import Q
 from simple_history.models import HistoricalRecords
 
-from apps.common.models import BaseModelEscopado
+from apps.common.models import BaseModelEscopado, TimeStampedModel
 from apps.escola.models import Aluno, Escola
 
 CENTAVO = Decimal("0.01")
@@ -107,6 +107,26 @@ class PlanoCobranca(BaseModelEscopado):
 
     aluno = models.ForeignKey(
         Aluno, on_delete=models.PROTECT, related_name="planos_cobranca"
+    )
+
+    # Quem paga. Mora no plano porque pagador é cláusula de contrato: o
+    # aluno com mãe e pai vinculados tem dois responsáveis no portal e um
+    # só titular do boleto, e deixar a escolha implícita ("o primeiro que
+    # tiver CPF") faria o titular trocar sozinho no dia em que alguém
+    # preenchesse o CPF do outro.
+    #
+    # Opcional porque cobrança online é opt-in da escola: quem recebe Pix
+    # na secretaria nunca preenche, e todo plano existente nasceu sem.
+    # Referência por string em vez de import pra manter `financeiro`
+    # independente de `portal` em tempo de import — a dependência é só de
+    # schema, e nenhum dos dois lados precisa do outro carregado.
+    pagador = models.ForeignKey(
+        "portal.Responsavel",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="planos_pagos",
+        help_text="Responsável que paga. Exigido só para emitir cobrança.",
     )
 
     valor_mensalidade = models.DecimalField(
@@ -257,6 +277,25 @@ class PlanoCobranca(BaseModelEscopado):
 
         if self.aluno_id and self.escola_id and self.aluno.escola_id != self.escola_id:
             errors["aluno"] = "O aluno deve pertencer à mesma escola do plano."
+
+        # O pagador tem que ser responsável **deste** aluno, não qualquer
+        # responsável da escola: o vínculo é o que autoriza alguém a ver os
+        # dados do aluno (`RESPONSAVEIS.md`), e cobrar em nome de quem não
+        # tem vínculo poria o nome de um terceiro no boleto da família.
+        # `elif` pra não empilhar duas mensagens na mesma chave — escola
+        # errada é a falha mais fundamental das duas.
+        if self.pagador_id:
+            if self.escola_id and self.pagador.escola_id != self.escola_id:
+                errors["pagador"] = (
+                    "O pagador deve pertencer à mesma escola do plano."
+                )
+            elif (
+                self.aluno_id
+                and not self.pagador.alunos.filter(pk=self.aluno_id).exists()
+            ):
+                errors["pagador"] = (
+                    "O pagador deve ser um responsável vinculado a este aluno."
+                )
 
         if (
             self.vigencia_inicio
@@ -594,6 +633,12 @@ class Pagamento(BaseModelEscopado):
         BOLETO = "boleto", "Boleto"
         CARTAO = "cartao", "Cartão"
         DINHEIRO = "dinheiro", "Dinheiro"
+        # Existe pro que chega pelo gateway num meio que não modelamos: a
+        # doc do Asaas diz que valor entrando na conta por Pix ou TED é
+        # associado a uma cobrança, então a mensalidade emitida com
+        # "pagador escolhe" pode voltar paga como `TRANSFER`/`DEPOSIT`.
+        # Não é opção de secretaria — ela escolhe entre os quatro de cima.
+        OUTRO = "outro", "Outro"
 
     fatura = models.ForeignKey(
         Fatura, on_delete=models.PROTECT, related_name="pagamentos"
@@ -661,3 +706,75 @@ class Pagamento(BaseModelEscopado):
 
         if errors:
             raise ValidationError(errors)
+
+
+class EventoWebhook(TimeStampedModel):
+    """Evento de cobrança recebido do gateway, guardado antes de processado.
+
+    **Não é `BaseModelEscopado`**, ao contrário de todo o resto do módulo.
+    O evento chega por um endpoint sem autenticação e sem tenant: a escola
+    só se descobre depois, resolvendo a fatura que o evento aponta. Exigir
+    `escola` no insert obrigaria a resolver o tenant antes de persistir, o
+    que é o inverso do que a confiabilidade pede aqui — grava primeiro,
+    processa depois, pra que uma falha de processamento não perca o
+    evento. A `fatura` (e por ela a escola) fica nula enquanto não
+    resolver.
+
+    `id_evento` é o id do provedor, e o `unique` nele é o que torna a
+    conciliação idempotente: reentrega é comportamento normal do Asaas,
+    não erro (a doc deles diz que 15 falhas consecutivas pausam a fila, e
+    por isso o endpoint responde 200 rápido e processa de forma repetível).
+
+    Sem `HistoricalRecords`: isto já é um log append-only de fato externo,
+    e auditar um log seria guardar duas vezes a mesma coisa. O que muda
+    depois da criação são só `fatura`, `processado_em` e `erro`, escritos
+    pelo processamento.
+    """
+
+    # 128 porque o id deles é `evt_<hash>&<numero>` (uns 45 caracteres no
+    # exemplo da doc) e o formato é deles pra mudar.
+    id_evento = models.CharField(
+        max_length=128,
+        unique=True,
+        help_text="Id do evento no gateway. Único — reentrega não duplica.",
+    )
+    tipo = models.CharField(
+        max_length=60,
+        help_text="Tipo do evento no gateway (ex.: PAYMENT_RECEIVED).",
+    )
+    # Corpo cru: é o que permite reprocessar ou entender um evento que o
+    # código da época não soube tratar, sem depender do log do provedor.
+    payload = models.JSONField(default=dict)
+
+    fatura = models.ForeignKey(
+        Fatura,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="eventos_webhook",
+        help_text="Fatura que o evento aponta. Nula se não foi resolvida.",
+    )
+
+    processado_em = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Quando o evento foi tratado. Nulo = pendente ou falhou.",
+    )
+    # Guardado além de ir pro log porque é o que deixa a falha visível no
+    # admin pra quem não tem acesso ao Sentry.
+    erro = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "evento de webhook"
+        verbose_name_plural = "eventos de webhook"
+        ordering = ["-criado_em"]
+        indexes = [
+            # A pergunta operacional é "o que chegou e não foi tratado".
+            models.Index(
+                fields=["processado_em", "criado_em"],
+                name="evento_wh_idx_processado",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.tipo} — {self.id_evento}"

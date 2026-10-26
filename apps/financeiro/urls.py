@@ -9,6 +9,7 @@ from .views import (
     PagamentoViewSet,
     PlanoCobrancaViewSet,
 )
+from .webhooks import WebhookAsaasView
 
 router = DefaultRouter()
 router.register(r"planos-cobranca", PlanoCobrancaViewSet, basename="planocobranca")
@@ -22,6 +23,13 @@ urlpatterns = [
         "financeiro/alunos/<int:aluno_id>/",
         FichaFinanceiraAlunoView.as_view(),
         name="ficha-financeira-aluno",
+    ),
+    # Entrada do provedor, não recurso nosso: rota por gateway, pra que um
+    # segundo provedor ganhe a sua em vez de disputar esta.
+    path(
+        "financeiro/webhooks/asaas/",
+        WebhookAsaasView.as_view(),
+        name="webhook-asaas",
     ),
     *router.urls,
 ]
