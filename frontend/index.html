@@ -15,6 +15,13 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/diario-diniz-badge-16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/diario-diniz-badge-180.png" />
     <meta name="theme-color" content="#3a4524" />
+    <!-- PWA/iOS: o manifest (injetado pelo vite-plugin-pwa) cobre Android,
+         mas o Safari/iOS ainda lê estas meta tags pra abrir em tela cheia
+         (sem a barra do browser) quando adicionado à tela de início. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Diário" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- Sinaliza pro browser que o app é light-only — desabilita o
          "force dark mode" automático do Chrome/Opera GX/Edge que
