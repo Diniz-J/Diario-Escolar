@@ -65,6 +65,12 @@ def _validar_pelo_clean(serializer, attrs: dict) -> dict:
         obj = serializer.Meta.model()
     for campo, valor in attrs.items():
         setattr(obj, campo, valor)
+    # Admin global que não manda `escola` (e o mixin não deduz, porque o
+    # JWT não tem `escola_id`) chegaria ao INSERT com `escola_id=None` numa
+    # coluna NOT NULL e estouraria IntegrityError (500). Devolve 400
+    # explícito — cobre os três serializers deste módulo de uma vez.
+    if getattr(obj, "escola_id", None) is None:
+        raise serializers.ValidationError({"escola": "Informe a escola."})
     try:
         obj.clean()
     except DjangoValidationError as exc:

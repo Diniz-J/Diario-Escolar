@@ -226,6 +226,39 @@ class EscopoTests(_Setup):
         )
         self.assertEqual(resp.status_code, 400, resp.data)
 
+    def test_admin_global_cria_plano_sem_escola_da_400(self):
+        """Admin não tem escola no JWT: sem o campo, 400 explícito (não 500)."""
+        self._como(self.admin)
+        resp = self.client.post(URL_PLANOS, self.payload_plano(), format="json")
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.assertIn("escola", resp.data)
+
+    def test_admin_global_cria_plano_com_escola(self):
+        self._como(self.admin)
+        resp = self.client.post(
+            URL_PLANOS, self.payload_plano(escola=self.escola.pk), format="json"
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(
+            PlanoCobranca.objects.get(pk=resp.data["id"]).escola_id, self.escola.pk
+        )
+
+    def test_admin_global_cria_fatura_sem_escola_da_400(self):
+        self._como(self.admin)
+        resp = self.client.post(URL_FATURAS, self.payload_fatura(), format="json")
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.assertIn("escola", resp.data)
+
+    def test_admin_global_cria_fatura_com_escola(self):
+        self._como(self.admin)
+        resp = self.client.post(
+            URL_FATURAS, self.payload_fatura(escola=self.escola.pk), format="json"
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(
+            Fatura.objects.get(pk=resp.data["id"]).escola_id, self.escola.pk
+        )
+
 
 # ====================================================================== #
 # PlanoCobranca                                                          #
