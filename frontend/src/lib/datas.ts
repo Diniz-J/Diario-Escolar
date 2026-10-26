@@ -13,12 +13,30 @@
 // Montar campo a campo a partir dos getters locais não passa por essa
 // conversão: `getFullYear`/`getMonth`/`getDate` já respondem no fuso do
 // usuário.
-export function hojeISO(): string {
-  const agora = new Date();
-  const ano = agora.getFullYear();
-  const mes = String(agora.getMonth() + 1).padStart(2, "0");
-  const dia = String(agora.getDate()).padStart(2, "0");
+function paraISO(data: Date): string {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
   return `${ano}-${mes}-${dia}`;
+}
+
+export function hojeISO(): string {
+  return paraISO(new Date());
+}
+
+/**
+ * `dias` atrás, em `YYYY-MM-DD` local. Serve pros filtros de janela
+ * ("últimos 30 dias") que a tela manda pro backend.
+ *
+ * Passa pelo `setDate` em vez de subtrair milissegundos porque o `Date`
+ * já resolve virada de mês, ano e bissexto; e sai pelo `paraISO` pelo
+ * mesmo motivo do `hojeISO` — `toISOString` viraria o dia em fuso
+ * negativo depois das 21h.
+ */
+export function isoDiasAtras(dias: number): string {
+  const data = new Date();
+  data.setDate(data.getDate() - dias);
+  return paraISO(data);
 }
 
 // Formatação por **tipo de campo do backend**, e os nomes dizem qual é

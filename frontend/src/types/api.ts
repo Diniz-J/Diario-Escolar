@@ -893,3 +893,45 @@ export interface MetricasDashboard {
     total_ocorrencias: number;
   };
 }
+
+// ====================================================================
+// Timeline do aluno (GET /timeline/aluno/<id>/)
+// ====================================================================
+
+// Agregação on-the-fly de três origens (ocorrência, presença e histórico
+// cadastral do simple-history), no molde do boletim. O `tipo` é o que
+// decide ícone, cor e rota do evento na tela — `referencia_id` é o id do
+// destino (`/ocorrencias/<id>` ou `/presenca/<id>`), nulo no evento
+// cadastral, que não tem página própria.
+export type TimelineTipo = "ocorrencia" | "presenca" | "cadastro";
+
+export interface TimelineEvento {
+  tipo: TimelineTipo;
+  // DateField: formatar com `formatarDataPura`, nunca com `new Date`.
+  data: string;
+  titulo: string;
+  detalhe: string;
+  status: OcorrenciaStatus | PresencaStatus | null;
+  status_label: string;
+  turma: string;
+  autor: string;
+  referencia_id: number | null;
+}
+
+export interface TimelineAluno {
+  aluno: {
+    id: number;
+    nome_completo: string;
+    matricula: string;
+    turma: string;
+    ativo: boolean;
+  };
+  janela: { data_inicio: string | null; data_fim: string | null };
+  total_eventos: number;
+  limite: number;
+  // Quando true, a resposta foi cortada no teto. A tela avisa: uma
+  // timeline truncada em silêncio faria a direção concluir que não houve
+  // mais nada.
+  truncado: boolean;
+  eventos: TimelineEvento[];
+}

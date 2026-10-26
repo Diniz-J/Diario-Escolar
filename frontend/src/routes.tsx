@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AlunosPage } from "@/pages/AlunosPage";
+import { AlunoTimelinePage } from "@/pages/AlunoTimelinePage";
 import { AvaliacaoDetalhePage } from "@/pages/AvaliacaoDetalhePage";
 import { AvaliacoesPage } from "@/pages/AvaliacoesPage";
 import { BoletimPage } from "@/pages/BoletimPage";
@@ -51,6 +52,12 @@ export function AppRoutes() {
           <Route path="/conta/senha" element={<ContaSenhaPage />} />
           <Route path="/import" element={<ImportPage />} />
           <Route path="/alunos" element={<AlunosPage />} />
+          {/* Timeline do aluno: leitura cronológica que junta
+              ocorrências, chamada e histórico cadastral. */}
+          <Route
+            path="/alunos/:id/timeline"
+            element={<AlunoTimelinePage />}
+          />
           <Route path="/turmas" element={<TurmasPage />} />
           <Route path="/turmas/:id" element={<TurmaDetalhePage />} />
           <Route path="/disciplinas" element={<DisciplinasPage />} />

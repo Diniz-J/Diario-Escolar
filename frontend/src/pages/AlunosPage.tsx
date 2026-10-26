@@ -315,6 +315,13 @@ export function AlunosPage() {
                         >
                           Baixar boletim (PDF)
                         </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            navigate(`/alunos/${aluno.id}/timeline`)
+                          }
+                        >
+                          Ver timeline
+                        </DropdownMenuItem>
                         {/* Ficha financeira é nível-diretor: o endpoint
                             recusa professor e inspetor. */}
                         {podeVerFinanceiro && (
