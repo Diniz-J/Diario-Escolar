@@ -221,6 +221,21 @@ mixin sobrescreve `get_permissions`. PDF separado por turma, com teto
 `LIMITE_PDF_ALUNOS`. Botões na `AlunosPage` ("Relatório") e na
 `TurmaDetalhePage` ("Lista da turma").
 
+**Métricas do dashboard** (`GET /relatorios/dashboard/?turma=`) — o par
+que faltava nos cards (presença média e reincidência de ocorrências),
+em três queries fixas. Mora nesta app porque a régua de presença efetiva
+é daqui: uma terceira cópia dela é exatamente o que o teste de
+não-divergência boletim×relatório existe pra impedir. Janela fixa de 30
+dias (`JANELA_DASHBOARD_DIAS`), **não exposta por parâmetro** — a tela
+não tem seletor de período. Reincidente é quem tem `LIMIAR_REINCIDENCIA`
+(2) ou mais ocorrências na janela, contado em Python sobre uma lista de
+contadores por aluno (dezenas de linhas, não milhares): em SQL exigiria
+`HAVING` sobre anotação dentro de `aggregate`, e a lista dá de graça o
+total de alunos envolvidos que o card usa na sublinha. Único endpoint da
+app que serve só JSON — ninguém baixa dashboard em PDF. Usuário sem
+escola e não-admin recebe **zerado, não 403**: um 4xx aqui derrubaria a
+tela toda.
+
 **Ocorrências** — a action mora no `OcorrenciaViewSet`
 (`GET /ocorrencias/exportar/?formato=pdf|csv|xlsx`), não aqui: é lá que
 `get_queryset` (escopo) e `filter_queryset` (`OcorrenciaFilter`) já
@@ -237,7 +252,7 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 
 ### Frontend — `frontend/src/`
 
-- **`features/<dominio>/hooks.ts`** — TanStack Query: `useXxx` (list), `useCreate`, `useUpdate`, `useDelete`/`useDeactivate`, com invalidação de cache + toast. Domínios: `alunos`, `auth`, `boletins`, `dashboard`, `disciplinas`, `escolas`, `lecionamentos`, `ocorrencias`, `planos-ensino`, `presenca`, `professores`, `turmas`, `usuarios`, `comunicados`, `financeiro`.
+- **`features/<dominio>/hooks.ts`** — TanStack Query: `useXxx` (list), `useCreate`, `useUpdate`, `useDelete`/`useDeactivate`, com invalidação de cache + toast. Domínios: `alunos`, `auth`, `boletins`, `dashboard`, `disciplinas`, `escolas`, `lecionamentos`, `ocorrencias`, `planos-ensino`, `presenca`, `professores`, `turmas`, `usuarios`, `comunicados`, `financeiro`. O `features/dashboard/hooks.ts` nasceu com as métricas agregadas: as outras do dashboard são derivadas no front a partir dos hooks de outros domínios, e presença média e reincidência não dão — a primeira exigiria baixar todo o `ItemPresenca` da escola, a segunda agrupar ocorrência por aluno no cliente.
 - **`features/auth/`** — `AuthProvider`, `useAuth`, `usePermissoes` (regra de UI por perfil; `podeModificarCadastros` = admin/diretor), tokenStorage em localStorage, decode JWT. `user.escola_id` é o sinal usado pelos FormDialogs pra decidir se renderiza o select de escola.
 - **`lib/api.ts`** — axios único. Request interceptor injeta Bearer. Response interceptor: 401 → refresh → refaz request (promise compartilhada contra thundering herd).
 - **`lib/queryClient.ts`** — staleTime 30s, retry off pra 401/403.
@@ -450,7 +465,12 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 7. ✅ **Observabilidade — Sentry** integrado em backend e frontend (PR #49). Init condicional por DSN, captura exceções não tratadas + erros 5xx + `logger.error/exception` + erros de render React via `<Sentry.ErrorBoundary>`. Plano Developer (free) 5k events/mês. Em produção, falta o Diniz setar `SENTRY_DSN` no Render e `VITE_SENTRY_DSN` no Vercel (DSNs já criados: projeto Django e projeto React em `diario-diniz.sentry.io`). Sem essas envs o SDK fica inerte. **`SENTRY_DSN` JÁ SETADO no Render e smoke test CONFIRMADO** (jun/2026): um 404 real em prod apareceu no painel. Captura de **4xx** adicionada via `SentryHttpErrorMiddleware` (#92, ignora 401 por default, env `SENTRY_IGNORE_STATUS_CODES`). **Logging estruturado JSON entregue (PR #88)** — contexto por escola via `EscolaLogContextMiddleware`.
 
 ### FASE 3 — Produto Comercial — PARCIAL
-8. ✅ **Dashboard com métricas** (cards + filtro por turma). Falta: reincidência, presença média.
+8. ✅ **Dashboard com métricas** (cards + filtro por turma) — **completo**:
+    reincidência e presença média entregues como agregado do backend
+    (`GET /relatorios/dashboard/`, janela de 30 dias, reincidente a
+    partir de 2 ocorrências). Presença média marca `tomDestaque` abaixo
+    dos 75% da LDB e distingue "ninguém veio" de "ninguém fez chamada".
+    Ver o mapa de `relatorios/`.
 9. ✅ **Filtro de período** em Ocorrências/Presença. Falta: múltiplos status.
 10. ✅ **Exportação de relatórios** — PDF/CSV/Excel. Três relatórios na
     app `relatorios`: frequência por turma (`TurmaDetalhePage`),
@@ -720,7 +740,7 @@ Frontend continua no Vercel — só backend+banco saem do Render.
 
 Frentes ativas enquanto isso: **melhorias de frontend** (mapeamento
 iniciado em out/2026), fila assíncrona pra email (item 12), timeline do
-aluno (item 13), dashboard com mais métricas.
+aluno (item 13).
 
 ---
 
