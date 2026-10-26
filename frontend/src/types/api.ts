@@ -860,3 +860,36 @@ export interface FichaFinanceira {
   faturas: Fatura[];
   pagamentos: Pagamento[];
 }
+
+// ====================================================================
+// Dashboard — metricas agregadas (GET /relatorios/dashboard/)
+// ====================================================================
+
+// Agregação on-the-fly do backend, no molde do boletim e da ficha
+// financeira. Presença média e reincidência são as duas métricas que o
+// front NÃO consegue derivar das listagens: a primeira exigiria baixar
+// todo o ItemPresenca da escola, a segunda agrupar ocorrência por aluno
+// no cliente. Percentual vem como string pelo mesmo motivo do dinheiro
+// (DecimalField do DRF não vira float), e nenhuma conta é feita aqui.
+export interface MetricasDashboard {
+  janela: {
+    dias: number;
+    data_inicio: string;
+    data_fim: string;
+  };
+  turma_id: number | null;
+  presenca: {
+    percentual_medio: string;
+    total_itens: number;
+    presencas_efetivas: number;
+    total_chamadas: number;
+    abaixo_do_limite: boolean;
+    limite_frequencia: string;
+  };
+  reincidencia: {
+    limiar: number;
+    alunos_reincidentes: number;
+    alunos_com_ocorrencia: number;
+    total_ocorrencias: number;
+  };
+}
