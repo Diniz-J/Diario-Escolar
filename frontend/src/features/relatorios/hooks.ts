@@ -50,7 +50,11 @@ export interface OcorrenciasExportParams {
   // ocorrências é client-side (filtra nome de aluno e turma em JS) e
   // não tem equivalente no backend — mandá-la aqui viraria busca em
   // `descricao`, que é outra coisa.
-  status?: string;
+  //
+  // Lista: a listagem aceita status repetido, e o arquivo tem que sair
+  // com o mesmo recorte da tela — tipar como valor único faria o export
+  // levar só o primeiro status marcado.
+  status?: string[];
   data_inicio?: string;
   data_fim?: string;
   turma?: number;
