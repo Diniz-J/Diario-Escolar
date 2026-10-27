@@ -19,6 +19,7 @@ from django.test import TestCase
 
 from apps.escola.models import Aluno, Escola, Turma
 from apps.financeiro.models import Fatura, FaturaItem, Pagamento, PlanoCobranca
+from apps.portal.models import Responsavel, ResponsavelAluno
 
 
 class _Setup(TestCase):
@@ -590,3 +591,53 @@ class HistoricoTests(_Setup):
         self.assertEqual(
             plano.history.first().valor_mensalidade, Decimal("1100.00")
         )
+
+
+class PlanoPagadorTests(_Setup):
+    """Invariantes do pagador: quem assina o contrato é responsável do aluno.
+
+    O vínculo é o que autoriza alguém a ver os dados do aluno
+    (`RESPONSAVEIS.md`); aceitar um pagador sem vínculo poria o nome de um
+    terceiro no boleto da família, e a escola só descobriria pelo boleto.
+    """
+
+    def responsavel(self, escola, email="mae@exemplo.com", aluno=None):
+        resp = Responsavel.objects.create(
+            escola=escola, nome="Maria", email=email
+        )
+        if aluno is not None:
+            ResponsavelAluno.objects.create(responsavel=resp, aluno=aluno)
+        return resp
+
+    def test_pagador_vinculado_ao_aluno_passa(self):
+        pagador = self.responsavel(self.escola_a, aluno=self.aluno_a)
+        self.plano(pagador=pagador).full_clean()
+
+    def test_plano_sem_pagador_passa(self):
+        """Cobrança online é opt-in: plano sem pagador é cadastro normal."""
+        self.plano(pagador=None).full_clean()
+
+    def test_pagador_de_outra_escola(self):
+        pagador = self.responsavel(self.escola_b, aluno=self.aluno_b)
+        with self.assertRaises(ValidationError) as ctx:
+            self.plano(pagador=pagador).full_clean()
+        self.assertIn("pagador", ctx.exception.message_dict)
+
+    def test_pagador_sem_vinculo_com_o_aluno(self):
+        """Responsável da escola certa, mas de outro aluno (ou de nenhum)."""
+        pagador = self.responsavel(self.escola_a)
+        with self.assertRaises(ValidationError) as ctx:
+            self.plano(pagador=pagador).full_clean()
+        self.assertIn("pagador", ctx.exception.message_dict)
+
+    def test_pagador_vinculado_a_outro_aluno_da_mesma_escola(self):
+        outro = Aluno.objects.create(
+            escola=self.escola_a,
+            turma=self.turma_a,
+            matricula="002",
+            nome_completo="Carla",
+        )
+        pagador = self.responsavel(self.escola_a, aluno=outro)
+        with self.assertRaises(ValidationError) as ctx:
+            self.plano(pagador=pagador).full_clean()
+        self.assertIn("pagador", ctx.exception.message_dict)

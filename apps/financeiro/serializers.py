@@ -65,6 +65,12 @@ def _validar_pelo_clean(serializer, attrs: dict) -> dict:
         obj = serializer.Meta.model()
     for campo, valor in attrs.items():
         setattr(obj, campo, valor)
+    # Admin global que não manda `escola` (e o mixin não deduz, porque o
+    # JWT não tem `escola_id`) chegaria ao INSERT com `escola_id=None` numa
+    # coluna NOT NULL e estouraria IntegrityError (500). Devolve 400
+    # explícito — cobre os três serializers deste módulo de uma vez.
+    if getattr(obj, "escola_id", None) is None:
+        raise serializers.ValidationError({"escola": "Informe a escola."})
     try:
         obj.clean()
     except DjangoValidationError as exc:
@@ -79,6 +85,9 @@ class PlanoCobrancaSerializer(
 
     aluno_nome = serializers.CharField(
         source="aluno.nome_completo", read_only=True
+    )
+    pagador_nome = serializers.CharField(
+        source="pagador.nome", read_only=True, default=""
     )
     # Derivado: mensalidade já com o desconto aplicado. `DecimalField` (e
     # não `SerializerMethodField`) pra sair com as mesmas duas casas em
@@ -95,6 +104,8 @@ class PlanoCobrancaSerializer(
             "escola",
             "aluno",
             "aluno_nome",
+            "pagador",
+            "pagador_nome",
             "valor_mensalidade",
             "dia_vencimento",
             "desconto_tipo",

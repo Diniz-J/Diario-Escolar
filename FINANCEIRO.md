@@ -68,9 +68,20 @@ Dois comandos, os dois seguros de repetir:
 # Gera as faturas do mês, todo dia 1 às 6h.
 0 6 1 * *  cd /app && python manage.py financeiro_gerar_faturas
 
+# Emite no gateway o que a geração criou, meia hora depois.
+30 6 1 * *  cd /app && python manage.py financeiro_emitir_cobrancas
+
 # Move pra `vencido` o que venceu, todo dia às 7h.
 0 7 * * *  cd /app && python manage.py financeiro_marcar_vencidas
 ```
+
+A emissão é **entrada separada**, e não parte da geração, porque
+`gerar_faturas` roda numa transação e em lote: pendurar N chamadas HTTP
+ali prenderia o lock das faturas pelo tempo do provedor, e uma falha no
+meio desfaria as cobranças que já tinham sido criadas lá — que
+continuariam existindo no Asaas sem fatura apontando pra elas. Também é
+o que mantém o módulo funcionando sem gateway: sem a chave, a terceira
+linha simplesmente não tem o que fazer.
 
 `financeiro_gerar_faturas` aceita `--competencia YYYY-MM` (default: mês
 corrente), `--escola <id>` e `--dry-run`. Rodar duas vezes no mesmo mês
@@ -393,7 +404,17 @@ Fluxo: gera `Fatura` → cria cobrança no gateway → guarda `id_externo` +
 fatura pelo `id_externo` → `services.registrar_pagamento()` → notifica o
 responsável.
 
-Decisões já tomadas pra quando a fatia 4 começar:
+As envs do gateway (todas opcionais — sem elas o módulo opera sem
+cobrança online):
+
+| Env | Para quê |
+|---|---|
+| `ASAAS_API_KEY` | Autentica a **nossa saída** pra API deles. Sem ela, `gateway_configurado()` devolve `None` e a emissão recusa com mensagem. |
+| `ASAAS_BASE_URL` | Sandbox (default) ou produção. Chave e ambiente andam juntos: cruzar os dois dá 401 `invalid_environment`. |
+| `ASAAS_TIMEOUT` | Segundos (default 10). Curto porque a emissão acontece dentro de uma request da secretaria. |
+| `ASAAS_WEBHOOK_TOKEN` | Valida a **entrada deles**. É o `authToken` do cadastro do hook no painel, **não** a API key — a doc deles diz isso explicitamente. Sem ela o endpoint recusa tudo. |
+
+Decisões tomadas antes da fatia 4, e o que implementar provou:
 
 - **Gateway: Asaas.** Boleto + Pix + cartão, API e webhook decentes, taxa
   baixa, popular em escola e clínica. Vindi é alternativa, mais forte em
@@ -410,10 +431,47 @@ Decisões já tomadas pra quando a fatia 4 começar:
 - **Webhook idempotente pelo id do evento**, com modelo próprio
   (`unique` no id) — reentrega é comportamento normal do Asaas, não erro.
 - **Não confiar no corpo do webhook pra valor**: reconsultar
-  `GET /payments/{id}` antes de conciliar.
+  `GET /payments/{id}` antes de conciliar. O token prova quem mandou, não
+  quanto entrou — `conciliar_cobranca` só lê o corpo pra achar a fatura.
 - **Notificação ao responsável sai por `apps/portal/destinatarios.py`**,
   como ocorrência e comunicado. O pai vinculado só pelo M2M tem que
-  receber — é a armadilha do `RESPONSAVEIS.md` §4.1.
+  receber — é a armadilha do `RESPONSAVEIS.md` §4.1. Mora em
+  `apps/financeiro/notificacoes.py`, separada do `services.py`: lá é o que
+  escreve dinheiro (não pode falhar em silêncio), aqui é melhor-esforço
+  por definição.
+
+Quatro coisas que só apareceram ao escrever o adaptador contra a
+documentação deles, e que nenhum nome de campo revela:
+
+- **`DELETE /payments/{id}` devolve `{deleted, id}`, não a cobrança.** O
+  contrato promete uma `Cobranca`, então `cancelar_cobranca` apaga e
+  relê. Consequência: se o `DELETE` passar e a releitura falhar, o
+  adaptador levanta erro embora a cobrança esteja cancelada lá — por isso
+  `services.cancelar_cobranca` trata falha como aviso, nunca como
+  bloqueio. Cancelar fatura aqui não pode depender da disponibilidade
+  deles.
+- **`deleted` ganha do `status`.** Cobrança removida continua
+  respondendo o status que tinha (`PENDING`, por exemplo). Ler só o
+  status faria a conciliação tratar como viva uma cobrança que a escola
+  já baixou.
+- **O valor pago é `value`, não `netValue`.** `netValue` é o líquido
+  depois da tarifa deles — usá-lo deixaria saldo residual em toda fatura.
+  Quando o pagamento sai diferente do original (atraso com multa), é
+  `originalValue` que guarda o original e `value` que traz o
+  efetivamente pago; `value` é o certo nos dois casos.
+- **`fine` tem `type`, `interest` não.** A multa vai como
+  `{value, type: "PERCENTAGE"}` e os juros como `{value}` — mandar `type`
+  nos juros faz o Asaas recusar. Os dois saem das cláusulas do
+  `PlanoCobranca`, e vão **porque o encargo tem que estar no boleto**:
+  sem isso o atraso é cobrado pelo valor de face e a escola teria que
+  cobrar a diferença à mão.
+
+O meio de pagamento que volta deles nem sempre cabe no nosso enum: a doc
+diz que valor entrando na conta por Pix ou TED é associado a uma cobrança
+existente, então a mensalidade emitida como "pagador escolhe" pode voltar
+paga como `TRANSFER`/`DEPOSIT`. Daí `Pagamento.Metodo.OUTRO` — chutar
+`boleto` gravaria fato errado numa tabela de dinheiro auditada. Não é
+opção de secretaria: ela escolhe entre os quatro meios de sempre.
 
 ---
 
@@ -480,8 +538,8 @@ turma, não de um aluno. As três são de nível-diretor, como o endpoint.
 | 1 | Models, migration, admin, testes | **entregue** |
 | 2 | API DRF (viewsets, serializers, filtros, permissões) | **entregue** |
 | 3 | `services.py` + geração recorrente + job de vencidas | **entregue** |
-| 4 | `gateways/base.py` + `asaas.py` | pendente |
-| 5 | Webhook + conciliação + notificação ao responsável | pendente |
+| 4 | `gateways/base.py` + `asaas.py` + emissão | **entregue** |
+| 5 | Webhook + conciliação + notificação ao responsável | **entregue** |
 | 6 | Frontend — faturas e planos | **entregue** |
 | 6b | Ficha financeira do aluno (endpoint + tela) | **entregue** |
 
@@ -511,8 +569,26 @@ automaticamente (fatias 4 e 5) e a tela (fatia 6).
 sem passar pelo `/admin/`, e a ficha do aluno responde "quanto este aluno
 deve" com os totais somados no servidor.
 
-Próximo passo é a fatia 4 (client do Asaas), **bloqueada** enquanto
-`docs.asaas.com` estiver negado pela política de rede do ambiente de
-desenvolvimento — o adapter precisa ser escrito contra o contrato real,
-não de memória. A 6b (ficha financeira do aluno) está livre e é a
-candidata natural enquanto isso.
+**Fatias 4 e 5 entregues**, e com elas o módulo fecha: a escola emite a
+cobrança (`POST /faturas/<id>/emitir-cobranca/` na tela, ou
+`financeiro_emitir_cobrancas` no cron), a família paga pelo link do
+provedor e o webhook concilia e avisa o responsável, sem ninguém abrir o
+sistema.
+
+O que a fatia 4 trouxe de schema, porque a emissão exigia: `pagador` no
+`PlanoCobranca` (FK pro `Responsavel`) e `id_externo_gateway` no
+`Responsavel`. O pagador mora no **contrato**, não no aluno, porque o
+aluno com mãe e pai vinculados tem dois responsáveis no portal e um só
+titular de boleto — deixar a escolha implícita ("o primeiro com CPF")
+faria o titular trocar sozinho no dia em que alguém preenchesse o CPF do
+outro. O `clean()` exige que o pagador seja responsável **daquele**
+aluno: cobrar em nome de quem não tem vínculo poria um terceiro no boleto
+da família. O `id_externo_gateway` existe porque criar cliente no Asaas
+**não** é idempotente — sem guardar o id, cada emissão abriria outro
+cadastro e espalharia o histórico da mesma família por vários clientes.
+
+O que falta pra operar de verdade não é código: as **entradas de cron**
+(§2.2) e as quatro envs (§6) precisam ser configuradas no servidor, e o
+hook tem que ser cadastrado no painel do Asaas apontando pra
+`/api/v1/financeiro/webhooks/asaas/` com o mesmo `authToken` que entrar
+em `ASAAS_WEBHOOK_TOKEN`.

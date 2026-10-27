@@ -1,0 +1,100 @@
+{% load static %}<!DOCTYPE html>
+{% comment %}
+   Template HTML do email de confirmacao de pagamento.
+   Mesmas restricoes do email de ocorrencia: estilos inline (clientes de
+   email ignoram <style>), logo em PNG (SVG nao renderiza no Outlook),
+   cores em hex (nao da pra usar CSS variables em email).
+   O filete de destaque aqui e olive, nao ferrugem: pagamento recebido e
+   confirmacao, nao alerta.
+{% endcomment %}
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<title>Pagamento recebido</title>
+</head>
+<body style="margin:0;padding:0;background-color:#fafafa;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#fafafa;padding:24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width:600px;background-color:#ffffff;border-radius:8px;overflow:hidden;">
+
+          <tr>
+            <td style="background-color:#3a4524;padding:24px 32px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:14px;">
+                    <img src="{{ backend_url }}{% static 'branding/diario-diniz-badge-128.png' %}"
+                         alt="Diário Diniz"
+                         width="48" height="48"
+                         style="display:block;border:0;border-radius:8px;">
+                  </td>
+                  <td style="vertical-align:middle;color:#ebe2d1;font-family:Georgia,serif;font-size:22px;letter-spacing:-0.01em;">
+                    Diário Diniz
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:32px;color:#2d2a24;font-size:15px;line-height:1.6;">
+              <h2 style="margin:0 0 16px;font-family:Georgia,serif;font-size:22px;color:#2d2a24;letter-spacing:-0.01em;font-weight:normal;">
+                Pagamento recebido
+              </h2>
+
+              <p style="margin:0 0 12px;">
+                Prezado(a) <strong>{{ nome_responsavel }}</strong>,
+              </p>
+              <p style="margin:0 0 12px;">
+                Confirmamos o recebimento do pagamento da mensalidade de
+                <strong>{{ competencia }}</strong> do(a) aluno(a)
+                <strong>{{ aluno.nome_completo }}</strong>.
+              </p>
+
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
+                     style="background-color:#f5efe0;border-left:3px solid #3a4524;border-radius:4px;margin:20px 0;">
+                <tr>
+                  <td style="padding:16px 20px;font-size:14px;color:#2d2a24;">
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#6b6859;margin-bottom:4px;">Aluno</div>
+                    <div style="margin-bottom:12px;">{{ aluno.nome_completo }}</div>
+
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#6b6859;margin-bottom:4px;">Competência</div>
+                    <div style="margin-bottom:12px;">{{ competencia }}</div>
+
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#6b6859;margin-bottom:4px;">Valor recebido</div>
+                    <div style="margin-bottom:12px;">{{ valor }}</div>
+
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#6b6859;margin-bottom:4px;">Data do pagamento</div>
+                    <div style="margin-bottom:12px;">{{ data_br }}</div>
+
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#6b6859;margin-bottom:4px;">Situação da fatura</div>
+                    <div>{{ status_display }}</div>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:16px 0 0;">
+                Guarde este email como comprovante. Em caso de dúvidas, fale
+                com a secretaria da escola.
+              </p>
+
+              <p style="margin:24px 0 0;color:#6b6859;font-size:13px;">
+                Atenciosamente,<br>
+                <strong>Secretaria</strong>
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="background-color:#f5efe0;padding:20px 32px;font-size:12px;color:#6b6859;text-align:center;border-top:1px solid #e5e5e5;">
+              Este é um email automático do sistema <strong>Diário Diniz</strong>.<br>
+              Não responda diretamente — fale com a escola pelo canal habitual.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

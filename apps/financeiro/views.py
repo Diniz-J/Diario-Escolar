@@ -24,6 +24,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, mixins, viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -34,6 +35,7 @@ from apps.common.views import EscopoEscolaMixin
 from apps.escola.models import Aluno
 
 from .filters import FaturaFilter, PagamentoFilter, PlanoCobrancaFilter
+from .gateways import ErroDeGateway, gateway_configurado
 from .models import Fatura, FaturaItem, Pagamento, PlanoCobranca
 from .serializers import (
     FaturaItemSerializer,
@@ -43,7 +45,14 @@ from .serializers import (
     PlanoCobrancaSerializer,
     erro_drf,
 )
-from .services import estornar_pagamento, ficha_financeira, registrar_pagamento
+from .services import (
+    EmissaoRecusadaError,
+    cancelar_cobranca,
+    emitir_cobranca,
+    estornar_pagamento,
+    ficha_financeira,
+    registrar_pagamento,
+)
 
 
 class PlanoCobrancaViewSet(EscopoEscolaMixin, viewsets.ModelViewSet):
@@ -93,6 +102,49 @@ class FaturaViewSet(EscopoEscolaMixin, viewsets.ModelViewSet):
     filterset_class = FaturaFilter
     search_fields = ["aluno__nome_completo", "aluno__matricula", "id_externo"]
 
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="emitir-cobranca",
+        # `url_name` explícito: o DRF o derivaria do nome do método
+        # (`fatura-emitir`), e o nome de rota ficaria diferente do caminho.
+        url_name="emitir-cobranca",
+    )
+    def emitir(self, request, pk=None):
+        """Cria no gateway a cobrança desta fatura e devolve a fatura.
+
+        `POST` sem corpo usa "pagador escolhe o meio", que é o caso da
+        mensalidade; `{"metodo": "pix"}` fixa um.
+
+        Erro de gateway e cadastro incompleto saem como 400 com o texto
+        do serviço, porque é ali que a secretaria descobre o que fazer
+        ("responsável sem CPF", "plano sem pagador"). Mesmo princípio dos
+        dialogs do financeiro, que mostram a mensagem do backend em vez de
+        um "erro ao salvar" genérico. Falha temporária do provedor sai
+        igual, com a mensagem dizendo pra repetir — distinguir no status
+        HTTP não mudaria nada pra quem está na tela.
+        """
+        fatura = self.get_object()
+        gateway = gateway_configurado()
+        if gateway is None:
+            raise ValidationError(
+                {
+                    "detail": (
+                        "Cobrança online não está configurada nesta "
+                        "instalação. Registre o pagamento manualmente."
+                    )
+                }
+            )
+        try:
+            fatura = emitir_cobranca(
+                fatura, gateway, metodo=request.data.get("metodo", "")
+            )
+        except EmissaoRecusadaError as exc:
+            raise ValidationError({"detail": str(exc)}) from exc
+        except ErroDeGateway as exc:
+            raise ValidationError({"detail": exc.mensagem}) from exc
+        return Response(self.get_serializer(fatura).data)
+
     def perform_destroy(self, instance) -> None:
         """Cancela em vez de apagar — fatura é documento financeiro.
 
@@ -101,6 +153,11 @@ class FaturaViewSet(EscopoEscolaMixin, viewsets.ModelViewSet):
         é estornar o pagamento primeiro. Sem este guard, o `save()`
         gravaria um estado que o `full_clean()` recusaria — o banco
         aceitaria, e a fatura ficaria cancelada com valor pago.
+
+        Cancelar aqui cancela também no gateway, quando a fatura foi
+        emitida: sem isso a família seguiria recebendo lembrete de uma
+        cobrança que a escola já baixou. A falha lá não bloqueia o
+        cancelamento daqui — ver `services.cancelar_cobranca`.
         """
         if instance.status == Fatura.Status.CANCELADO:
             return
@@ -113,6 +170,8 @@ class FaturaViewSet(EscopoEscolaMixin, viewsets.ModelViewSet):
                     )
                 }
             )
+        if instance.id_externo and (gateway := gateway_configurado()):
+            cancelar_cobranca(instance, gateway)
         instance.status = Fatura.Status.CANCELADO
         instance.save(update_fields=["status", "atualizado_em"])
 

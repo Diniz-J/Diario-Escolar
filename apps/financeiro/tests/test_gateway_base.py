@@ -1,9 +1,10 @@
-"""Testes do contrato do gateway.
+"""Testes do contrato do gateway, independentes de provedor.
 
-Não há provedor ainda (fatia 4 entrega o Asaas), então o que se testa
-aqui é o contrato em si: que ele obriga as quatro operações, que o
-vocabulário de situação não desencontra do `Fatura.Status` e que a
-hierarquia de erro permite decidir retentativa sem ler mensagem.
+O que se testa aqui é o contrato em si: que ele obriga as quatro
+operações, que o vocabulário de situação não desencontra do
+`Fatura.Status` e que a hierarquia de erro permite decidir retentativa
+sem ler mensagem. A tradução do dialeto do Asaas é testada em
+`test_gateway_asaas` (transporte) e `test_gateway_asaas_adapter`.
 """
 from datetime import date
 from decimal import Decimal

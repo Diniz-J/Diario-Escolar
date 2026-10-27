@@ -31,6 +31,7 @@ from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 from simple_history.models import HistoricalRecords
 
@@ -80,6 +81,18 @@ class Responsavel(AbstractBaseUser, BaseModelEscopado):
         help_text="Documento do pagador. Exigido só para emitir cobrança.",
     )
 
+    # Id deste pagador no gateway de cobrança (`cus_...` no Asaas).
+    # Guardado porque criar cliente lá **não** é idempotente: o Asaas
+    # aceita duplicata, então sem o id cada emissão abriria outro cadastro
+    # e espalharia o histórico da mesma família por vários clientes.
+    # Escrito pelo sistema, nunca pela secretaria.
+    id_externo_gateway = models.CharField(
+        max_length=64,
+        blank=True,
+        verbose_name="id no gateway",
+        help_text="Id do pagador no gateway. Preenchido pelo sistema.",
+    )
+
     # Sobrescreve o campo herdado para expor `escola.responsaveis` no reverse.
     escola = models.ForeignKey(
         Escola, on_delete=models.PROTECT, related_name="responsaveis"
@@ -108,6 +121,15 @@ class Responsavel(AbstractBaseUser, BaseModelEscopado):
             models.UniqueConstraint(
                 fields=["escola", "email"],
                 name="responsavel_unique_escola_email",
+            ),
+            # Dois responsáveis apontando pro mesmo cadastro no gateway
+            # fariam a cobrança de um sair no nome do outro. Parcial porque
+            # vazio é o estado normal de quem nunca foi pro gateway —
+            # mesmo molde de `Fatura.id_externo`.
+            models.UniqueConstraint(
+                fields=["id_externo_gateway"],
+                condition=~Q(id_externo_gateway=""),
+                name="responsavel_unique_id_externo_gateway",
             ),
         ]
 

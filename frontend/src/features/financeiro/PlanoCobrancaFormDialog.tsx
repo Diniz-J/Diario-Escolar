@@ -20,6 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAlunos } from "@/features/alunos/hooks";
+import { usePermissoes } from "@/features/auth/usePermissoes";
+import { useEscolas } from "@/features/escolas/hooks";
 import type { DescontoTipo, PlanoCobranca } from "@/types/api";
 
 import { DESCONTO_TIPOS } from "./constants";
@@ -46,12 +48,20 @@ export function PlanoCobrancaFormDialog({
   const updateMutation = useUpdatePlanoCobranca();
   // Só alunos ativos: contrato novo pra aluno desativado não faz sentido.
   const alunosQuery = useAlunos({ ativo: true });
+  // Select de escola só pra admin global — demais perfis têm escola no
+  // JWT e o backend deduz (AutoEscopoEscolaSerializerMixin). Sem isso, o
+  // admin (escola_id null) criava plano sem escola e o INSERT estourava
+  // 500 numa coluna NOT NULL.
+  const { ehAdminGlobal } = usePermissoes();
+  const escolasQuery = useEscolas();
 
   // Estado nasce dos props — a página remonta o dialog (`key`) a cada
   // abertura, então não há `useEffect` pra resetar.
   const [alunoId, setAlunoId] = useState<string>(
     plano ? String(plano.aluno) : "",
   );
+  // Só a escolha explícita do admin; o valor que vale é o derivado abaixo.
+  const [escolaId, setEscolaId] = useState<string>("");
   const [valor, setValor] = useState(plano?.valor_mensalidade ?? "");
   const [diaVencimento, setDiaVencimento] = useState(
     String(plano?.dia_vencimento ?? 10),
@@ -72,10 +82,19 @@ export function PlanoCobrancaFormDialog({
 
   const enviando = createMutation.isPending || updateMutation.isPending;
 
+  // Pré-seleciona a única escola disponível (perfil comum só vê a sua).
+  const escolas = escolasQuery.data;
+  const escolaEfetiva =
+    escolaId || (escolas?.length === 1 ? String(escolas[0].id) : "");
+
   async function salvar() {
     setErro(null);
     if (!editando && alunoId === "") {
       setErro("Escolha o aluno.");
+      return;
+    }
+    if (!editando && ehAdminGlobal && !escolaEfetiva) {
+      setErro("Selecione a escola.");
       return;
     }
     if (!valor.trim()) {
@@ -111,6 +130,10 @@ export function PlanoCobrancaFormDialog({
         await createMutation.mutateAsync({
           ...payload,
           aluno: Number(alunoId),
+          // `escola` só pra admin global; demais perfis o backend deduz.
+          ...(ehAdminGlobal && escolaEfetiva
+            ? { escola: Number(escolaEfetiva) }
+            : {}),
         });
       }
       onOpenChange(false);
@@ -136,6 +159,24 @@ export function PlanoCobrancaFormDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {!editando && ehAdminGlobal && (
+            <div className="space-y-2">
+              <Label className={LABEL_CLASS}>Escola</Label>
+              <Select value={escolaEfetiva} onValueChange={setEscolaId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Escolha a escola" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(escolas ?? []).map((e) => (
+                    <SelectItem key={e.id} value={String(e.id)}>
+                      {e.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {!editando && (
             <div className="space-y-2">
               <Label className={LABEL_CLASS}>Aluno</Label>
