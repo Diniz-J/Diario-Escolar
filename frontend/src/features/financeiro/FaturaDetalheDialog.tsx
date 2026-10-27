@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatarDataPura } from "@/lib/datas";
 import type { Fatura } from "@/types/api";
 
 import {
@@ -15,7 +16,6 @@ import {
   STATUS_FATURA,
   formatarBRL,
   formatarCompetencia,
-  formatarData,
 } from "./constants";
 import {
   useEstornarPagamento,
@@ -57,7 +57,7 @@ export function FaturaDetalheDialog({
           </DialogTitle>
           <DialogDescription>
             {fatura
-              ? `Competência ${formatarCompetencia(fatura.competencia)} · vence em ${formatarData(fatura.vencimento)}`
+              ? `Competência ${formatarCompetencia(fatura.competencia)} · vence em ${formatarDataPura(fatura.vencimento)}`
               : ""}
           </DialogDescription>
         </DialogHeader>
@@ -100,7 +100,7 @@ export function FaturaDetalheDialog({
                 <>
                   <dt className={LABEL_CLASS}>Quitada em</dt>
                   <dd className="text-right">
-                    {formatarData(fatura.data_pagamento)}
+                    {formatarDataPura(fatura.data_pagamento)}
                   </dd>
                 </>
               )}
@@ -147,7 +147,7 @@ export function FaturaDetalheDialog({
                       className="flex items-center justify-between gap-3 py-1.5"
                     >
                       <span>
-                        {formatarData(pagamento.data)} ·{" "}
+                        {formatarDataPura(pagamento.data)} ·{" "}
                         {METODO_LABEL[pagamento.metodo]}
                         {pagamento.referencia_externa && (
                           <span className="text-sepia">

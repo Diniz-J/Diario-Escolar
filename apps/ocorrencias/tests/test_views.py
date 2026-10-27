@@ -223,6 +223,47 @@ class OcorrenciaFilterAndSearchTests(_OcorrenciaSetup):
         ids = {item["id"] for item in resp.data["results"]}
         self.assertEqual(ids, {self.oc_aberta.id})
 
+    def test_filtro_por_multiplos_status(self):
+        """`?status=a&status=b` é "o que ainda está em aberto".
+
+        A ocorrência extra nasce aqui e não no `setUpTestData` pra não
+        mexer nos conjuntos exatos que os outros testes da classe afirmam.
+        """
+        em_andamento = Ocorrencia.objects.create(
+            escola=self.escola, turma=self.turma, aluno=self.aluno,
+            professor=self.professor, descricao="caso em apuracao",
+            status=Ocorrencia.Status.EM_ANDAMENTO,
+        )
+        resp = self._request(
+            "list", "professor", query="?status=aberta&status=em_andamento"
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        ids = {item["id"] for item in resp.data["results"]}
+        self.assertEqual(ids, {self.oc_aberta.id, em_andamento.id})
+
+    def test_status_repetido_nao_duplica_linha(self):
+        """O filtro é sobre coluna da própria tabela: sem JOIN, sem repetição.
+
+        Trava o `distinct=False`: se um dia o filtro passar a atravessar
+        relação, a contagem aqui acusa antes de a tela mostrar a mesma
+        ocorrência duas vezes.
+        """
+        resp = self._request(
+            "list", "professor", query="?status=aberta&status=aberta"
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        ids = [item["id"] for item in resp.data["results"]]
+        self.assertEqual(ids, [self.oc_aberta.id])
+
+    def test_status_fora_do_enum_recusa(self):
+        """Erro explícito em vez de recorte vazio que parece resposta."""
+        resp = self._request("list", "professor", query="?status=inventado")
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("status", resp.data)
+
     def test_filtro_por_aluno(self):
         resp = self._request("list", "professor", query=f"?aluno={self.outro_aluno.id}")
         self.assertEqual(resp.status_code, 200)

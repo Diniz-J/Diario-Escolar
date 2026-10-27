@@ -20,7 +20,7 @@ export const STATUS_FATURA: Record<
 > = {
   pendente: {
     label: "Pendente",
-    className: "bg-[#FCE7BC] text-[#854D0E]",
+    className: "bg-mostarda text-ambar",
   },
   pago: {
     label: "Pago",
@@ -61,14 +61,6 @@ export function formatarBRL(valor: string): string {
     style: "currency",
     currency: "BRL",
   });
-}
-
-// `new Date("2026-03-10")` é interpretado como UTC e, em fuso negativo
-// (Brasil), volta como dia 9. Estes campos são DateField puro, sem hora,
-// então o split é mais correto que qualquer coisa com `Date`.
-export function formatarData(iso: string): string {
-  const [ano, mes, dia] = iso.split("-");
-  return `${dia}/${mes}/${ano}`;
 }
 
 export function formatarCompetencia(iso: string): string {

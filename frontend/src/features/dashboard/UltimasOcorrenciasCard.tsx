@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAlunos } from "@/features/alunos/hooks";
 import { useOcorrencias } from "@/features/ocorrencias/hooks";
+import { formatarDataPura } from "@/lib/datas";
 import type { OcorrenciaStatus } from "@/types/api";
 
 interface UltimasOcorrenciasCardProps {
@@ -12,23 +13,19 @@ interface UltimasOcorrenciasCardProps {
 
 // Mapeia status → cores na paleta da marca (em vez do red/amber/green
 // genérico). Mantém a leitura "ferrugem = atenção, olive = resolvido"
-// coerente com o resto do app. Cada entrada gera classes Tailwind via
-// arbitrary values pra puxar diretamente das CSS variables.
+// coerente com o resto do app. A mostarda sai do token compartilhado
+// (DESIGN.md §6.3); as outras seguem em valor arbitrário, porque são
+// específicas deste conjunto de status.
 const STATUS_STYLE: Record<OcorrenciaStatus, string> = {
   // ferrugem clarinho de fundo + ferrugem escuro de texto.
   aberta: "bg-[#F4DAD3] text-[#7C2D1A]",
   // mostarda quente — diferencia de "aberta" sem perder a sensação de pendente.
-  em_andamento: "bg-[#FCE7BC] text-[#854D0E]",
+  em_andamento: "bg-mostarda text-ambar",
   // olive — sensação de "consolidado, ok".
   resolvida: "bg-[#D7DCC1] text-[#3A4524]",
   // muted — paleta neutra da própria marca.
   arquivada: "bg-muted text-sepia",
 };
-
-function formatarDataBR(iso: string): string {
-  const [ano, mes, dia] = iso.split("-");
-  return `${dia}/${mes}/${ano}`;
-}
 
 // Lista as 5 ocorrências mais recentes da escola (ou da turma filtrada).
 // O backend já devolve ordenado por data desc, então é só fatiar.
@@ -43,6 +40,8 @@ export function UltimasOcorrenciasCard({
   const alunosQuery = useAlunos();
 
   const carregando = ocorrenciasQuery.isLoading || alunosQuery.isLoading;
+  // Só a query de ocorrências define o estado de erro: se a de alunos
+  // falhar, a lista ainda sai — o nome cai no fallback "Aluno #id".
 
   const alunosPorId = useMemo(() => {
     const m = new Map<number, string>();
@@ -66,6 +65,10 @@ export function UltimasOcorrenciasCard({
           <Skeleton className="h-5 w-full" />
           <Skeleton className="h-5 w-3/4" />
         </div>
+      ) : ocorrenciasQuery.isError ? (
+        <p className="text-sm text-destructive">
+          Não foi possível carregar as ocorrências.
+        </p>
       ) : recentes.length === 0 ? (
         <p className="text-sm text-sepia">Nenhuma ocorrência registrada.</p>
       ) : (
@@ -81,7 +84,7 @@ export function UltimasOcorrenciasCard({
                 title={alunosPorId.get(o.aluno) ?? `Aluno #${o.aluno}`}
               >
                 <span className="text-sepia tabular-nums mr-2 font-mono text-xs">
-                  {formatarDataBR(o.data_ocorrencia)}
+                  {formatarDataPura(o.data_ocorrencia)}
                 </span>
                 <span>
                   {alunosPorId.get(o.aluno) ?? `Aluno #${o.aluno}`}

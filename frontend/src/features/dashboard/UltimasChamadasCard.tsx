@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRegistros } from "@/features/presenca/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
-import { hojeISO } from "@/lib/datas";
+import { formatarDataPura, hojeISO } from "@/lib/datas";
 import { cn } from "@/lib/utils";
 
 interface UltimasChamadasCardProps {
@@ -27,11 +27,6 @@ function diasDesde(isoData: string): number {
   return Math.floor(diffMs / (1000 * 60 * 60 * 24));
 }
 
-function formatarDataBR(iso: string): string {
-  const [ano, mes, dia] = iso.split("-");
-  return `${dia}/${mes}/${ano}`;
-}
-
 // Mostra a data da chamada mais recente por turma. Quando nenhuma turma
 // está filtrada, exibe até 5 turmas ativas (priorizando as que estão a
 // mais tempo sem chamada — sinaliza turma "esquecida").
@@ -47,6 +42,9 @@ export function UltimasChamadasCard({
   );
 
   const carregando = turmasQuery.isLoading || registrosQuery.isLoading;
+  // As duas são essenciais: `linhas` volta vazia se qualquer uma faltar,
+  // então sem este ramo a falha apareceria como "Nenhuma turma ativa".
+  const erro = turmasQuery.isError || registrosQuery.isError;
 
   const linhas: LinhaUltimaChamada[] = useMemo(() => {
     if (!turmasQuery.data || !registrosQuery.data) return [];
@@ -96,6 +94,10 @@ export function UltimasChamadasCard({
           <Skeleton className="h-5 w-full" />
           <Skeleton className="h-5 w-3/4" />
         </div>
+      ) : erro ? (
+        <p className="text-sm text-destructive">
+          Não foi possível carregar as chamadas.
+        </p>
       ) : linhas.length === 0 ? (
         <p className="text-sm text-sepia">Nenhuma turma ativa.</p>
       ) : (
@@ -120,7 +122,7 @@ export function UltimasChamadasCard({
                   )}
                 >
                   {l.ultimaData
-                    ? `${formatarDataBR(l.ultimaData)} · ${l.diasAtras}d`
+                    ? `${formatarDataPura(l.ultimaData)} · ${l.diasAtras}d`
                     : "sem chamada"}
                 </span>
               </li>

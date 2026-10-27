@@ -64,6 +64,9 @@ export function OcorrenciaDetalhePage() {
   const updateMutation = useUpdateOcorrencia();
 
   const [editOpen, setEditOpen] = useState(false);
+  // Remonta o dialog a cada abertura pra que o estado nasça dos props,
+  // sem `useEffect` de repreenchimento. Idioma da `PlanosCobrancaPage`.
+  const [formKey, setFormKey] = useState(0);
   const [deleteAlvo, setDeleteAlvo] = useState(false);
 
   const ocorrencia = ocorrenciaQuery.data;
@@ -129,12 +132,21 @@ export function OcorrenciaDetalhePage() {
               ))}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="Ações da ocorrência"
+                  >
                     ⋯
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setFormKey((k) => k + 1);
+                      setEditOpen(true);
+                    }}
+                  >
                     Editar detalhes
                   </DropdownMenuItem>
                   <DropdownMenuItem
@@ -231,6 +243,7 @@ export function OcorrenciaDetalhePage() {
           </Card>
 
           <OcorrenciaFormDialog
+            key={formKey}
             open={editOpen}
             onOpenChange={setEditOpen}
             ocorrencia={ocorrencia}

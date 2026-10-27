@@ -86,6 +86,7 @@ LOCAL_APPS: list[str] = [
     "apps.presenca",
     "apps.tarefas",
     "apps.boletins",
+    "apps.timeline",
     "apps.relatorios",
     "apps.planos_ensino",
     "apps.avaliacao",
@@ -405,6 +406,23 @@ LOGGING = {
 # `traces_sample_rate=0` — só erro, sem APM/tracing. Tracing entra na
 # quota de "performance units" do plano free; deixamos zerado pra
 # preservar a quota pro que realmente importa (exceções).
+# ---------------------------------------------------------------- #
+# Gateway de cobrança (Asaas)                                        #
+# ---------------------------------------------------------------- #
+# Sem `ASAAS_API_KEY` o módulo financeiro continua funcionando: a escola
+# registra Pix e dinheiro na secretaria à mão, e o gateway é integração,
+# não dependência (`FINANCEIRO.md` §6). Por isso nada aqui é obrigatório
+# e a falta da chave só aparece quando alguém tenta emitir cobrança.
+#
+# Chave e URL andam juntas de propósito: chave de produção apontada pro
+# sandbox (ou o contrário) devolve 401 `invalid_environment`, que é um
+# erro difícil de ler quando as duas configurações vivem separadas.
+ASAAS_API_KEY = config("ASAAS_API_KEY", default="")
+ASAAS_BASE_URL = config(
+    "ASAAS_BASE_URL", default="https://api-sandbox.asaas.com/v3"
+)
+ASAAS_TIMEOUT = config("ASAAS_TIMEOUT", default=10, cast=int)
+
 SENTRY_DSN = config("SENTRY_DSN", default="")
 if SENTRY_DSN and not TESTING:
     import sentry_sdk

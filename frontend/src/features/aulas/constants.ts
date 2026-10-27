@@ -38,7 +38,7 @@ export const STATUS_AULA: Record<
   },
   rascunho: {
     label: "Rascunho",
-    classe: "bg-[#FCE7BC] text-[#854D0E]",
+    classe: "bg-mostarda text-ambar",
   },
   lancado: {
     label: "Lançado",

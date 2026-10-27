@@ -63,6 +63,12 @@ export function DiarioAulaPage() {
   });
 
   const [dialogAberto, setDialogAberto] = useState(false);
+  // Remonta o dialog a cada abertura. O conteúdo da aula é derivado da
+  // query de detalhe com o que o professor digitou por cima, e sem a
+  // remontagem um rascunho não salvo apareceria na próxima abertura —
+  // inclusive em outra aula, porque `slotSelecionado` não é limpo ao
+  // fechar e o dialog continua montado.
+  const [formKey, setFormKey] = useState(0);
   const [slotSelecionado, setSlotSelecionado] = useState<AgendaSlot | null>(
     null,
   );
@@ -112,11 +118,15 @@ export function DiarioAulaPage() {
     // futura); só abre se já existe registro (ex.: editar rascunho).
     if (slot.futuro && slot.status === "vazio") return;
     setSlotSelecionado(slot);
+    setFormKey((k) => k + 1);
     setDialogAberto(true);
   }
 
   const carregandoBase =
     professoresQuery.isLoading || lecionamentosQuery.isLoading;
+  // `meuProfessor` sai da lista de professores: se a requisição falhar ele
+  // fica indefinido e a tela acusaria o professor de não ter cadastro.
+  const erroBase = professoresQuery.isError || lecionamentosQuery.isError;
 
   return (
     <div className="p-4 md:p-8 max-w-4xl">
@@ -131,7 +141,14 @@ export function DiarioAulaPage() {
         </p>
       </header>
 
-      {!carregandoBase && !meuProfessor && (
+      {erroBase && (
+        <p className="text-sm text-destructive">
+          Não foi possível carregar seus vínculos de lecionamento. Recarregue
+          a página.
+        </p>
+      )}
+
+      {!carregandoBase && !erroBase && !meuProfessor && (
         <p className="text-sm text-sepia">
           Esta área é do professor — seu usuário não tem um cadastro de
           professor vinculado.
@@ -198,6 +215,11 @@ export function DiarioAulaPage() {
             </p>
           ) : agendaQuery.isLoading ? (
             <p className="text-sm text-sepia">Carregando agenda…</p>
+          ) : agendaQuery.isError ? (
+            <p className="text-sm text-destructive">
+              Não foi possível carregar a agenda do mês. Recarregue a página
+              — não é problema na grade horária do lecionamento.
+            </p>
           ) : (agendaQuery.data?.length ?? 0) === 0 ? (
             <p className="text-sm text-sepia">
               Nenhum dia de aula neste mês. Verifique a grade horária (dias da
@@ -255,6 +277,7 @@ export function DiarioAulaPage() {
 
       {slotSelecionado && lecionamentoSel && meuProfessor && (
         <RegistroAulaFormDialog
+          key={formKey}
           open={dialogAberto}
           onOpenChange={setDialogAberto}
           turma={lecionamentoSel.turma}

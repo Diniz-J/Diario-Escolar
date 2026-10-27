@@ -35,7 +35,11 @@ from .exportacao import (
     resolver_formato,
     resposta_download,
 )
-from .services import frequencia_por_turma, linhas_planas
+from .services import (
+    frequencia_por_turma,
+    linhas_planas,
+    metricas_dashboard,
+)
 
 # Alias module-level: o render mora em `apps/common/pdf.py`, mas o nome
 # fica aqui porque os testes dão `mock.patch` em
@@ -130,6 +134,41 @@ def _br(iso: str) -> str:
     return f"{dia}/{mes}/{ano}"
 
 
+# Escola inexistente, usada quando o usuário não tem escopo nenhum: `0`
+# nunca casa com pk (o `BigAutoField` começa em 1), então o serviço
+# agrega sobre conjunto vazio e devolve a resposta zerada já na forma que
+# o front espera, sem um segundo caminho de código pra montá-la à mão.
+_SEM_ESCOPO = 0
+
+
+def _resolver_turma_opcional(request) -> Turma | None:
+    """Mesma validação de `_resolver_turma`, mas sem exigir a turma.
+
+    O dashboard tem o filtro "Visão: todas as turmas", que é o estado
+    default da tela — ali a ausência do parâmetro é um recorte legítimo
+    (a escola inteira), não um filtro esquecido.
+    """
+    if not request.query_params.get("turma"):
+        return None
+    return _resolver_turma(request)
+
+
+def _escopo_de_escola(request) -> tuple[int | None, bool]:
+    """Escola do recorte e se há escopo válido pra consultar.
+
+    Admin global não tem escola e enxerga todas (`None` = sem filtro),
+    igual ao `_resolver_turma`. Usuário comum sem escola no JWT não
+    enxerga nada: devolve `False` pra quem chama responder zerado em vez
+    de agregar a base inteira.
+    """
+    if eh_admin_global(request.user):
+        return None, True
+    escola_id = getattr(request.user, "escola_id", None)
+    if not escola_id:
+        return None, False
+    return escola_id, True
+
+
 class RelatorioFrequenciaView(APIView):
     """`GET /relatorios/frequencia/`.
 
@@ -179,3 +218,38 @@ class RelatorioFrequenciaView(APIView):
             content_type="application/pdf",
             nome_arquivo=f"{stem}.pdf",
         )
+
+
+class RelatorioDashboardView(APIView):
+    """`GET /relatorios/dashboard/`.
+
+    Params: `turma` (opcional). Sem formato: é o único endpoint desta
+    app que serve só JSON, porque alimenta cards de tela — ninguém baixa
+    um dashboard em PDF, e os três formatos de download existem pros
+    relatórios que a secretaria arquiva.
+
+    A janela é fixa em `JANELA_DASHBOARD_DIAS` e **não** vem por
+    parâmetro: a tela não tem seletor de período, e expor `?dias=` seria
+    configurabilidade que ninguém pediu.
+
+    Leitura aberta a professor e inspetor, igual ao de frequência: os
+    números são agregados da escola, sem nome de aluno.
+    """
+
+    permission_classes = [
+        IsAuthenticated,
+        IsAdminOrDiretorOrProfessorOrInspetor,
+    ]
+
+    def get(self, request):
+        turma = _resolver_turma_opcional(request)
+        escola_id, tem_escopo = _escopo_de_escola(request)
+        if not tem_escopo:
+            # Zerado, não 403: o card é parte do dashboard de quem já
+            # está autenticado, e um erro aqui derrubaria a tela toda por
+            # causa de um JWT sem escola. Os outros endpoints tratam o
+            # mesmo caso devolvendo lista vazia, não erro.
+            return Response(metricas_dashboard(_SEM_ESCOPO))
+        if turma is not None:
+            escola_id = turma.escola_id
+        return Response(metricas_dashboard(escola_id, turma))

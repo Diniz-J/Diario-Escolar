@@ -181,6 +181,8 @@ export function BoletimFilho({
   );
 }
 
+// Fica local de propósito: é o formato compacto da lista de avaliações
+// ("10/03", sem ano), e não o `dd/mm/yyyy` do `lib/datas`.
 function formatarData(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("pt-BR", {
     day: "2-digit",

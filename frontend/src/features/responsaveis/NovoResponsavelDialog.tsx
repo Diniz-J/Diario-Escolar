@@ -65,6 +65,7 @@ function Formulario({ onPronto }: { onPronto: () => void }) {
 
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
+  const [cpf, setCpf] = useState("");
   const [escolaId, setEscolaId] = useState<string>("");
   const [erro, setErro] = useState<string | null>(null);
 
@@ -75,6 +76,9 @@ function Formulario({ onPronto }: { onPronto: () => void }) {
       await criar.mutateAsync({
         nome: nome.trim(),
         email: email.trim(),
+        // Campo opcional: omitido quando vazio pra não mandar string
+        // vazia onde o backend aceita ausência.
+        ...(cpf.trim() ? { cpf: cpf.trim() } : {}),
         // Só o admin global manda escola; os outros perfis o backend
         // deduz pelo JWT e o select nem aparece.
         ...(ehAdminGlobal && escolaId ? { escola: Number(escolaId) } : {}),
@@ -140,6 +144,27 @@ function Formulario({ onPronto }: { onPronto: () => void }) {
               <p className="text-xs text-muted-foreground">
                 É por este endereço que o convite sai e com ele que o
                 responsável entra no portal.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label
+                htmlFor="responsavel-cpf"
+                className="text-[11px] uppercase tracking-[0.18em] text-sepia"
+              >
+                CPF (opcional)
+              </Label>
+              <Input
+                id="responsavel-cpf"
+                value={cpf}
+                onChange={(e) => setCpf(e.target.value)}
+                inputMode="numeric"
+                maxLength={14}
+                placeholder="000.000.000-00"
+              />
+              <p className="text-xs text-muted-foreground">
+                Só é necessário para emitir cobrança no nome deste
+                responsável. Pode ficar em branco.
               </p>
             </div>
 

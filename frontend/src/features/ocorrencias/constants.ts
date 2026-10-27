@@ -31,7 +31,7 @@ export const STATUS_BADGE: Record<OcorrenciaStatus, string> = {
   aberta:
     "text-destructive bg-destructive/15",
   em_andamento:
-    "bg-[#FCE7BC] text-[#854D0E]",
+    "bg-mostarda text-ambar",
   resolvida:
     "text-olive bg-olive/10",
   arquivada:

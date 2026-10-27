@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
   useLancarNotas,
   useNotasDaAvaliacao,
 } from "@/features/avaliacoes/hooks";
+import { formatarDataPura } from "@/lib/datas";
 import { cn } from "@/lib/utils";
 import type { LancarNotaItem, NotaAvaliacao } from "@/types/api";
 
@@ -26,11 +27,6 @@ import type { LancarNotaItem, NotaAvaliacao } from "@/types/api";
 interface LinhaEstado {
   nota: string; // "" significa "não lançada"
   observacao: string;
-}
-
-function formatarDataBR(iso: string): string {
-  const [ano, mes, dia] = iso.split("-");
-  return `${dia}/${mes}/${ano}`;
 }
 
 function formatarTimestamp(iso: string | null): string {
@@ -53,22 +49,21 @@ export function AvaliacaoDetalhePage() {
   const lancarMutation = useLancarNotas(avaliacaoId ?? 0);
   const { podeModificarCadastros } = usePermissoes();
 
-  // `linhas`: estado controlado da tabela. Sincroniza com o backend
-  // sempre que `notasQuery.data` mudar (load inicial + após salvar).
+  // `linhas` guarda SÓ as linhas que o professor editou; o que não está
+  // aqui é lido direto do backend na renderização. Antes um `useEffect`
+  // copiava a resposta inteira pra cá a cada mudança de
+  // `notasQuery.data` — além do `setState` em efeito que a regra
+  // `react-hooks/set-state-in-effect` acusa, isso **descartava o que
+  // estava sendo digitado** em qualquer refetch: com `staleTime` de 30s
+  // e refetch no foco da janela, lançar notas e trocar de aba apagava o
+  // trabalho. Guardar só o diff resolve os dois.
   const [linhas, setLinhas] = useState<Record<number, LinhaEstado>>({});
   const [erroSubmit, setErroSubmit] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!notasQuery.data) return;
-    const novo: Record<number, LinhaEstado> = {};
-    for (const n of notasQuery.data) {
-      novo[n.id] = {
-        nota: n.nota ?? "",
-        observacao: n.observacao,
-      };
-    }
-    setLinhas(novo);
-  }, [notasQuery.data]);
+  // Valor exibido de uma linha: a edição, se houver, senão o do backend.
+  function linhaDe(n: NotaAvaliacao): LinhaEstado {
+    return linhas[n.id] ?? { nota: n.nota ?? "", observacao: n.observacao };
+  }
 
   const avaliacao = avaliacaoQuery.data;
 
@@ -139,11 +134,17 @@ export function AvaliacaoDetalhePage() {
         </Link>
       </div>
 
-      {avaliacaoQuery.isLoading || !avaliacao ? (
+      {avaliacaoQuery.isLoading ? (
         <div className="space-y-2">
           <Skeleton className="h-8 w-1/2" />
           <Skeleton className="h-4 w-1/3" />
         </div>
+      ) : avaliacaoQuery.isError || !avaliacao ? (
+        // Sem este ramo o `!avaliacao` do loading deixava o skeleton girando
+        // pra sempre quando a requisição falhava.
+        <p className="text-sm text-destructive">
+          Não foi possível carregar a avaliação.
+        </p>
       ) : (
         <header className="space-y-3">
           <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
@@ -173,7 +174,7 @@ export function AvaliacaoDetalhePage() {
               <span className="text-[10px] uppercase tracking-wider text-sepia/60 mr-1">
                 Data
               </span>
-              {formatarDataBR(avaliacao.data)}
+              {formatarDataPura(avaliacao.data)}
             </span>
             <span>
               <span className="text-[10px] uppercase tracking-wider text-sepia/60 mr-1">
@@ -200,10 +201,10 @@ export function AvaliacaoDetalhePage() {
       )}
 
       {avaliacao && avaliacao.periodo_nome === null && (
-        // Alerta em mostarda pastel — mesmo hex do "em andamento" de
-        // ocorrências (DESIGN.md §6.1). Pattern compartilhado pra status
-        // "em curso/atenção"; não existe utility/token correspondente.
-        <div className="rounded-md border border-ferrugem/40 bg-[#FCE7BC]/40 px-4 py-3 text-sm text-tinta">
+        // Alerta em mostarda translúcida — mesma família dos badges "em
+        // curso" (DESIGN.md §6.3), a 40% pra servir de fundo de bloco em
+        // vez de etiqueta.
+        <div className="rounded-md border border-ferrugem/40 bg-mostarda/40 px-4 py-3 text-sm text-tinta">
           A data desta avaliação não cai em nenhum período avaliativo
           cadastrado. Cadastre um período em{" "}
           <Link
@@ -281,6 +282,16 @@ export function AvaliacaoDetalhePage() {
                     </TableCell>
                   </TableRow>
                 ))
+              ) : notasQuery.isError ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={4}
+                    className="text-center text-destructive py-8"
+                  >
+                    Não foi possível carregar a grade de notas. Recarregue a
+                    página antes de lançar.
+                  </TableCell>
+                </TableRow>
               ) : (notasQuery.data?.length ?? 0) === 0 ? (
                 <TableRow>
                   <TableCell
@@ -292,7 +303,7 @@ export function AvaliacaoDetalhePage() {
                 </TableRow>
               ) : (
                 (notasQuery.data ?? []).map((n: NotaAvaliacao) => {
-                  const linha = linhas[n.id] ?? { nota: "", observacao: "" };
+                  const linha = linhaDe(n);
                   const invalido = notaInvalida(linha.nota);
                   const editavel = podeModificarCadastros;
                   return (

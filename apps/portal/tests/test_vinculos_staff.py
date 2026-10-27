@@ -438,3 +438,79 @@ class FluxoCompletoTests(_VinculoSetup):
             sorted(d.email for d in destinos),
             ["mae@example.com", "pai.ana@example.com"],
         )
+
+
+class CpfDoResponsavelTests(_VinculoSetup):
+    """CPF do pagador — entrou pro gateway de cobrança (`FINANCEIRO.md` §6).
+
+    O campo é opcional de propósito: o portal nunca precisou de CPF e as
+    contas existentes nasceram sem ele. Só quem vai emitir cobrança
+    preenche, e é aí que o gateway exige.
+    """
+
+    def _criar(self, **payload):
+        return self.client.post(URL_RESPONSAVEIS, payload, format="json")
+
+    def test_cadastra_sem_cpf(self):
+        """Não pode virar campo obrigatório: quebraria quem só usa o portal."""
+        resp = self._criar(nome="Pai da Ana", email="pai.ana@example.com")
+
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(Responsavel.objects.get(pk=resp.data["id"]).cpf, "")
+
+    def test_cadastra_com_cpf_e_guarda_so_digitos(self):
+        """A máscara vem do formulário; o banco guarda o que o gateway quer."""
+        resp = self._criar(
+            nome="Pai da Ana",
+            email="pai.ana@example.com",
+            cpf="529.982.247-25",
+        )
+
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(
+            Responsavel.objects.get(pk=resp.data["id"]).cpf, "52998224725"
+        )
+
+    def test_response_devolve_o_mesmo_que_o_banco_guardou(self):
+        """Sem normalizar no serializer, o response traria a máscara.
+
+        O banco teria dígitos e a resposta da mesma requisição teria
+        pontuação — duas representações do mesmo CPF numa só ida.
+        """
+        resp = self._criar(
+            nome="Pai", email="pai@example.com", cpf="529.982.247-25"
+        )
+
+        self.assertEqual(resp.data["cpf"], "52998224725")
+
+    def test_cpf_invalido_e_recusado(self):
+        """Erro de DV vira 400 aqui em vez de recusa remota do gateway."""
+        resp = self._criar(
+            nome="Pai", email="pai@example.com", cpf="529.982.247-24"
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("cpf", resp.data)
+
+    def test_cpf_aparece_na_listagem_do_staff(self):
+        """A secretaria precisa ver quem já tem documento pra poder cobrar."""
+        self._criar(nome="Pai", email="pai@example.com", cpf="52998224725")
+
+        lista = self.client.get(URL_RESPONSAVEIS, {"busca": "pai@example.com"})
+
+        linha = next(
+            item
+            for item in lista.data["results"]
+            if item["email"] == "pai@example.com"
+        )
+        self.assertEqual(linha["cpf"], "52998224725")
+
+    def test_cpf_nao_e_editavel_pela_listagem(self):
+        """A tela do staff segue sem PUT/PATCH — o CPF não abre exceção."""
+        resp = self.client.patch(
+            f"{URL_RESPONSAVEIS}{self.responsavel.pk}/",
+            {"cpf": "52998224725"},
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, 405)

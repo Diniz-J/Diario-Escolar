@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { useComunicados, useFilhos } from "@/features/portal/hooks";
+import { formatarDataHora } from "@/lib/datas";
 
 const MAX_RECENTES = 3;
 
@@ -89,15 +90,4 @@ export function InicioPage() {
       </section>
     </>
   );
-}
-
-export function formatarDataHora(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }

@@ -5,7 +5,13 @@
 
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { hojeISO } from "./datas";
+import {
+  formatarDataHora,
+  formatarDataPura,
+  formatarDiaDaDataHora,
+  hojeISO,
+  isoDiasAtras,
+} from "./datas";
 
 // Estes testes só fazem sentido em fuso negativo — é lá que a conversão
 // pra UTC troca o dia. Fixa São Paulo (UTC-3, sem horário de verão desde
@@ -47,5 +53,67 @@ describe("hojeISO", () => {
     vi.setSystemTime(new Date(2026, 0, 5, 23, 59));
 
     expect(hojeISO()).toBe("2026-01-05");
+  });
+});
+
+describe("isoDiasAtras", () => {
+  it("volta a janela sem cair no dia seguinte à noite", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 2, 10, 21, 30));
+
+    // O caminho ingênuo (toISOString) devolveria 2026-02-09 aqui, um dia
+    // a mais, e a janela de 30 dias nasceria torta.
+    expect(isoDiasAtras(30)).toBe("2026-02-08");
+  });
+
+  it("atravessa virada de ano", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 0, 5, 9, 0));
+
+    expect(isoDiasAtras(10)).toBe("2025-12-26");
+  });
+
+  it("zero dias é hoje", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 2, 10, 9, 0));
+
+    expect(isoDiasAtras(0)).toBe(hojeISO());
+  });
+});
+
+describe("formatarDataPura", () => {
+  it("não desloca o dia em fuso negativo", () => {
+    // `new Date("2026-03-10")` voltaria como 09/03 em UTC-3; o split não.
+    expect(formatarDataPura("2026-03-10")).toBe("10/03/2026");
+  });
+});
+
+describe("formatarDataHora", () => {
+  it("converte o instante do DRF pro fuso do usuário", () => {
+    expect(formatarDataHora("2026-03-10T21:30:00-03:00")).toBe(
+      "10/03/2026, 21:30",
+    );
+  });
+
+  it("devolve travessão pra nulo", () => {
+    expect(formatarDataHora(null)).toBe("—");
+  });
+});
+
+describe("formatarDiaDaDataHora", () => {
+  it("exibe só o dia de um campo de data-hora", () => {
+    expect(formatarDiaDaDataHora("2026-03-10T21:30:00-03:00")).toBe(
+      "10/03/2026",
+    );
+  });
+
+  it("reprova o erro que o portal cometia: data pura aplicada a data-hora", () => {
+    // A `AlunoPage` do portal usava o formatador de data pura em
+    // `publicado_em` (`DateTimeField`), concatenando `T00:00:00` numa
+    // string que já tinha hora e offset — e o portal mostrava
+    // "Invalid Date" em todo material.
+    const instante = "2026-03-10T21:30:00-03:00";
+    expect(new Date(`${instante}T00:00:00`).toString()).toBe("Invalid Date");
+    expect(formatarDiaDaDataHora(instante)).toBe("10/03/2026");
   });
 });

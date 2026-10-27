@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -51,25 +51,27 @@ export function RegistroFormDialog({
 
   const hoje = hojeISO();
 
+  // `turmaId` guarda só a escolha explícita; o valor que vale é o
+  // derivado abaixo. A lista de turmas chega depois do mount, e
+  // sincronizá-la com `setState` num efeito é o que a regra
+  // `react-hooks/set-state-in-effect` acusa. A data nasce de `hoje`
+  // porque a página remonta o dialog (`key={formKey}`) a cada abertura.
   const [turmaId, setTurmaId] = useState("");
   const [data, setData] = useState(hoje);
   const [erro, setErro] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (open) {
-      setErro(null);
-      // Se há uma única turma, pré-seleciona.
-      const turmas = turmasQuery.data;
-      setTurmaId(turmas?.length === 1 ? String(turmas[0].id) : "");
-      setData(hoje);
-    }
-  }, [open, turmasQuery.data, hoje]);
+  // Se há uma única turma, ela entra sozinha quando a lista chega.
+  const turmas = turmasQuery.data;
+  const turmaEfetiva =
+    turmaId || (turmas?.length === 1 ? String(turmas[0].id) : "");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErro(null);
 
-    const turma = turmasQuery.data?.find((t) => String(t.id) === turmaId);
+    const turma = turmasQuery.data?.find(
+      (t) => String(t.id) === turmaEfetiva,
+    );
     if (!turma) {
       setErro("Selecione uma turma.");
       return;
@@ -120,7 +122,7 @@ export function RegistroFormDialog({
             <Label className="text-[11px] uppercase tracking-[0.18em] text-sepia">
               Turma
             </Label>
-            <Select value={turmaId} onValueChange={setTurmaId}>
+            <Select value={turmaEfetiva} onValueChange={setTurmaId}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecione uma turma" />
               </SelectTrigger>

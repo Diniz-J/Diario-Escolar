@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useComunicados } from "@/features/portal/hooks";
 
-import { formatarDataHora } from "./InicioPage";
+import { formatarDataHora } from "@/lib/datas";
 
 export function ComunicadosPage() {
   const query = useComunicados();

@@ -36,10 +36,10 @@ import {
   competenciaDoMes,
   formatarBRL,
   formatarCompetencia,
-  formatarData,
 } from "@/features/financeiro/constants";
 import { useFaturasPaginated } from "@/features/financeiro/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
+import { formatarDataPura } from "@/lib/datas";
 import type { Fatura, FaturaStatus } from "@/types/api";
 
 const FILTRO_TODOS = "__all__";
@@ -219,6 +219,11 @@ export function FaturasPage() {
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
         </div>
+      ) : faturasQuery.isError ? (
+        <p className="text-sm text-destructive">
+          Não foi possível carregar as faturas. Recarregue a página — a lista
+          vazia aqui não significa que não há cobrança em aberto.
+        </p>
       ) : faturas.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           Nenhuma fatura neste recorte.
@@ -268,7 +273,7 @@ export function FaturasPage() {
                         {formatarCompetencia(fatura.competencia)}
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
-                        {formatarData(fatura.vencimento)}
+                        {formatarDataPura(fatura.vencimento)}
                       </TableCell>
                       <TableCell className="text-right">
                         {formatarBRL(fatura.valor)}

@@ -22,12 +22,13 @@ import {
 } from "@/components/ui/table";
 import { FinanceiroTabs } from "@/features/financeiro/FinanceiroTabs";
 import { PlanoCobrancaFormDialog } from "@/features/financeiro/PlanoCobrancaFormDialog";
-import { formatarBRL, formatarData } from "@/features/financeiro/constants";
+import { formatarBRL } from "@/features/financeiro/constants";
 import {
   useDesativarPlanoCobranca,
   usePlanosCobrancaPaginated,
   useReativarPlanoCobranca,
 } from "@/features/financeiro/hooks";
+import { formatarDataPura } from "@/lib/datas";
 import type { PlanoCobranca } from "@/types/api";
 
 const PAGE_SIZE = 20;
@@ -43,9 +44,9 @@ function descricaoDesconto(plano: PlanoCobranca): string {
 }
 
 function descricaoVigencia(plano: PlanoCobranca): string {
-  const inicio = formatarData(plano.vigencia_inicio);
+  const inicio = formatarDataPura(plano.vigencia_inicio);
   return plano.vigencia_fim
-    ? `${inicio} a ${formatarData(plano.vigencia_fim)}`
+    ? `${inicio} a ${formatarDataPura(plano.vigencia_fim)}`
     : `desde ${inicio}`;
 }
 
@@ -151,6 +152,11 @@ export function PlanosCobrancaPage() {
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
         </div>
+      ) : planosQuery.isError ? (
+        <p className="text-sm text-destructive">
+          Não foi possível carregar os planos. Recarregue a página antes de
+          cadastrar — o contrato do aluno pode já existir.
+        </p>
       ) : planos.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           {mostrarEncerrados

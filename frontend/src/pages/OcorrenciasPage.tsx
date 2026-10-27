@@ -3,14 +3,13 @@ import { useNavigate } from "react-router-dom";
 
 import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -33,16 +32,20 @@ import { ExportarOcorrenciasDialog } from "@/features/relatorios/ExportarOcorren
 import { useTurmas } from "@/features/turmas/hooks";
 import type { OcorrenciaStatus } from "@/types/api";
 
-const FILTRO_TODOS = "__all__";
 const PAGE_SIZE = 20;
 
 export function OcorrenciasPage() {
   const navigate = useNavigate();
-  const [filtroStatus, setFiltroStatus] = useState<string>(FILTRO_TODOS);
+  // Lista vazia = sem filtro de status, o que dispensa o sentinel
+  // `__all__` que o `Select` de valor único exigia.
+  const [filtroStatus, setFiltroStatus] = useState<OcorrenciaStatus[]>([]);
   const [busca, setBusca] = useState("");
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  // Remonta o dialog a cada abertura pra que o estado nasça dos props,
+  // sem `useEffect` de repreenchimento. Idioma da `PlanosCobrancaPage`.
+  const [formKey, setFormKey] = useState(0);
   const [exportOpen, setExportOpen] = useState(false);
   const [page, setPage] = useState(1);
   // Reseta pra página 1 sempre que o filtro server-side muda — senão
@@ -55,9 +58,7 @@ export function OcorrenciasPage() {
   // que está na tela.
   const filtrosServidor = useMemo(
     () => ({
-      ...(filtroStatus !== FILTRO_TODOS
-        ? { status: filtroStatus as OcorrenciaStatus }
-        : {}),
+      ...(filtroStatus.length ? { status: filtroStatus } : {}),
       ...(dataInicio ? { data_inicio: dataInicio } : {}),
       ...(dataFim ? { data_fim: dataFim } : {}),
     }),
@@ -76,8 +77,11 @@ export function OcorrenciasPage() {
     if (dataInicio && dataFim) partes.push(`${dataInicio} a ${dataFim}`);
     else if (dataInicio) partes.push(`a partir de ${dataInicio}`);
     else if (dataFim) partes.push(`até ${dataFim}`);
-    if (filtroStatus !== FILTRO_TODOS) {
-      partes.push(STATUS_LABEL[filtroStatus as OcorrenciaStatus]);
+    if (filtroStatus.length) {
+      // Na ordem de `STATUS_OPTIONS`, não na de clique: o rótulo tem que
+      // bater com o que o backend imprime no cabeçalho do PDF, que sai na
+      // ordem em que os parâmetros chegam.
+      partes.push(filtroStatus.map((s) => STATUS_LABEL[s]).join(", "));
     }
     return partes.length ? partes.join(" · ") : "Todas as ocorrências";
   }, [dataInicio, dataFim, filtroStatus]);
@@ -91,6 +95,25 @@ export function OcorrenciasPage() {
       setPage(1);
     };
   }
+
+  // Mantém a ordem de `STATUS_OPTIONS` em vez da ordem de clique, pra que
+  // o rótulo do recorte (e o cabeçalho do PDF) não dependa de em que
+  // sequência a secretaria marcou as caixas.
+  function alternarStatus(valor: OcorrenciaStatus) {
+    setFiltroStatus((atual) =>
+      STATUS_OPTIONS.map((s) => s.value).filter((s) =>
+        s === valor ? !atual.includes(s) : atual.includes(s),
+      ),
+    );
+    setPage(1);
+  }
+
+  const rotuloStatus =
+    filtroStatus.length === 0
+      ? "Todos os status"
+      : filtroStatus.length === 1
+        ? STATUS_LABEL[filtroStatus[0]]
+        : `${filtroStatus.length} status`;
 
   const alunosQuery = useAlunos();
   const turmasQuery = useTurmas();
@@ -146,11 +169,22 @@ export function OcorrenciasPage() {
           <Button variant="outline" onClick={() => setExportOpen(true)}>
             Exportar
           </Button>
-          <Button onClick={() => setFormOpen(true)}>Nova ocorrência</Button>
+          <Button
+            onClick={() => {
+              setFormKey((k) => k + 1);
+              setFormOpen(true);
+            }}
+          >
+            Nova ocorrência
+          </Button>
         </div>
       </header>
 
-      <OcorrenciaFormDialog open={formOpen} onOpenChange={setFormOpen} />
+      <OcorrenciaFormDialog
+        key={formKey}
+        open={formOpen}
+        onOpenChange={setFormOpen}
+      />
       <ExportarOcorrenciasDialog
         open={exportOpen}
         onOpenChange={setExportOpen}
@@ -166,19 +200,28 @@ export function OcorrenciasPage() {
           onChange={(e) => setBusca(e.target.value)}
           className="max-w-sm"
         />
-        <Select value={filtroStatus} onValueChange={filtrar(setFiltroStatus)}>
-          <SelectTrigger className="w-44">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={FILTRO_TODOS}>Todos os status</SelectItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="w-44 justify-start font-normal">
+              {rotuloStatus}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-44">
             {STATUS_OPTIONS.map((s) => (
-              <SelectItem key={s.value} value={s.value}>
+              <DropdownMenuCheckboxItem
+                key={s.value}
+                checked={filtroStatus.includes(s.value)}
+                // `onSelect` com `preventDefault` mantém o menu aberto:
+                // marcar dois status é o caso de uso, e fechar a cada
+                // clique obrigaria a reabrir pra cada um.
+                onSelect={(e) => e.preventDefault()}
+                onCheckedChange={() => alternarStatus(s.value)}
+              >
                 {s.label}
-              </SelectItem>
+              </DropdownMenuCheckboxItem>
             ))}
-          </SelectContent>
-        </Select>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <div className="flex flex-col gap-1">
           <label
             htmlFor="data-inicio"
@@ -281,7 +324,7 @@ export function OcorrenciasPage() {
                   colSpan={4}
                   className="text-center text-muted-foreground py-8"
                 >
-                  {busca || filtroStatus !== FILTRO_TODOS || dataInicio || dataFim
+                  {busca || filtroStatus.length || dataInicio || dataFim
                     ? "Nenhuma ocorrência encontrada."
                     : "Nenhuma ocorrência registrada."}
                 </TableCell>

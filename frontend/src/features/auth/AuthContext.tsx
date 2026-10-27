@@ -1,11 +1,4 @@
-import {
-  createContext,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useMemo, useState, type ReactNode } from "react";
 
 import { api } from "@/lib/api";
 
@@ -44,24 +37,26 @@ interface AuthProviderProps {
 
 // Provider: cuida da lógica de login/logout/refresh e expõe via Context.
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<JwtPayload | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Ao montar, tenta ler o token persistido. Se existir e não estiver
-  // expirado, hidrata o estado — mantém o usuário logado entre reloads.
-  useEffect(() => {
+  // Hidrata do token persistido já no primeiro render — mantém o usuário
+  // logado entre reloads. A leitura é síncrona (localStorage + decode do
+  // JWT), então um `useEffect` só serviria pra disparar um segundo render,
+  // que é o que a regra `react-hooks/set-state-in-effect` acusa. O
+  // `clearTokens()` aqui é idempotente, então o duplo-render do StrictMode
+  // em dev não causa efeito colateral.
+  const [user, setUser] = useState<JwtPayload | null>(() => {
     const token = getAccessToken();
-    if (token) {
-      const payload = decodeToken(token);
-      if (payload && !isTokenExpired(payload)) {
-        setUser(payload);
-      } else {
-        // Token corrompido ou expirado: limpa pra evitar usar.
-        clearTokens();
-      }
-    }
-    setIsLoading(false);
-  }, []);
+    if (!token) return null;
+    const payload = decodeToken(token);
+    if (payload && !isTokenExpired(payload)) return payload;
+    // Token corrompido ou expirado: limpa pra evitar usar.
+    clearTokens();
+    return null;
+  });
+  // Com a hidratação acima no primeiro render, nunca há fase de carregamento:
+  // `user` já vem correto antes do primeiro paint. A flag fica na API porque
+  // é a emenda pra quando o boot virar assíncrono (ex.: refresh no start) —
+  // e o `ProtectedRoute` já sabe esperá-la.
+  const [isLoading] = useState(false);
 
   const login = useCallback(async (input: LoginInput) => {
     // POST /api/v1/auth/token/ — devolve { access, refresh }.

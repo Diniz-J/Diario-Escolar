@@ -154,6 +154,13 @@ export function BoletimPage() {
               {baixarPDF.isPending ? "Gerando..." : "Baixar boletim (PDF)"}
             </Button>
 
+            {/* A timeline é o complemento do boletim: as notas e a
+                frequência estão aqui, o que aconteceu com o aluno está
+                lá. */}
+            <Button asChild variant="outline">
+              <Link to={`/alunos/${alunoId}/timeline`}>Timeline</Link>
+            </Button>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button

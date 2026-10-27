@@ -15,6 +15,7 @@ from apps.common.serializers import (
     validate_escola_do_usuario,
 )
 from apps.common.texto import normalizar_email
+from apps.common.validators import apenas_digitos
 from apps.escola.models import Aluno
 from apps.materiais.models import Material
 from apps.ocorrencias.models import Ocorrencia
@@ -124,6 +125,7 @@ class ResponsavelStaffSerializer(serializers.ModelSerializer):
             "id",
             "nome",
             "email",
+            "cpf",
             "ativo",
             "situacao",
             "situacao_display",
@@ -279,7 +281,7 @@ class ResponsavelCriacaoSerializer(
 
     class Meta:
         model = Responsavel
-        fields = ["id", "nome", "email", "escola"]
+        fields = ["id", "nome", "email", "cpf", "escola"]
         read_only_fields = ["id"]
         # `escola` opcional — auto-preenchida pelo JWT via
         # AutoEscopoEscolaSerializerMixin quando o usuário tem escola.
@@ -302,3 +304,13 @@ class ResponsavelCriacaoSerializer(
         virando 500 em vez de um 400 dizendo que o email já existe.
         """
         return normalizar_email(value)
+
+    def validate_cpf(self, value: str) -> str:
+        """Tira a máscara antes de validar, como o `save()` do model faz.
+
+        Sem isso o valor cru ("123.456.789-09") chegaria ao campo com
+        `max_length=14` e passaria, mas o serializer devolveria no
+        response um CPF com máscara enquanto o banco guardou só dígitos —
+        duas representações da mesma coisa na mesma requisição.
+        """
+        return apenas_digitos(value)

@@ -44,7 +44,9 @@ django-cors-headers · **django-simple-history** (audit log) ·
 **Fraunces** (serif variable) em títulos + **Geist** (sans) no corpo ·
 React Router 7 · TanStack Query 5 · axios (interceptors Bearer + refresh) ·
 sonner (toasts) · jwt-decode · **@sentry/react** (error tracking + ErrorBoundary,
-gated por `VITE_SENTRY_DSN`).
+gated por `VITE_SENTRY_DSN`). **Teste:** vitest + jsdom +
+`@testing-library/react` + `@testing-library/jest-dom` + **MSW** (mock de
+rede) — ver `src/test/` no mapa abaixo.
 
 **Ambiente do Diniz:** Windows + PowerShell. Banco de teste em Docker
 (`docker start diario_pg_test`). Venv em `.venv/Scripts/python.exe`.
@@ -119,7 +121,7 @@ porque o `clean()` não tem o que reclamar. **Fatia 6 entregue**: frontend do
 portal sob `/portal`, em chunk próprio (`React.lazy` no `App.tsx` separa a
 árvore do staff da do portal), sessão independente em
 `features/portal/` (storage `portal_*`, `portalApi` que guarda o refresh
-rotacionado, `PortalAuthContext` lendo `/portal/me/`) e seis telas
+rotacionado, `PortalAuthContext` lendo `/portal/me/` por **query do TanStack**, não por `useEffect`: a identidade vira cache com `enabled` ligado à presença de token, `staleTime` infinito e `retry` off, e `entrar` semeia o cache com o `/me/` que acabou de responder) e seis telas
 mobile-first em `src/portal/`. Backend entregue até a fatia 5:
 autenticação isolada (`/api/v1/portal/auth/`, tokens com `tipo=responsavel`
 e `responsavel_id` — o staff recusa), convite e senha (`ConviteResponsavel`,
@@ -193,6 +195,30 @@ Gateway e webhook são as fatias seguintes.
 
 **`boletins/`** — **sem modelo próprio**. `services.py` agrega on-the-fly; `BoletimAlunoView` (APIView) expõe `GET /boletins/aluno/<id>/`. Justificado (J) conta como presença efetiva na frequência.
 
+**`timeline/`** — timeline do aluno (item 13 do roadmap). **Sem modelo
+próprio**, molde de `boletins`: `services.py` mescla on-the-fly três
+origens numa lista ordenada por data desc e `TimelineAlunoView` serve
+`GET /timeline/aluno/<id>/?data_inicio=&data_fim=` (JSON só; o que a
+escola arquiva sai pelos relatórios). Três coisas que não se deduzem do
+código: (1) **presença entra pelo que NÃO é presença** — o item `P` fica
+fora porque 200 "veio à aula" por ano afogam as cinco linhas que
+importam, e `J`/`R` entram como evento, numa régua **deliberadamente
+diferente** da frequência (lá eles contam como presença efetiva): a
+pergunta aqui é "o que aconteceu", e chegar atrasado aconteceu — tem
+teste travando os dois lados pra ninguém "consertar" a divergência;
+(2) **o histórico do simple-history é lido inteiro e filtrado depois**,
+porque cada evento nasce da comparação com a entrada anterior e filtrar
+no banco deixaria de fora justamente a entrada que está antes da janela;
+(3) `CAMPOS_CADASTRAIS` é **lista de permissão** (`turma`, `ativo`,
+`matricula`, `nome_completo`) e não "tudo menos X" — `nome_responsavel`
+e `email_responsavel` ficam fora de propósito, porque a tela é lida por
+professor e inspetor e contato de responsável é nível-direção no resto
+do sistema (é por isso que o relatório cadastral exige
+`WRITE_PERMISSION`). Teto de `LIMITE_EVENTOS` com flag `truncado` na
+resposta: timeline cortada em silêncio faria a direção concluir que não
+houve mais nada. Guard de IDOR igual ao do boletim — são duas cópias de
+seis linhas; a terceira vai pra `apps/common`.
+
 **`relatorios/`** — relatórios operacionais. **Sem modelo próprio**, mesmo
 molde de `boletins`: `services.py` agrega on-the-fly e cada relatório é uma
 APIView que serve quatro formatos no mesmo recorte
@@ -221,6 +247,21 @@ mixin sobrescreve `get_permissions`. PDF separado por turma, com teto
 `LIMITE_PDF_ALUNOS`. Botões na `AlunosPage` ("Relatório") e na
 `TurmaDetalhePage` ("Lista da turma").
 
+**Métricas do dashboard** (`GET /relatorios/dashboard/?turma=`) — o par
+que faltava nos cards (presença média e reincidência de ocorrências),
+em três queries fixas. Mora nesta app porque a régua de presença efetiva
+é daqui: uma terceira cópia dela é exatamente o que o teste de
+não-divergência boletim×relatório existe pra impedir. Janela fixa de 30
+dias (`JANELA_DASHBOARD_DIAS`), **não exposta por parâmetro** — a tela
+não tem seletor de período. Reincidente é quem tem `LIMIAR_REINCIDENCIA`
+(2) ou mais ocorrências na janela, contado em Python sobre uma lista de
+contadores por aluno (dezenas de linhas, não milhares): em SQL exigiria
+`HAVING` sobre anotação dentro de `aggregate`, e a lista dá de graça o
+total de alunos envolvidos que o card usa na sublinha. Único endpoint da
+app que serve só JSON — ninguém baixa dashboard em PDF. Usuário sem
+escola e não-admin recebe **zerado, não 403**: um 4xx aqui derrubaria a
+tela toda.
+
 **Ocorrências** — a action mora no `OcorrenciaViewSet`
 (`GET /ocorrencias/exportar/?formato=pdf|csv|xlsx`), não aqui: é lá que
 `get_queryset` (escopo) e `filter_queryset` (`OcorrenciaFilter`) já
@@ -237,16 +278,18 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 
 ### Frontend — `frontend/src/`
 
-- **`features/<dominio>/hooks.ts`** — TanStack Query: `useXxx` (list), `useCreate`, `useUpdate`, `useDelete`/`useDeactivate`, com invalidação de cache + toast. Domínios: `alunos`, `auth`, `boletins`, `dashboard`, `disciplinas`, `escolas`, `lecionamentos`, `ocorrencias`, `planos-ensino`, `presenca`, `professores`, `turmas`, `usuarios`, `comunicados`, `financeiro`.
+- **`features/<dominio>/hooks.ts`** — TanStack Query: `useXxx` (list), `useCreate`, `useUpdate`, `useDelete`/`useDeactivate`, com invalidação de cache + toast. Domínios: `alunos`, `auth`, `boletins`, `dashboard`, `disciplinas`, `escolas`, `lecionamentos`, `ocorrencias`, `planos-ensino`, `presenca`, `professores`, `timeline`, `turmas`, `usuarios`, `comunicados`, `financeiro`. O `features/dashboard/hooks.ts` nasceu com as métricas agregadas: as outras do dashboard são derivadas no front a partir dos hooks de outros domínios, e presença média e reincidência não dão — a primeira exigiria baixar todo o `ItemPresenca` da escola, a segunda agrupar ocorrência por aluno no cliente.
 - **`features/auth/`** — `AuthProvider`, `useAuth`, `usePermissoes` (regra de UI por perfil; `podeModificarCadastros` = admin/diretor), tokenStorage em localStorage, decode JWT. `user.escola_id` é o sinal usado pelos FormDialogs pra decidir se renderiza o select de escola.
 - **`lib/api.ts`** — axios único. Request interceptor injeta Bearer. Response interceptor: 401 → refresh → refaz request (promise compartilhada contra thundering herd).
 - **`lib/queryClient.ts`** — staleTime 30s, retry off pra 401/403.
-- **`lib/datas.ts`** — `hojeISO()`, o "hoje" dos inputs de data. Existe porque `new Date().toISOString().slice(0, 10)` converte pra UTC e, das 21h em diante num fuso negativo, devolve **amanhã** — e ocorrência e chamada recusam data futura no backend, então o turno noturno recebia formulário que o servidor rejeitava (o `max` do input vinha errado junto, então o browser nem barrava). Monta campo a campo pelos getters locais. Tem teste com fuso e relógio fixos (`datas.test.ts`) que reprova a implementação antiga.
+- **`lib/datas.ts`** — `hojeISO()`, o "hoje" dos inputs de data. Existe porque `new Date().toISOString().slice(0, 10)` converte pra UTC e, das 21h em diante num fuso negativo, devolve **amanhã** — e ocorrência e chamada recusam data futura no backend, então o turno noturno recebia formulário que o servidor rejeitava (o `max` do input vinha errado junto, então o browser nem barrava). Monta campo a campo pelos getters locais. Tem teste com fuso e relógio fixos (`datas.test.ts`) que reprova a implementação antiga. Mora aqui também a **formatação de data**, em três funções cujo nome diz o tipo do campo no backend, porque errar o par era o bug clássico: `formatarDataPura` pra `DateField` (split da string, porque `new Date("2026-03-10")` é lido como UTC e volta como dia 9), `formatarDataHora` pra `DateTimeField` (aí `new Date` é o certo — a string do DRF traz offset) e `formatarDiaDaDataHora` pro `DateTimeField` exibido só como dia. Consolidou **14 cópias locais** espalhadas em 13 arquivos; a `AlunoPage` do portal aplicava a de data pura em `publicado_em`, concatenando `T00:00:00` numa string que já tinha hora e offset, e o mural do pai mostrava **"Invalid Date"** em todo material (tem teste travando). Fica fora só o formatador do `BoletimFilho`, que é o formato compacto "10/03" sem ano. `isoDiasAtras(dias)` monta a ponta de trás dos filtros de janela ("últimos 30 dias") pelo mesmo caminho — `setDate` pra resolver virada de mês/ano/bissexto, e composição campo a campo na saída.
 - **`lib/download.ts`** — `baixarArquivo()`: download autenticado via Blob (`window.location` perderia o Bearer). Usado por boletim, diário e relatórios; antes era copy-paste em dois `hooks.ts`. Desembrulha o corpo de erro, que com `responseType: "blob"` chega como Blob — sem isso a mensagem que o backend escreve (recorte grande demais pro PDF, por exemplo) nunca chega no toast. Equivalente no backend: `apps/common/pdf.py` (`render_pdf`, `caminho_logo`, `slug_arquivo`), que as três views de PDF compartilham.
+- **`test/`** — harness dos testes de componente (vitest + jsdom + testing-library + MSW). `render.tsx` tem o `renderizar()`, que monta os três contextos que as telas exigem (TanStack Query com `retry: false` — obrigatório, senão o teste de falha espera as tentativas antes de `isError` virar true; rota, porque os cards usam `<Link>`; e auth, porque `useAuth` lança erro explícito fora do provider). `autenticar.ts` semeia sessão forjando um JWT no localStorage — funciona porque o front **nunca** valida assinatura (`features/auth/jwt.ts`), então o token forjado é indistinguível de um real pra quem consome `useAuth`. `servidor.ts` nasce sem handler nenhum: cada teste declara os endpoints que usa.
+  **Duas armadilhas pagas, e as duas produzem teste que passa pelo motivo errado** (o remédio das duas é um **controle positivo** ao lado de cada teste de erro — se o caminho felizmente carregado não for afirmado, nada garante que a falha veio do que o teste quis provar): (1) em jsdom o axios escolhe o adapter **XHR**, e a interceptação de XHR do MSW não funciona nessa combinação — todo request volta `Network Error`, então `setup.ts` força `adapter: "fetch"` nas duas instâncias (os interceptors de Bearer e de refresh são camada de axios, não de transporte, e seguem rodando); (2) requisição que nenhum handler cobre o MSW só **loga** — a falha de transporte é indistinguível de um 500 declarado, então `setup.ts` junta os `request:unhandled` e **reprova no `afterEach`** listando os endpoints esquecidos (pegou um `/planos-cobranca/` faltando no primeiro teste escrito). Em MSW 3 a opção do `listen` chama-se `onUnhandledFrame` (era `onUnhandledRequest` até a v2). E `defineConfig` sai do `vitest/config`, não do `vite` — com o do `vite`, `tsc -b` reprova o bloco `test` (TS2769) e o `npm run build` quebra junto.
 - **`components/AppLayout.tsx`** — shell: sidebar fixa olive-dark em ≥768px, drawer (`Sheet`) com hamburguer em <768px. Logo "Diário Diniz" em Fraunces no topo + perfil em mono uppercase + nav com barra ferrugem no ativo + rodapé com filete ferrugem + logout + versão.
 - **`components/ui/`** — shadcn (editável). `Sheet` e `Switch` foram adicionados manualmente (CLI travava em prompt).
 - **`index.css`** — paleta de marca em CSS variables no `:root` (`--olive`, `--olive-dark`, `--linho`, `--paper`, `--ferrugem`, `--tinta`, `--sepia`, `--creme`) + mapeamento dos tokens shadcn (`--background`, `--primary`, etc.) pra paleta. Light mode permanente (sem `.dark` block). `color-scheme: light` + meta tag desabilitam force-dark dos browsers.
-- **~28 pages** — Login, Dashboard, Alunos, Turmas (+detalhe), Disciplinas, Professores (+detalhe — ficha 360º), PlanosEnsino (+detalhe), Ocorrencias (+detalhe), Presenca (+detalhe), Avaliacoes (+detalhe), PeriodosAvaliativos, NotasFinais, DiarioAula, Boletim, **Faturas + PlanosCobranca + FichaFinanceira** (financeiro; as duas primeiras sob um item só de sidebar com abas internas, a ficha alcançada pelo nome do aluno, pelo ⋯ da AlunosPage e pelo botão da TurmaDetalhePage), Import, ContaSenha/EsqueciSenha/RedefinirSenha, NotFound, Placeholder. **Todas no padrão visual `DESIGN.md`** (Fraunces + filete ferrugem + eyebrow mono + `bg-paper`), inclusive listagens/detalhes/forms. Polidas em ondas: Login/Sidebar/Dashboard (PRs #50-#52), depois listagens e detalhes ao longo de jun/2026.
+- **~29 pages** — Login, Dashboard, Alunos (+timeline do aluno), Turmas (+detalhe), Disciplinas, Professores (+detalhe — ficha 360º), PlanosEnsino (+detalhe), Ocorrencias (+detalhe), Presenca (+detalhe), Avaliacoes (+detalhe), PeriodosAvaliativos, NotasFinais, DiarioAula, Boletim, **Faturas + PlanosCobranca + FichaFinanceira** (financeiro; as duas primeiras sob um item só de sidebar com abas internas, a ficha alcançada pelo nome do aluno, pelo ⋯ da AlunosPage e pelo botão da TurmaDetalhePage), Import, ContaSenha/EsqueciSenha/RedefinirSenha, NotFound, Placeholder. **Todas no padrão visual `DESIGN.md`** (Fraunces + filete ferrugem + eyebrow mono + `bg-paper`), inclusive listagens/detalhes/forms. Polidas em ondas: Login/Sidebar/Dashboard (PRs #50-#52), depois listagens e detalhes ao longo de jun/2026.
 - **`types/api.ts`** — interfaces espelhando os serializers (mantido à mão; drf-spectacular no backlog). Todos os `*Input` com FK `escola` têm o campo opcional (`escola?: number`) — backend deduz pelo JWT quando ausente.
 
 ### Padrões de UI consolidados
@@ -272,7 +315,8 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
   - Ocorrência resolvida → olive clarinho + texto olive.
   - Ocorrência arquivada → muted neutro.
   - Presença P/A/J/R → olive / terracota / mostarda / petrol pastel (em `presenca/constants.ts`).
-  - Fatura pendente/pago/vencido/cancelado → mostarda / olive / destructive / muted (em `financeiro/constants.ts`). Segue o molde de **ocorrência** (`DESIGN.md` §6.1.1), não os pastels de presença: status de fatura é estado de documento. A mostarda é o 5º uso da "família mostarda" (§6.3), então a extração pra constante compartilhada que o `DESIGN.md` prometia está vencida — ficou fora do PR do financeiro de propósito (mexeria em quatro features fora do escopo).
+  - Fatura pendente/pago/vencido/cancelado → mostarda / olive / destructive / muted (em `financeiro/constants.ts`). Segue o molde de **ocorrência** (`DESIGN.md` §6.1.1), não os pastels de presença: status de fatura é estado de documento.
+- **Família mostarda virou token** (out/2026, `DESIGN.md` §6.3): todo status "em curso / rascunho / atenção sem urgência" usa `bg-mostarda text-ambar` (e `bg-mostarda/40` no alerta translúcido), com `--mostarda`/`--ambar` no `:root` do `index.css`. Eram **nove** usos do hex `#FCE7BC`/`#854D0E` espalhados em dez arquivos quando foi extraído. A **presença ficou fora**: os tons dela são outros e têm estado de hover (`#F8DBAE` → `#F2CB8E` no `J`); só o tom de texto coincide, e convergir os dois conjuntos é decisão de desenho.
 
 ### Infra / deploy (raiz)
 
@@ -321,7 +365,10 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 ### Validação antes de PR
 - Backend: `python manage.py check && python manage.py test`.
 - Frontend: `npm --prefix frontend test && npm --prefix frontend run build`.
-- O CI roda os dois no job de frontend. O `npm run lint` **não** é gate ainda: tem 29 erros herdados (24 deles o mesmo `set-state-in-effect` nos FormDialogs), então entrar no CI hoje deixaria tudo vermelho — limpar e plugar é frente própria.
+  Desde out/2026 existem **testes de componente** (ver `src/test/` no mapa):
+  `npm test` roda os de função pura (`lib/datas.test.ts`) e os de tela no
+  mesmo comando, e o CI já executa os dois.
+- O CI roda os dois no job de frontend. O `npm run lint` **não** é gate ainda: caiu de 30 pra **5 problemas** (out/2026). O padrão de casa pros FormDialogs é estado nascendo dos props mais `key={formKey}`, e quando o valor depende de query (escola/turma única, lecionamentos, conteúdo de aula, grade de notas, form do plano) ele é **derivado**: o estado guarda só o que o usuário tocou. Sobram: 3 `react-refresh` (forma padrão do shadcn e dos contexts — configuração, não código; o quarto era a `InicioPage` do portal exportando um formatador de data, e caiu quando ele virou `lib/datas`), 1 `no-control-regex` no `NomeArquivoDialog` (o código **está correto**, sanitiza nome de arquivo; cabe disable explicado) e 1 `set-state-in-effect` no `NotasFinaisPage`, que é decisão de desenho: o efeito dispara uma **escrita** (POST que inicializa as linhas) a partir dos três selects, então mover pros handlers significa três gatilhos que só devem disparar com o trio completo — ou discutir se essa inicialização idempotente não deveria ser query em vez de mutation.
 
 ### Código
 - Comentários **em português**. **Nunca emojis** em código ou respostas.
@@ -450,8 +497,25 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 7. ✅ **Observabilidade — Sentry** integrado em backend e frontend (PR #49). Init condicional por DSN, captura exceções não tratadas + erros 5xx + `logger.error/exception` + erros de render React via `<Sentry.ErrorBoundary>`. Plano Developer (free) 5k events/mês. Em produção, falta o Diniz setar `SENTRY_DSN` no Render e `VITE_SENTRY_DSN` no Vercel (DSNs já criados: projeto Django e projeto React em `diario-diniz.sentry.io`). Sem essas envs o SDK fica inerte. **`SENTRY_DSN` JÁ SETADO no Render e smoke test CONFIRMADO** (jun/2026): um 404 real em prod apareceu no painel. Captura de **4xx** adicionada via `SentryHttpErrorMiddleware` (#92, ignora 401 por default, env `SENTRY_IGNORE_STATUS_CODES`). **Logging estruturado JSON entregue (PR #88)** — contexto por escola via `EscolaLogContextMiddleware`.
 
 ### FASE 3 — Produto Comercial — PARCIAL
-8. ✅ **Dashboard com métricas** (cards + filtro por turma). Falta: reincidência, presença média.
-9. ✅ **Filtro de período** em Ocorrências/Presença. Falta: múltiplos status.
+8. ✅ **Dashboard com métricas** (cards + filtro por turma) — **completo**:
+    reincidência e presença média entregues como agregado do backend
+    (`GET /relatorios/dashboard/`, janela de 30 dias, reincidente a
+    partir de 2 ocorrências). Presença média marca `tomDestaque` abaixo
+    dos 75% da LDB e distingue "ninguém veio" de "ninguém fez chamada".
+    Ver o mapa de `relatorios/`.
+9. ✅ **Filtro de período** em Ocorrências/Presença — **completo**: o
+    status virou múltipla escolha (`MultipleChoiceFilter`), porque "o que
+    ainda está em aberto" é aberta mais em andamento, uma pergunta só, e
+    com um status por vez virava duas consultas e duas folhas impressas.
+    Um valor só continua funcionando, então export e links salvos seguem
+    válidos. Duas coisas que a mudança obrigou e não eram óbvias: o
+    cabeçalho do PDF lia `query_params.get("status")` e passaria a mentir
+    sobre o recorte (virou `getlist`), e o axios 1.x serializa array como
+    `status[]=a`, que o `django-filter` não lê — sem
+    `paramsSerializer: { indexes: null }` na instância o filtro chegaria
+    **vazio** no backend, em silêncio. Na tela, o `Select` virou
+    `DropdownMenu` de checkboxes (o `DropdownMenuCheckboxItem` já existia
+    em `components/ui` e nunca tinha sido usado).
 10. ✅ **Exportação de relatórios** — PDF/CSV/Excel. Três relatórios na
     app `relatorios`: frequência por turma (`TurmaDetalhePage`),
     ocorrências filtradas (`OcorrenciasPage`) e cadastral de alunos
@@ -479,7 +543,17 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
     futura no envio: o fallback pro campo antigo dispara por **ausência de
     vínculo**, nunca por ausência de destino — senão o opt-out vira nada.
 12. **Email assíncrono dedicado** — fila (Celery/Dramatiq/RQ) com retry + histórico, quando o volume crescer. Hoje é thread daemon best-effort. PENDENTE.
-13. **Timeline do aluno** — centraliza ocorrências, presença, advertências. Pode reaproveitar a API HistoricalRecords pra mostrar mudanças no histórico. PENDENTE.
+13. ✅ **Timeline do aluno** — app `timeline` (sem modelo) +
+    `/alunos/:id/timeline`. Centraliza ocorrências, presença e as
+    mudanças de cadastro que o audit log guarda (é o "reaproveitar
+    HistoricalRecords" que este item pedia), em ordem cronológica
+    decrescente, com filtro de janela e agrupamento por mês. Leitura
+    pura: cada bloco linka pra tela onde o registro é editado. Duas
+    entradas — ⋯ da `AlunosPage` e botão na `BoletimPage` (a timeline é
+    o complemento do boletim: notas e frequência de um lado, o que
+    aconteceu do outro). Decisões e armadilhas no mapa de `timeline/`;
+    o que ficou de fora de propósito: comunicados enviados e notas de
+    avaliação (esta sobreporia o boletim).
 
 ### FASE 6 — Portal do Responsável — EM ANDAMENTO
 
@@ -719,8 +793,7 @@ restaurar dump, ajustar `ALLOWED_HOSTS`/`CSRF_TRUSTED_ORIGINS`/
 Frontend continua no Vercel — só backend+banco saem do Render.
 
 Frentes ativas enquanto isso: **melhorias de frontend** (mapeamento
-iniciado em out/2026), fila assíncrona pra email (item 12), timeline do
-aluno (item 13), dashboard com mais métricas.
+iniciado em out/2026) e fila assíncrona pra email (item 12).
 
 ---
 

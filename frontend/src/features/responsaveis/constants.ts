@@ -18,7 +18,7 @@ export const SITUACAO_OPTIONS: {
 // - ativo             → olive: positivo, resolvido
 // - inativo           → muted: fora de operação
 export const SITUACAO_BADGE: Record<ResponsavelSituacao, string> = {
-  sem_convite: "bg-[#FCE7BC] text-[#854D0E]",
+  sem_convite: "bg-mostarda text-ambar",
   convite_expirado: "text-destructive bg-destructive/15",
   convidado: "bg-[#DCE7EA] text-[#2F5D68]",
   ativo: "text-olive bg-olive/10",

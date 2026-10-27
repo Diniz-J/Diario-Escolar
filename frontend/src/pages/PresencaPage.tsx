@@ -48,6 +48,9 @@ export function PresencaPage() {
   const turmasQuery = useTurmas();
   const [busca, setBusca] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  // Remonta o dialog a cada abertura pra que o estado nasça dos props,
+  // sem `useEffect` de reset. Idioma da `PlanosCobrancaPage`.
+  const [formKey, setFormKey] = useState(0);
 
   const turmasPorId = useMemo(() => {
     const map = new Map<number, string>();
@@ -93,10 +96,18 @@ export function PresencaPage() {
           </h1>
           <div className="h-px w-10 bg-ferrugem" />
         </div>
-        <Button onClick={() => setFormOpen(true)}>Nova chamada</Button>
+        <Button
+          onClick={() => {
+            setFormKey((k) => k + 1);
+            setFormOpen(true);
+          }}
+        >
+          Nova chamada
+        </Button>
       </header>
 
       <RegistroFormDialog
+        key={formKey}
         open={formOpen}
         onOpenChange={setFormOpen}
         onCreated={(id) => navigate(`/presenca/${id}`)}

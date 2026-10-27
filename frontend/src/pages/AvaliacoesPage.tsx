@@ -24,21 +24,17 @@ import {
   useAvaliacoes,
   useDeactivateAvaliacao,
 } from "@/features/avaliacoes/hooks";
+import { formatarDataPura } from "@/lib/datas";
 import type { Avaliacao, AvaliacaoTipo } from "@/types/api";
 
 // Paleta dos tipos alinhada com a identidade do projeto — pastels
 // terrosos pra ficar coerente com os badges de presenca e ocorrencia.
 const TIPO_STYLE: Record<AvaliacaoTipo, string> = {
   prova: "bg-[#F4DAD3] text-[#7C2D1A]", // ferrugem claro — peso maior
-  trabalho: "bg-[#FCE7BC] text-[#854D0E]", // mostarda
+  trabalho: "bg-mostarda text-ambar", // mostarda
   atividade: "bg-[#C4D4D2] text-[#1F3A37]", // petrol claro
   participacao: "bg-[#D7DCC1] text-[#3A4524]", // olive
 };
-
-function formatarDataBR(iso: string): string {
-  const [ano, mes, dia] = iso.split("-");
-  return `${dia}/${mes}/${ano}`;
-}
 
 export function AvaliacoesPage() {
   const avaliacoesQuery = useAvaliacoes({ ativo: true });
@@ -192,7 +188,7 @@ export function AvaliacoesPage() {
                     {a.disciplina_nome}
                   </TableCell>
                   <TableCell className="text-sepia tabular-nums">
-                    {formatarDataBR(a.data)}
+                    {formatarDataPura(a.data)}
                   </TableCell>
                   <TableCell className="text-right text-sepia tabular-nums font-mono text-sm">
                     {a.notas_lancadas}/{a.total_alunos}
@@ -201,7 +197,11 @@ export function AvaliacoesPage() {
                     {podeModificarCadastros && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon-sm">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="Ações da avaliação"
+                          >
                             ⋯
                           </Button>
                         </DropdownMenuTrigger>

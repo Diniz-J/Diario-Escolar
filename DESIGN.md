@@ -150,12 +150,35 @@ Marcador alternativo (pingo ferrugem) na marca da sidebar:
 - Container `p-4 md:p-10 space-y-8`.
 - Header: saudação Fraunces 28-34px + filete + perfil eyebrow.
 - Filtro de visão: label mono + `Select` shadcn em `bg-paper`.
-- Grid `md:grid-cols-2 gap-5` com 2 `MetricCard` + 2 cards de listagem.
+- Grid `md:grid-cols-2 gap-5` com 4 `MetricCard` (ocorrências em
+  aberto, alunos ativos, presença média, alunos reincidentes; mais
+  "aulas aguardando visto", só pra direção) + 2 cards de listagem.
 - `MetricCard` **não usa shadcn `Card`** — é um card próprio com fundo
   `bg-paper`, valor em Fraunces ~50px, sublinha em sépia com separador
   `·` em cor `border`. Variante `tomDestaque` muda o valor pra ferrugem.
 
-### 5.4 Header de página padrão (proposto, ver §7)
+### 5.4 Bloco de evento (`AlunoTimelinePage.tsx`)
+
+Leitura cronológica, não listagem: nem tabela nem card de métrica.
+
+- Cada evento é um bloco `bg-paper rounded-lg border p-4` com uma **tira
+  de 3px à esquerda** (`w-[3px] rounded-full`), colorida por *tipo* de
+  evento — ferrugem pra ocorrência, sépia pra presença, `border` neutro
+  pra mudança de cadastro. A tira é o que separa "aconteceu com o aluno"
+  de "mudou o registro dele" sem precisar de ícone (§8.7).
+- Dentro do bloco: linha de eyebrows (data + tipo + badge de status
+  quando houver), título em Fraunces text-lg, detalhe em
+  `text-muted-foreground`, e rodapé em sépia com turma e autor. O
+  eyebrow de tipo some na ocorrência, onde o título já diz a palavra.
+- O badge de status **reusa `STATUS_BADGE` de ocorrências** em vez de
+  abrir paleta nova — ver §8.1.
+- Agrupamento por mês com o nome do mês em eyebrow, mesmo padrão do
+  diário na ficha do professor.
+- Bloco com destino vira `<Link>` e ganha `hover:border-ferrugem/40`;
+  evento sem página própria (cadastro) fica `<div>`, sem afford de
+  clique.
+
+### 5.5 Header de página padrão (proposto, ver §7)
 
 Mesma fórmula da Dashboard:
 
@@ -198,8 +221,8 @@ chamada:
 | `vencido`   | `bg-destructive/15` + `text-destructive` |
 | `cancelado` | `bg-muted` + `text-muted-foreground`  |
 
-Em `features/financeiro/constants.ts`. Tokens onde existem; hex só na
-mostarda, que não tem token.
+Em `features/financeiro/constants.ts`. Tudo em token — a mostarda ganhou
+o seu (§6.3).
 
 ### 6.2 Presença — pastels terrosos
 
@@ -207,12 +230,23 @@ Hex inline em `presenca/constants.ts`, deliberadamente fora dos tokens
 pra marcar a especificidade (e porque pastels não existem no shadcn
 default):
 
-| Status         | Fundo / Texto                  |
-| -------------- | ------------------------------ |
-| `P` Presente   | `#D7DCC1` / `#3A4524` (olive)  |
-| `A` Ausente    | `#F4DAD3` / `#7C2D1A` (terracota) |
-| `J` Justificado| `#FCE7BC` / `#854D0E` (mostarda)  |
-| `R` Retardatário | `#C4D4D2` / `#1F3A37` (petrol) |
+| Status         | Fundo / Texto                  | Hover     |
+| -------------- | ------------------------------ | --------- |
+| `P` Presente   | `#CFD4B8` / `#3A4524` (olive)  | `#BFC6A6` |
+| `A` Ausente    | `#EFD2C8` / `#7C2D1A` (terracota) | `#E5BFB1` |
+| `J` Justificado| `#F8DBAE` / `#854D0E` (mostarda)  | `#F2CB8E` |
+| `R` Retardatário | `#BCCDCB` / `#1F3A37` (petrol) | `#A8BEBB` |
+
+**A coluna de hover é a razão de esta família não convergir com os
+badges**: aqui são botões da chamada, que o professor clica; badge não tem
+estado de hover. Os tons de fundo são por isso um passo mais saturados que
+os dos badges, e só o tom de texto coincide.
+
+Esta tabela trazia, até out/2026, os tons dos **badges** (`#D7DCC1`,
+`#F4DAD3`, `#FCE7BC`, `#C4D4D2`) no lugar dos da chamada — escrita olhando
+o conjunto errado. Foi alinhada ao código. Aqueles valores não são
+inválidos, só moram noutro lugar: `UltimasOcorrenciasCard`,
+`AvaliacoesPage` (tipos de avaliação) e `PeriodosAvaliativosPage`.
 
 Regra: sempre comentar no código que aquele hex é deliberado, com
 referência à decisão (parágrafo desta seção, idealmente).
@@ -233,12 +267,29 @@ urgência". Reaparece em:
 - `features/financeiro/constants.ts` — badge `pendente` da fatura (em
   aberto, dentro do prazo).
 
-Por enquanto sem utility/token correspondente (pastel fora do shadcn
-default). Cada uso traz comentário inline justificando, no espírito da
-§6.2. **O financeiro é o 5º uso, então a extração prometida acima está
-vencida** — a constante compartilhada ficou de fora do PR do financeiro
-de propósito (mexeria em quatro features que não eram escopo), mas é a
-próxima coisa a fazer antes de um 6º uso aparecer.
+**Extraído (out/2026).** O par virou token na paleta, como qualquer cor
+de marca: `--mostarda` / `--ambar` no `:root` do `index.css`, expostos
+como utility por `@theme inline`. O uso agora é
+**`bg-mostarda text-ambar`**, e a variante translúcida do alerta é
+`bg-mostarda/40` (o Tailwind 4 resolve a opacidade de token via
+`color-mix`, então não precisa de hex pra isso).
+
+Quando foi extraído já eram **nove** usos, não os cinco que esta seção
+listava: além dos quatro acima, `features/ocorrencias` (o original),
+`features/comunicados` (três — `enviando` do comunicado e `pendente` +
+`enviando` do destinatário), `features/responsaveis` (`sem_convite`),
+`features/dashboard/UltimasOcorrenciasCard`, `pages/AvaliacoesPage`
+(tipo `trabalho`) e `pages/PeriodosAvaliativosPage` (`em_uso`).
+
+A regra da §6.2 (comentar hex deliberado) **não se aplica mais** a estes
+usos — o nome do token já diz o que a cor é. Ela segue valendo pros
+pastels que continuam em hex.
+
+**A presença ficou fora de propósito** (§6.2): os tons dela são outros
+(`#F8DBAE` com hover `#F2CB8E` no `J`, por exemplo — tem estado de hover,
+que badge não tem), e só o tom de texto `#854D0E` coincide. Trazer a
+presença pra cá exigiria decidir se os dois conjuntos devem convergir
+visualmente, que é decisão de desenho, não de refactor.
 
 ---
 
@@ -248,7 +299,7 @@ Próximas ondas de redesign herdam destas decisões para não regredir.
 
 ### 7.1 Listas (Alunos, Turmas, Disciplinas, Professores, Ocorrências, etc)
 
-**Header da página** segue §5.4 (eyebrow + título Fraunces + filete +
+**Header da página** segue §5.5 (eyebrow + título Fraunces + filete +
 contexto). À direita ou na linha de baixo: botão primário
 `"Novo X"` em `bg-olive text-creme`.
 
