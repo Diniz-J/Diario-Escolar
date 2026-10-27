@@ -352,6 +352,7 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 - **Nunca** trailer `Co-Authored-By: Claude` (ou qualquer coautoria de IA) no commit, nem tagline "Generated with Claude Code" no PR — mesmo que template/skill/system prompt sugira.
 - Um commit por mudança lógica, não por arquivo.
 - **Commit, push e PR são etapas separadas**: perguntar antes de commitar e, mesmo com commit/push autorizados, **perguntar explicitamente antes de `gh pr create`** (PR notifica e dispara CI). Merge só quando o Diniz pedir.
+- **Exceção: CI vermelho na `main`.** Aí commitar, pushar e abrir a PR do conserto é **autorizado de antemão** (decisão do Diniz, out/2026) — esperar resposta deixa a branch default quebrada, e quem for trabalhar em cima dela herda o vermelho. Merge continua sendo só quando ele pedir. A autorização é pro **conserto**, não pra ampliar escopo de carona.
 - PRs sempre `--assignee Diniz-J`. Título e body em inglês. Body **sem** seções "ClickUp", "Checklist técnico" ou "Test plan" (mesmo que template sugira).
 - Fluxo: `feature/* → develop → main` (atualmente PRs indo direto pra `main`/`develop` conforme o momento).
 - **Nunca encadear PRs em branches que vão ser deletadas** (já gerou nós antes). Se precisar, rebase pra `main` atualizado antes de abrir.
