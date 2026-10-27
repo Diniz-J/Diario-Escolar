@@ -716,10 +716,29 @@ mesmo token. Sem nada disso o módulo segue operando manualmente: a
 secretaria registra o Pix ou o dinheiro que recebeu, que é como ele já
 funciona hoje.
 
-**Falta de UI**: a emissão tem endpoint e command, mas ainda não tem
-botão — a tela de faturas não chama `emitir-cobranca`, e o
-`link_pagamento` não aparece pro responsável no portal. É a próxima
-fatia de frontend do módulo, não uma pendência do backend.
+**UI da emissão entregue** (out/2026): item "Emitir cobrança" no ⋯ da
+`FaturasPage` **e** da `FichaFinanceiraPage` (as duas compartilham o
+`FaturaDetalheDialog`, então ligar numa obrigava ligar na outra),
+confirmação em dialog próprio no molde do `FaturaCancelDialog` — a ação
+sai do sistema, cria cobrança de verdade e é o provedor quem avisa o
+pagador, sem desfazer prático — e o `link_pagamento` no detalhe da
+fatura, que é o resultado visível da emissão.
+
+Duas decisões que valem pra quem mexer: `podeEmitirCobranca` mora em
+`financeiro/constants.ts`, e não repetida nas duas telas, porque duas
+cópias divergiriam no dia em que a regra mudar e aí uma das duas
+ofereceria botão que só devolve erro; e o erro **não** vai pra toast, vai
+pro `Alert` dentro do dialog, porque é a frase do backend que diz o que
+falta preencher ("o responsável está sem CPF", "este plano não tem
+pagador definido", "cobrança online não está configurada") e toast some
+antes de a secretaria agir. Sem `ASAAS_API_KEY` o botão aparece e
+devolve a terceira dessas mensagens: o front não tem como saber que o
+gateway não existe, e inventar um endpoint de capabilities pra uma
+instalação só não se paga.
+
+**Ainda falta de UI**: o campo de pagador no dialog do plano (hoje só
+dá pra definir pela API ou pelo `/admin/`, e sem ele a emissão recusa) e
+o `link_pagamento` no portal do responsável.
 
 ### App mobile (PWA) — consideração (out/2026), NÃO comprometido
 
