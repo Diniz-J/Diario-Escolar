@@ -495,7 +495,19 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
     partir de 2 ocorrências). Presença média marca `tomDestaque` abaixo
     dos 75% da LDB e distingue "ninguém veio" de "ninguém fez chamada".
     Ver o mapa de `relatorios/`.
-9. ✅ **Filtro de período** em Ocorrências/Presença. Falta: múltiplos status.
+9. ✅ **Filtro de período** em Ocorrências/Presença — **completo**: o
+    status virou múltipla escolha (`MultipleChoiceFilter`), porque "o que
+    ainda está em aberto" é aberta mais em andamento, uma pergunta só, e
+    com um status por vez virava duas consultas e duas folhas impressas.
+    Um valor só continua funcionando, então export e links salvos seguem
+    válidos. Duas coisas que a mudança obrigou e não eram óbvias: o
+    cabeçalho do PDF lia `query_params.get("status")` e passaria a mentir
+    sobre o recorte (virou `getlist`), e o axios 1.x serializa array como
+    `status[]=a`, que o `django-filter` não lê — sem
+    `paramsSerializer: { indexes: null }` na instância o filtro chegaria
+    **vazio** no backend, em silêncio. Na tela, o `Select` virou
+    `DropdownMenu` de checkboxes (o `DropdownMenuCheckboxItem` já existia
+    em `components/ui` e nunca tinha sido usado).
 10. ✅ **Exportação de relatórios** — PDF/CSV/Excel. Três relatórios na
     app `relatorios`: frequência por turma (`TurmaDetalhePage`),
     ocorrências filtradas (`OcorrenciasPage`) e cadastral de alunos

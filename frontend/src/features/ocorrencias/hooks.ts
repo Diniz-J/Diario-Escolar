@@ -11,7 +11,10 @@ import type {
 } from "@/types/api";
 
 interface OcorrenciasFilter {
-  status?: OcorrenciaStatus;
+  // Lista porque o backend aceita status repetido (`OcorrenciaFilter` é
+  // `MultipleChoiceFilter`): "o que ainda está em aberto" é aberta mais
+  // em andamento, uma pergunta só. Um elemento cobre o caso antigo.
+  status?: OcorrenciaStatus[];
   aluno?: number;
   turma?: number;
   // Professor que registrou a ocorrência — usado na ficha do professor.

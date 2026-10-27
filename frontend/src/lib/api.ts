@@ -15,6 +15,12 @@ import {
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
   headers: { "Content-Type": "application/json" },
+  // Array em `params` vira chave repetida (`?status=a&status=b`), e não
+  // `status[]=a&status[]=b`, que é o default do axios 1.x. O
+  // `django-filter` lê a chave crua, então com o default um filtro de
+  // múltipla escolha chegaria **vazio** no backend — em silêncio: a tela
+  // mostraria o recorte inteiro achando que filtrou.
+  paramsSerializer: { indexes: null },
 });
 
 // =========================================================================

@@ -237,6 +237,25 @@ class ExportarOcorrenciasTests(TestCase):
         self.assertNotIn("Turma Secreta", html)
         self.assertIn("Nenhuma ocorrência no recorte", html)
 
+    @patch("apps.ocorrencias.views._render_pdf", return_value=b"%PDF")
+    def test_pdf_rotula_todos_os_status_do_recorte(self, render_mock):
+        """Cabeçalho com um status só mentiria sobre o que o arquivo traz.
+
+        O cabeçalho existe pra distinguir duas folhas na mesa, então
+        rotular menos do que o recorte contém é pior que não rotular.
+        """
+        self._auth(self.diretor)
+        resp = self.client.get(
+            self.url, {"formato": "pdf", "status": ["aberta", "resolvida"]}
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        html = render_mock.call_args[0][0]
+        self.assertIn("Aberta, Resolvida", html)
+        # E o recorte é de fato os dois status, não só o primeiro.
+        self.assertIn("Conversa durante a prova.", html)
+        self.assertIn("Atraso reiterado.", html)
+
     @patch("apps.ocorrencias.views.LIMITE_PDF_OCORRENCIAS", 2)
     def test_pdf_recusa_recorte_grande_e_aponta_a_saida(self):
         """WeasyPrint é síncrono: um PDF gigante derruba o worker."""

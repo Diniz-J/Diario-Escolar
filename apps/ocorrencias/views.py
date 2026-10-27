@@ -167,10 +167,17 @@ class OcorrenciaViewSet(EscopoEscolaMixin, viewsets.ModelViewSet):
         elif fim:
             partes.append(f"até {_br(fim)}")
 
-        status_filtro = request.query_params.get("status")
+        # `getlist`, não `get`: o filtro aceita status repetido, e ler só
+        # o primeiro imprimiria "Abertas" num arquivo que também traz as
+        # em andamento — o cabeçalho existe exatamente pra distinguir duas
+        # folhas na mesa, então rotular menos do que o recorte tem é pior
+        # que não rotular.
+        status_filtro = request.query_params.getlist("status")
         if status_filtro:
             rotulos = dict(Ocorrencia.Status.choices)
-            partes.append(rotulos.get(status_filtro, status_filtro))
+            partes.append(
+                ", ".join(rotulos.get(s, s) for s in status_filtro)
+            )
 
         if request.query_params.get("turma"):
             nomes = {ocorrencia.turma.nome for ocorrencia in ocorrencias}
