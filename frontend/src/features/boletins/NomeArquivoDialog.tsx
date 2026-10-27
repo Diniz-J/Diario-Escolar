@@ -52,6 +52,13 @@ export function NomeArquivoDialog({
     event.preventDefault();
     // Higieniza: remove chars proibidos em nomes de arquivo no
     // Windows/Linux/macOS. Tira whitespace nas pontas.
+    //
+    // O `no-control-regex` existe pra pegar control char que entrou sem
+    // querer no padrão; aqui a faixa \x00-\x1F é o alvo, não um
+    // acidente — são exatamente os caracteres que o NTFS recusa e que o
+    // header `Content-Disposition` quebraria. Tirar a faixa desativaria
+    // a higienização, que é o ponto da função.
+    // eslint-disable-next-line no-control-regex
     const limpo = nome.replace(/[/\\<>:"|?*\x00-\x1F]/g, "").trim();
     onConfirmar(limpo || nomeDefault);
   }
