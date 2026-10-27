@@ -8,13 +8,19 @@ import { servidor } from "@/test/servidor";
 
 const API = "http://api.test/api/v1";
 
-// Os quatro endpoints que o Dashboard dispara pra visitante sem perfil de
+// Os endpoints que o Dashboard dispara pra visitante sem perfil de
 // direção (o card de aulas aguardando visto tem `enabled` e não busca).
+//
+// `/relatorios/dashboard/` entrou com as métricas agregadas (presença
+// média e reincidência): a tela passou a chamá-lo e o teste não o
+// declarava, então o `setup.ts` derrubava os dois casos por requisição
+// sem handler — que é exatamente o que ele existe pra denunciar.
 const ENDPOINTS = [
   "/turmas/",
   "/ocorrencias/",
   "/alunos/",
   "/registros-presenca/",
+  "/relatorios/dashboard/",
 ];
 
 function responderComDados() {
@@ -53,6 +59,29 @@ function responderComDados() {
     ),
     http.get(`${API}/registros-presenca/`, () =>
       HttpResponse.json([{ id: 1, turma: 1, data: "2026-03-10" }]),
+    ),
+    // Valores escolhidos pra não colidirem com os que as asserções
+    // procuram: `findByText` estoura quando o texto casa em mais de um
+    // nó, então um "2" ou "3" vindo das métricas faria o controle
+    // positivo falhar por ambiguidade, não por regressão.
+    http.get(`${API}/relatorios/dashboard/`, () =>
+      HttpResponse.json({
+        janela: { dias: 30, data_inicio: "2026-02-08", data_fim: "2026-03-10" },
+        turma_id: null,
+        presenca: {
+          percentual_medio: "87.50",
+          total_itens: 48,
+          presencas_efetivas: 42,
+          total_chamadas: 6,
+          abaixo_do_limite: false,
+          limite_frequencia: "75.00",
+        },
+        reincidencia: {
+          limiar: 2,
+          alunos_reincidentes: 5,
+          alunos_com_ocorrencia: 9,
+        },
+      }),
     ),
   );
 }
