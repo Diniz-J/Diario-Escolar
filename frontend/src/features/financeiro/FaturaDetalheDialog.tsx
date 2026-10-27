@@ -16,6 +16,7 @@ import {
   STATUS_FATURA,
   formatarBRL,
   formatarCompetencia,
+  podeEmitirCobranca,
 } from "./constants";
 import {
   useEstornarPagamento,
@@ -29,6 +30,9 @@ interface FaturaDetalheDialogProps {
   // A página é quem abre o dialog de pagamento: dialog dentro de dialog
   // briga por foco e trava o scroll.
   onRegistrarPagamento: (fatura: Fatura) => void;
+  // Mesma razão: a confirmação de emissão é outro dialog, e quem o abre é
+  // a página.
+  onEmitirCobranca: (fatura: Fatura) => void;
 }
 
 const LABEL_CLASS = "text-[11px] uppercase tracking-[0.18em] text-sepia";
@@ -37,6 +41,7 @@ export function FaturaDetalheDialog({
   fatura,
   onOpenChange,
   onRegistrarPagamento,
+  onEmitirCobranca,
 }: FaturaDetalheDialogProps) {
   const itensQuery = useFaturaItens(fatura?.id ?? null);
   const pagamentosQuery = usePagamentosDaFatura(fatura?.id ?? null);
@@ -176,6 +181,23 @@ export function FaturaDetalheDialog({
           </div>
         )}
 
+        {/* O link é o resultado visível da emissão: é ele que a secretaria
+            manda pra família. Sem isto, emitir não mostraria nada na tela.
+            `noreferrer` junto do `_blank` porque a página é de terceiro. */}
+        {fatura?.link_pagamento && (
+          <section className="space-y-1">
+            <h3 className={LABEL_CLASS}>Link de pagamento</h3>
+            <a
+              href={fatura.link_pagamento}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-olive underline break-all"
+            >
+              {fatura.link_pagamento}
+            </a>
+          </section>
+        )}
+
         <DialogFooter>
           <Button
             type="button"
@@ -184,6 +206,15 @@ export function FaturaDetalheDialog({
           >
             Fechar
           </Button>
+          {fatura && podeEmitirCobranca(fatura) && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onEmitirCobranca(fatura)}
+            >
+              Emitir cobrança
+            </Button>
+          )}
           {fatura && emAberto && (
             <Button type="button" onClick={() => onRegistrarPagamento(fatura)}>
               Registrar pagamento

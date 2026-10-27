@@ -20,6 +20,7 @@ import {
 import { MetricCard } from "@/features/dashboard/MetricCard";
 import { FaturaCancelDialog } from "@/features/financeiro/FaturaCancelDialog";
 import { FaturaDetalheDialog } from "@/features/financeiro/FaturaDetalheDialog";
+import { FaturaEmitirDialog } from "@/features/financeiro/FaturaEmitirDialog";
 import { PagamentoFormDialog } from "@/features/financeiro/PagamentoFormDialog";
 import { PlanoCobrancaFormDialog } from "@/features/financeiro/PlanoCobrancaFormDialog";
 import {
@@ -27,6 +28,7 @@ import {
   STATUS_FATURA,
   formatarBRL,
   formatarCompetencia,
+  podeEmitirCobranca,
 } from "@/features/financeiro/constants";
 import { useFichaFinanceira } from "@/features/financeiro/hooks";
 import { formatarDataPura } from "@/lib/datas";
@@ -61,8 +63,14 @@ export function FichaFinanceiraPage() {
   const [detalhe, setDetalhe] = useState<Fatura | null>(null);
   const [pagando, setPagando] = useState<Fatura | null>(null);
   const [cancelando, setCancelando] = useState<Fatura | null>(null);
+  const [emitindo, setEmitindo] = useState<Fatura | null>(null);
   const [planoEditando, setPlanoEditando] = useState<PlanoCobranca | null>(null);
   const [planoFormKey, setPlanoFormKey] = useState(0);
+
+  function emitirCobranca(fatura: Fatura) {
+    setDetalhe(null);
+    setEmitindo(fatura);
+  }
 
   function registrarPagamento(fatura: Fatura) {
     setDetalhe(null);
@@ -125,6 +133,11 @@ export function FichaFinanceiraPage() {
         fatura={detalhe}
         onOpenChange={(aberto) => !aberto && setDetalhe(null)}
         onRegistrarPagamento={registrarPagamento}
+        onEmitirCobranca={emitirCobranca}
+      />
+      <FaturaEmitirDialog
+        fatura={emitindo}
+        onOpenChange={(aberto) => !aberto && setEmitindo(null)}
       />
       <PagamentoFormDialog
         key={pagando?.id ?? "nenhum"}
@@ -286,6 +299,13 @@ export function FichaFinanceiraPage() {
                                   Registrar pagamento
                                 </DropdownMenuItem>
                               )}
+                            {podeEmitirCobranca(fatura) && (
+                              <DropdownMenuItem
+                                onClick={() => setEmitindo(fatura)}
+                              >
+                                Emitir cobrança
+                              </DropdownMenuItem>
+                            )}
                             {fatura.status !== "cancelado" && (
                               <DropdownMenuItem
                                 onClick={() => setCancelando(fatura)}
