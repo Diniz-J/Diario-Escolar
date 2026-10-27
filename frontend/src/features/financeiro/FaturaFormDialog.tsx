@@ -19,6 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { usePermissoes } from "@/features/auth/usePermissoes";
+import { useEscolas } from "@/features/escolas/hooks";
 import type { Fatura } from "@/types/api";
 
 import { competenciaDoMes, formatarCompetencia } from "./constants";
@@ -62,6 +64,11 @@ export function FaturaFormDialog({
   const createMutation = useCreateFatura();
   const updateMutation = useUpdateFatura();
   const planosQuery = usePlanosAtivos(!editando);
+  // Select de escola só pra admin global — demais perfis têm escola no
+  // JWT e o backend deduz. Sem isso, o admin (escola_id null) criava
+  // fatura sem escola e o INSERT estourava 500 numa coluna NOT NULL.
+  const { ehAdminGlobal } = usePermissoes();
+  const escolasQuery = useEscolas();
 
   const [planoId, setPlanoId] = useState<string>(
     fatura ? String(fatura.plano) : "",
@@ -71,10 +78,17 @@ export function FaturaFormDialog({
   );
   const [valor, setValor] = useState(fatura?.valor ?? "");
   const [vencimento, setVencimento] = useState(fatura?.vencimento ?? "");
+  // Só a escolha explícita do admin; o valor que vale é o derivado abaixo.
+  const [escolaId, setEscolaId] = useState<string>("");
   const [erro, setErro] = useState<string | null>(null);
 
   const planos = planosQuery.data ?? [];
   const enviando = createMutation.isPending || updateMutation.isPending;
+
+  // Pré-seleciona a única escola disponível (perfil comum só vê a sua).
+  const escolas = escolasQuery.data;
+  const escolaEfetiva =
+    escolaId || (escolas?.length === 1 ? String(escolas[0].id) : "");
 
   // Escolher o plano preenche valor e vencimento — o que a geração mensal
   // faria. Campos editáveis depois: a fatura avulsa pode ter outro valor.
@@ -100,6 +114,10 @@ export function FaturaFormDialog({
       setErro("Escolha o plano de cobrança.");
       return;
     }
+    if (!editando && ehAdminGlobal && !escolaEfetiva) {
+      setErro("Selecione a escola.");
+      return;
+    }
     if (!valor.trim() || !vencimento) {
       setErro("Informe valor e vencimento.");
       return;
@@ -116,6 +134,10 @@ export function FaturaFormDialog({
           competencia: competenciaDoMes(mes),
           valor: valor.trim(),
           vencimento,
+          // `escola` só pra admin global; demais perfis o backend deduz.
+          ...(ehAdminGlobal && escolaEfetiva
+            ? { escola: Number(escolaEfetiva) }
+            : {}),
         });
       }
       onOpenChange(false);
@@ -143,6 +165,23 @@ export function FaturaFormDialog({
         <div className="space-y-4">
           {!editando && (
             <>
+              {ehAdminGlobal && (
+                <div className="space-y-2">
+                  <Label className={LABEL_CLASS}>Escola</Label>
+                  <Select value={escolaEfetiva} onValueChange={setEscolaId}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Escolha a escola" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(escolas ?? []).map((e) => (
+                        <SelectItem key={e.id} value={String(e.id)}>
+                          {e.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label className={LABEL_CLASS}>Plano de cobrança</Label>
                 <Select value={planoId} onValueChange={escolherPlano}>
