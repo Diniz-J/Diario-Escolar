@@ -40,7 +40,7 @@ const LABEL_ESTADO: Record<PeriodoEstado, string> = {
 // (mesmo princípio dos badges de ocorrência).
 const CLASSE_ESTADO: Record<PeriodoEstado, string> = {
   vazio: "bg-muted text-sepia",
-  em_uso: "bg-[#FCE7BC] text-[#854D0E]",
+  em_uso: "bg-mostarda text-ambar",
   fechado: "bg-[#D7DCC1] text-[#3A4524]",
 };
 

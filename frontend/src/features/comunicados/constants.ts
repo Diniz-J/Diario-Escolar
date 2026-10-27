@@ -31,7 +31,7 @@ export const STATUS_ORDEM: Record<ComunicadoStatus, number> = {
 // - falhou   → terracota + destructive (chama atenção)
 export const STATUS_BADGE: Record<ComunicadoStatus, string> = {
   rascunho: "text-muted-foreground bg-muted",
-  enviando: "bg-[#FCE7BC] text-[#854D0E]",
+  enviando: "bg-mostarda text-ambar",
   enviado: "text-olive bg-olive/10",
   falhou: "text-destructive bg-destructive/15",
 };
@@ -61,9 +61,9 @@ export const DEST_STATUS_BADGE: Record<
   ComunicadoDestinatarioStatus,
   string
 > = {
-  pendente: "bg-[#FCE7BC] text-[#854D0E]",
+  pendente: "bg-mostarda text-ambar",
   // Indeterminado: nem sucesso nem falha — mostarda, igual ao "em curso".
-  enviando: "bg-[#FCE7BC] text-[#854D0E]",
+  enviando: "bg-mostarda text-ambar",
   enviado: "text-olive bg-olive/10",
   falhou: "text-destructive bg-destructive/15",
   sem_email: "text-muted-foreground bg-muted",

@@ -42,6 +42,8 @@
     --color-tinta: var(--tinta);
     --color-sepia: var(--sepia);
     --color-creme: var(--creme);
+    --color-mostarda: var(--mostarda);
+    --color-ambar: var(--ambar);
 
     /* Mapeamento shadcn → paleta da marca. Esses são os tokens que
        Card, Button, Input, etc. consomem via classes utility. */
@@ -100,6 +102,14 @@
     --tinta:        #2d2a24;  /* texto principal */
     --sepia:        #6b6859;  /* texto secundário, labels */
     --creme:        #ebe2d1;  /* texto sobre fundos escuros (sidebar) */
+
+    /* ─── Família mostarda (DESIGN.md §6.3) ───
+     * Par usado por todo status "em curso / rascunho / atenção sem
+     * urgência": ocorrência em andamento, aula em rascunho, fatura
+     * pendente, comunicado enviando, convite não enviado. Virou token
+     * depois do 9º uso — antes era o hex repetido em dez arquivos. */
+    --mostarda:     #fce7bc;  /* fundo do badge */
+    --ambar:        #854d0e;  /* texto sobre a mostarda */
 
     /* ─── Tokens shadcn mapeados ─── */
     --background:           var(--linho);

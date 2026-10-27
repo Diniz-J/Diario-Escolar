@@ -311,7 +311,8 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
   - Ocorrência resolvida → olive clarinho + texto olive.
   - Ocorrência arquivada → muted neutro.
   - Presença P/A/J/R → olive / terracota / mostarda / petrol pastel (em `presenca/constants.ts`).
-  - Fatura pendente/pago/vencido/cancelado → mostarda / olive / destructive / muted (em `financeiro/constants.ts`). Segue o molde de **ocorrência** (`DESIGN.md` §6.1.1), não os pastels de presença: status de fatura é estado de documento. A mostarda é o 5º uso da "família mostarda" (§6.3), então a extração pra constante compartilhada que o `DESIGN.md` prometia está vencida — ficou fora do PR do financeiro de propósito (mexeria em quatro features fora do escopo).
+  - Fatura pendente/pago/vencido/cancelado → mostarda / olive / destructive / muted (em `financeiro/constants.ts`). Segue o molde de **ocorrência** (`DESIGN.md` §6.1.1), não os pastels de presença: status de fatura é estado de documento.
+- **Família mostarda virou token** (out/2026, `DESIGN.md` §6.3): todo status "em curso / rascunho / atenção sem urgência" usa `bg-mostarda text-ambar` (e `bg-mostarda/40` no alerta translúcido), com `--mostarda`/`--ambar` no `:root` do `index.css`. Eram **nove** usos do hex `#FCE7BC`/`#854D0E` espalhados em dez arquivos quando foi extraído. A **presença ficou fora**: os tons dela são outros e têm estado de hover (`#F8DBAE` → `#F2CB8E` no `J`); só o tom de texto coincide, e convergir os dois conjuntos é decisão de desenho.
 
 ### Infra / deploy (raiz)
 

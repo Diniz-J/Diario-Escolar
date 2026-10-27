@@ -31,7 +31,7 @@ import type { Avaliacao, AvaliacaoTipo } from "@/types/api";
 // terrosos pra ficar coerente com os badges de presenca e ocorrencia.
 const TIPO_STYLE: Record<AvaliacaoTipo, string> = {
   prova: "bg-[#F4DAD3] text-[#7C2D1A]", // ferrugem claro — peso maior
-  trabalho: "bg-[#FCE7BC] text-[#854D0E]", // mostarda
+  trabalho: "bg-mostarda text-ambar", // mostarda
   atividade: "bg-[#C4D4D2] text-[#1F3A37]", // petrol claro
   participacao: "bg-[#D7DCC1] text-[#3A4524]", // olive
 };

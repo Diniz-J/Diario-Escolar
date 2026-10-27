@@ -20,7 +20,7 @@ export const STATUS_FATURA: Record<
 > = {
   pendente: {
     label: "Pendente",
-    className: "bg-[#FCE7BC] text-[#854D0E]",
+    className: "bg-mostarda text-ambar",
   },
   pago: {
     label: "Pago",
