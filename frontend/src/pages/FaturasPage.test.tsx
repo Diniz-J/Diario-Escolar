@@ -19,6 +19,13 @@ function responderFaturas(resposta: () => Response) {
     // nada a ver com a asserção, mas sem o handler a requisição falharia
     // em silêncio — a checagem de requisição não-coberta pegou isso.
     http.get(`${API}/planos-cobranca/`, () => HttpResponse.json([])),
+    // Mesma razão: os dialogs do financeiro passaram a chamar
+    // `useEscolas()` pro select que só o admin global enxerga. O hook não
+    // é condicional, então a requisição sai para qualquer perfil — a
+    // diretora deste teste inclusive.
+    http.get(`${API}/escolas/`, () =>
+      HttpResponse.json([{ id: 1, nome: "Escola Teste" }]),
+    ),
   );
 }
 
