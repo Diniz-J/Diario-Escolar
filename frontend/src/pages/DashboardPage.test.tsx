@@ -107,6 +107,14 @@ describe("DashboardPage", () => {
     expect(await screen.findByText("2")).toBeInTheDocument();
     expect(screen.getByText(/1 abertas/)).toBeInTheDocument();
     expect(await screen.findByText("3")).toBeInTheDocument();
+
+    // Os dois cards agregados também: declarar o handler tira o teste do
+    // vermelho, mas sem afirmar o que ele devolve a tela pode parar de
+    // mostrar a métrica sem nenhum teste reclamar.
+    expect(await screen.findByText("87,50%")).toBeInTheDocument();
+    expect(
+      screen.getByText("2+ ocorrências em 30 dias"),
+    ).toBeInTheDocument();
   });
 
   it("não apresenta zero como resposta do servidor quando a API falha", async () => {
@@ -116,10 +124,13 @@ describe("DashboardPage", () => {
     // O bug: `data ?? []` e `data?.length ?? 0` faziam o card dizer
     // "0 ocorrências em aberto" com a API fora do ar, e o `carregando`
     // virava false no erro, então o skeleton saía e o zero ficava.
+    // Quatro, não "pelo menos dois": são os cards que renderizam sem
+    // perfil de direção (o de aulas aguardando visto tem `enabled` e nem
+    // busca). Com piso, perder o estado de erro de um card novo passaria.
     const avisos = await screen.findAllByText("Não foi possível carregar.");
-    expect(avisos.length).toBeGreaterThanOrEqual(2);
+    expect(avisos).toHaveLength(4);
     expect(screen.queryByText("0")).not.toBeInTheDocument();
-    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
 
     // E os dois cards de lista param de mentir "nada registrado".
     expect(
