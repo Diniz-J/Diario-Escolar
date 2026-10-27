@@ -7,7 +7,7 @@ vê o detalhamento e os pagamentos dela na mesma página.
 from django.contrib import admin
 from simple_history.admin import SimpleHistoryAdmin
 
-from .models import Fatura, FaturaItem, Pagamento, PlanoCobranca
+from .models import EventoWebhook, Fatura, FaturaItem, Pagamento, PlanoCobranca
 
 
 class FaturaItemInline(admin.TabularInline):
@@ -117,3 +117,40 @@ class PagamentoAdmin(SimpleHistoryAdmin):
     autocomplete_fields = ("escola", "fatura")
     date_hierarchy = "data"
     ordering = ("-data",)
+
+
+@admin.register(EventoWebhook)
+class EventoWebhookAdmin(admin.ModelAdmin):
+    """Log dos eventos do gateway. Somente leitura.
+
+    `ModelAdmin` e não `SimpleHistoryAdmin` porque o modelo não é auditado
+    — já é um log de fato externo (ver a docstring dele).
+
+    Tudo read-only de propósito: editar à mão um evento recebido não
+    corrige nada e apagaria a prova do que o provedor mandou. O que a
+    direção precisa daqui é a pergunta "chegou algo que não foi tratado?",
+    que o filtro por `processado_em` responde.
+    """
+
+    list_display = ("id_evento", "tipo", "fatura", "processado_em", "criado_em")
+    list_filter = ("tipo", "processado_em")
+    search_fields = ("id_evento", "fatura__aluno__nome_completo")
+    list_select_related = ("fatura__aluno",)
+    date_hierarchy = "criado_em"
+    ordering = ("-criado_em",)
+    readonly_fields = (
+        "id_evento",
+        "tipo",
+        "payload",
+        "fatura",
+        "processado_em",
+        "erro",
+        "criado_em",
+        "atualizado_em",
+    )
+
+    def has_add_permission(self, request) -> bool:
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        return False

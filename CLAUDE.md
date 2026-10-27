@@ -161,9 +161,9 @@ sobreposta é barrada só no `clean()`: limitação conhecida da v1, com o
 caminho da exclusion constraint (`daterange` + `EXCLUDE USING gist`)
 anotado no `FINANCEIRO.md` §3.2. Dinheiro é sempre `DecimalField`, com
 arredondamento comercial (`ROUND_HALF_UP`) centralizado em
-`arredondar_dinheiro()`. **Fatias 1, 2, 3, 6 e 6b entregues**
+`arredondar_dinheiro()`. **Completo — as seis fatias entregues**
 (models/migration/admin + API REST + services e geração recorrente + as
-telas do financeiro + a ficha do aluno). A API é **só direção**
+telas do financeiro + a ficha do aluno + gateway Asaas + webhook). A API é **só direção**
 (`IsAdminOrDiretor` uniforme; professor e inspetor levam 403 até na
 leitura) e o que mexe em dinheiro é read-only — `status`/`valor_pago`/
 `data_pagamento` pertencem ao `services.py`, `id_externo`/
@@ -180,14 +180,32 @@ que escreve dinheiro: `gerar_faturas` (idempotente, com
 `bulk_create_with_history`), `registrar_pagamento`/`estornar_pagamento`
 (em transação, com `select_for_update`, recalculando `valor_pago` em vez
 de incrementar — recálculo é idempotente e se autocorrige) e
-`marcar_vencidas`. Dois management commands pra cron
-(`financeiro_gerar_faturas`, `financeiro_marcar_vencidas`). Duas pegadinhas
+`marcar_vencidas`. Três management commands pra cron
+(`financeiro_gerar_faturas`, `financeiro_emitir_cobrancas`,
+`financeiro_marcar_vencidas`). Duas pegadinhas
 que custaram código e estão registradas no `FINANCEIRO.md` §5: o DRF monta
 um `UniqueValidator` a partir do `UniqueConstraint` de
 `referencia_externa` e mataria a idempotência do reenvio antes do service
 (o campo é declarado com `validators=[]`), e o `ValidationError` do Django
 que o service levanta sai como 500 se a view não traduzir (`erro_drf`).
-Gateway e webhook são as fatias seguintes.
+**Gateway e webhook entregues.** `gateways/base.py` é o contrato
+(quatro operações, vocabulário nosso) e `gateways/asaas.py` o adaptador —
+transporte `httpx` mais a tradução de campo e de status, escrita contra a
+doc deles, não de memória. A emissão é passo **separado** da geração
+(`emitir_cobranca` no service, action na API, command no cron): a geração
+é transacional e em lote, e pendurar HTTP ali prenderia o lock pelo tempo
+do provedor. A conciliação chega em
+`POST /api/v1/financeiro/webhooks/asaas/` — única rota sem autenticação
+do projeto, com token em `compare_digest`, evento gravado antes de
+processado (`EventoWebhook`, unique no id do evento, **não** escopado por
+escola porque o tenant só se descobre depois) e **reconsulta ao provedor
+antes de escrever dinheiro**: o token prova quem mandou, não quanto
+entrou. Responde 200 mesmo quando o processamento falha, porque 15 falhas
+consecutivas pausam a fila deles e param a escola inteira. A emissão
+exigiu schema novo: `PlanoCobranca.pagador` (o titular do boleto é
+cláusula de contrato, não "o primeiro responsável com CPF") e
+`Responsavel.id_externo_gateway` (criar cliente lá não é idempotente).
+Detalhes do contrato real e as pegadinhas estão no `FINANCEIRO.md` §6.
 
 **`tarefas/`** — esqueleto vazio (só `__init__.py`/`apps.py`/`migrations`). Feature **removida** do produto; frontend não tem `TarefasPage` nem feature `tarefas/`. Diretório mantido pra não quebrar migrations históricas.
 
@@ -644,7 +662,8 @@ não reabrir discussão:
 Fatias: 1) models · 2) API DRF · 3) services + geração recorrente ·
 4) gateway Asaas · 5) webhook + conciliação + notificação · 6) frontend.
 
-**Fatias 1, 2 e 3 entregues**: os quatro modelos (escopo por escola,
+**Fatias 1 a 6b entregues — o módulo está completo.** Os quatro modelos
+mais o `EventoWebhook` (escopo por escola,
 audit log, admin com inlines na fatura), a API REST sob `/api/v1/`
 (`planos-cobranca/`, `faturas/`, `fatura-itens/`, `pagamentos/`) e o
 `services.py` com geração recorrente idempotente, conciliação (registro e
@@ -676,15 +695,30 @@ outra, mostrando dívida menor que a real. Três entradas (nome do aluno na
 lista de faturas, ⋯ da `AlunosPage`, botão "Financeiro" na
 `TurmaDetalhePage` → `/financeiro?turma=<id>`), todas nível-diretor.
 
-Fatia 4 (client do Asaas) está **bloqueada** enquanto `docs.asaas.com`
-estiver negado pela política de rede do ambiente de desenvolvimento — é a
-última pendente.
+Fatias 4 e 5 entregues (out/2026): o adaptador do Asaas, a emissão e o
+webhook de conciliação com aviso por email ao responsável. O bloqueio de
+rede que travava a fatia 4 caiu quando `docs.asaas.com` entrou nos
+domínios liberados do ambiente — o adaptador foi escrito contra o
+contrato real (OpenAPI deles), que era a condição registrada aqui.
 
-**Pendência operacional de produção**: as duas entradas de cron
-(`financeiro_gerar_faturas` dia 1, `financeiro_marcar_vencidas` diário)
-precisam ser configuradas no servidor que hospedar o backend — sem elas
-nenhuma fatura é gerada automaticamente, e é a tela "Nova fatura" que
-cobre o buraco hoje. Comandos e horários sugeridos no `FINANCEIRO.md` §2.2.
+**Pendência operacional de produção** (o que falta não é código): as
+**três** entradas de cron (`financeiro_gerar_faturas` dia 1,
+`financeiro_emitir_cobrancas` meia hora depois,
+`financeiro_marcar_vencidas` diário) precisam ser configuradas no
+servidor que hospedar o backend — sem elas nenhuma fatura é gerada nem
+emitida automaticamente, e é a tela "Nova fatura" que cobre o buraco
+hoje. Comandos e horários no `FINANCEIRO.md` §2.2. Faltam também as
+quatro envs do gateway (`ASAAS_API_KEY`, `ASAAS_BASE_URL`,
+`ASAAS_TIMEOUT`, `ASAAS_WEBHOOK_TOKEN` — §6) e o cadastro do hook no
+painel do Asaas apontando pra `/api/v1/financeiro/webhooks/asaas/` com o
+mesmo token. Sem nada disso o módulo segue operando manualmente: a
+secretaria registra o Pix ou o dinheiro que recebeu, que é como ele já
+funciona hoje.
+
+**Falta de UI**: a emissão tem endpoint e command, mas ainda não tem
+botão — a tela de faturas não chama `emitir-cobranca`, e o
+`link_pagamento` não aparece pro responsável no portal. É a próxima
+fatia de frontend do módulo, não uma pendência do backend.
 
 ### App mobile (PWA) — consideração (out/2026), NÃO comprometido
 
