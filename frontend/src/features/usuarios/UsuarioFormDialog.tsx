@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 
+import { AlertaOpcoesIndisponiveis } from "@/components/AlertaOpcoesIndisponiveis";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -65,6 +66,12 @@ export function UsuarioFormDialog({
 
   const perfisDisponiveis = opcoesDePerfil(ehAdminGlobal);
 
+  // Mesmo gate do `DisciplinaFormDialog`: `useEscolas` roda pra todo
+  // perfil, mas só o admin global vê o select e manda o campo — pros
+  // outros o backend deduz pelo JWT. Contar a falha sem o gate travaria
+  // a direção por causa de uma lista que ela nem consome.
+  const falhouCarregar = ehAdminGlobal && escolasQuery.isError;
+
   const salvando = createMutation.isPending || updateMutation.isPending;
 
   async function handleSubmit(e: FormEvent) {
@@ -122,6 +129,8 @@ export function UsuarioFormDialog({
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            <AlertaOpcoesIndisponiveis falhou={falhouCarregar} />
+
             {erro && (
               <Alert variant="destructive">
                 <AlertDescription>{erro}</AlertDescription>
@@ -240,7 +249,7 @@ export function UsuarioFormDialog({
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={salvando}>
+            <Button type="submit" disabled={salvando || falhouCarregar}>
               {salvando ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>

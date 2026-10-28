@@ -164,6 +164,49 @@ describe("UsuariosPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("avisa e trava o envio quando as escolas não carregam, só pro admin global", async () => {
+    // O select de escola só existe pro admin global; contar a falha de
+    // `/escolas/` sem esse gate travaria a direção por causa de uma
+    // lista que ela nem consome. Ver o AlertaOpcoesIndisponiveis.
+    autenticarComo("admin", null);
+    servidor.use(
+      http.get(`${API}/usuarios/`, () => HttpResponse.json([usuario()])),
+      http.get(`${API}/professores/`, () => HttpResponse.json([])),
+      http.get(`${API}/escolas/`, () => new HttpResponse(null, { status: 500 })),
+    );
+    renderizar(<UsuariosPage />);
+
+    await screen.findByText("Ana Lima");
+    await userEvent.click(screen.getByRole("button", { name: "Novo usuário" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByText(/não foi possível carregar as opções/i),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Salvar" })).toBeDisabled();
+  });
+
+  it("não trava a direção quando as escolas falham, porque ela não usa a lista", async () => {
+    autenticarComo("diretor");
+    servidor.use(
+      http.get(`${API}/usuarios/`, () => HttpResponse.json([usuario()])),
+      http.get(`${API}/professores/`, () => HttpResponse.json([])),
+      http.get(`${API}/escolas/`, () => new HttpResponse(null, { status: 500 })),
+    );
+    renderizar(<UsuariosPage />);
+
+    await screen.findByText("Ana Lima");
+    await userEvent.click(screen.getByRole("button", { name: "Novo usuário" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).queryByText(/não foi possível carregar as opções/i),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "Salvar" }),
+    ).not.toBeDisabled();
+  });
+
   it("mostra a recusa do backend em vez de um erro genérico", async () => {
     autenticarComo("diretor");
     responder([usuario()]);
