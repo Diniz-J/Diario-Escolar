@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 
+import { AlertaOpcoesIndisponiveis } from "@/components/AlertaOpcoesIndisponiveis";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -63,6 +64,11 @@ function Formulario({ onPronto }: { onPronto: () => void }) {
   const escolasQuery = useEscolas();
   const criar = useCriarResponsavel();
 
+  // Só o admin global manda escola, e sem ela o backend recusa.
+  // Pros outros perfis a lista não é usada, então a falha dela
+  // não pode travar o cadastro.
+  const falhouCarregar = ehAdminGlobal && escolasQuery.isError;
+
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [cpf, setCpf] = useState("");
@@ -105,6 +111,8 @@ function Formulario({ onPronto }: { onPronto: () => void }) {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            <AlertaOpcoesIndisponiveis falhou={falhouCarregar} />
+
             {erro && (
               <Alert variant="destructive">
                 <AlertDescription>{erro}</AlertDescription>
@@ -198,7 +206,7 @@ function Formulario({ onPronto }: { onPronto: () => void }) {
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={criar.isPending}>
+            <Button type="submit" disabled={criar.isPending || falhouCarregar}>
               {criar.isPending ? "Cadastrando..." : "Cadastrar"}
             </Button>
           </DialogFooter>

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 
+import { AlertaOpcoesIndisponiveis } from "@/components/AlertaOpcoesIndisponiveis";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -57,6 +58,11 @@ export function FrequenciaDialog({
   const [formato, setFormato] = useState<FormatoRelatorio>("pdf");
 
   const periodosQuery = usePeriodosAvaliativos({ ano_letivo: anoLetivo });
+
+  // Aqui o aviso NÃO trava o botão: o período é filtro opcional e a
+  // janela personalizada é caminho alternativo, então quem perdeu a
+  // lista ainda consegue baixar por data.
+  const falhouCarregar = periodosQuery.isError;
   const baixar = useBaixarRelatorioFrequencia();
 
   const personalizado = recorte === PERSONALIZADO;
@@ -153,6 +159,8 @@ export function FrequenciaDialog({
               </div>
             </div>
           )}
+
+          <AlertaOpcoesIndisponiveis falhou={falhouCarregar} />
 
           <SeletorFormato valor={formato} onChange={setFormato} />
 

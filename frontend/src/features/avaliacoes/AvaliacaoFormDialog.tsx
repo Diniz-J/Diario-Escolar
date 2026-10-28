@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useState, type FormEvent } from "react";
 
+import { AlertaOpcoesIndisponiveis } from "@/components/AlertaOpcoesIndisponiveis";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -89,6 +90,13 @@ export function AvaliacaoFormDialog({
   const escolaEfetiva =
     escolaId ||
     (ehAdminGlobal && escolas?.length === 1 ? String(escolas[0].id) : "");
+
+  // Turma e disciplina são exigidas na validação, e a escola também
+  // pro admin global — qualquer uma das três faltando impede salvar.
+  const falhouCarregar =
+    turmasQuery.isError ||
+    disciplinasQuery.isError ||
+    (ehAdminGlobal && escolasQuery.isError);
 
   const enviando = createMutation.isPending || updateMutation.isPending;
 
@@ -336,6 +344,8 @@ export function AvaliacaoFormDialog({
             />
           </div>
 
+          <AlertaOpcoesIndisponiveis falhou={falhouCarregar} />
+
           {erro && (
             <Alert variant="destructive">
               <AlertDescription>{erro}</AlertDescription>
@@ -351,7 +361,7 @@ export function AvaliacaoFormDialog({
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={enviando}>
+            <Button type="submit" disabled={enviando || falhouCarregar}>
               {enviando ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>

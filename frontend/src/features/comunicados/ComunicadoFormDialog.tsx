@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useMemo, useState, type FormEvent } from "react";
 
+import { AlertaOpcoesIndisponiveis } from "@/components/AlertaOpcoesIndisponiveis";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -157,6 +158,10 @@ export function ComunicadoFormDialog({
     }
   }
 
+  // A validação exige ao menos uma turma, e escola pro admin global.
+  const falhouCarregar =
+    turmasQuery.isError || (ehAdminGlobal && escolasQuery.isError);
+
   const salvando = createMutation.isPending || updateMutation.isPending;
 
   return (
@@ -293,6 +298,8 @@ export function ComunicadoFormDialog({
             </div>
           )}
 
+          <AlertaOpcoesIndisponiveis falhou={falhouCarregar} />
+
           {erro && (
             <Alert variant="destructive">
               <AlertDescription>{erro}</AlertDescription>
@@ -308,7 +315,7 @@ export function ComunicadoFormDialog({
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={salvando}>
+            <Button type="submit" disabled={salvando || falhouCarregar}>
               {salvando ? "Salvando..." : "Salvar rascunho"}
             </Button>
           </DialogFooter>

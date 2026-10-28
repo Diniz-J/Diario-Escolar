@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useState, type FormEvent } from "react";
 
+import { AlertaOpcoesIndisponiveis } from "@/components/AlertaOpcoesIndisponiveis";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -78,6 +79,12 @@ export function TurmaFormDialog({
   const escolas = escolasQuery.data;
   const escolaEfetiva =
     escolaId || (escolas?.length === 1 ? String(escolas[0].id) : "");
+
+  // O select de escola só existe pro admin global, e só ele manda o
+  // campo — pros outros perfis o backend deduz pelo JWT. Então a falha
+  // de `/escolas/` só atrapalha o admin: contar sem esse gate travaria
+  // o diretor por causa de uma lista que ele não usa.
+  const falhouCarregar = ehAdminGlobal && escolasQuery.isError;
 
   const enviando = createMutation.isPending || updateMutation.isPending;
 
@@ -244,6 +251,8 @@ export function TurmaFormDialog({
             </Label>
           </div>
 
+          <AlertaOpcoesIndisponiveis falhou={falhouCarregar} />
+
           {erro && (
             <Alert variant="destructive">
               <AlertDescription>{erro}</AlertDescription>
@@ -259,7 +268,7 @@ export function TurmaFormDialog({
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={enviando}>
+            <Button type="submit" disabled={enviando || falhouCarregar}>
               {enviando ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>

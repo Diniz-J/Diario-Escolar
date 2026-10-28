@@ -381,6 +381,21 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
   (`RegistroAulaFormDialog`). Pelo mesmo motivo, flag derivada de `data`
   (`somenteLeitura = registro?.status === "conferido"`) cai pro lado
   permissivo quando a leitura falha, e o travamento que ela fazia vai junto.
+  Nos **dialogs de formulário** o estrago tem uma terceira forma: a lista
+  que popula o `<Select>` falha, o select abre vazio e a validação de
+  submit responde "Selecione uma turma" — a tela **culpa o usuário** por
+  uma falha de rede. O aviso é o `AlertaOpcoesIndisponiveis`
+  (`components/`, não repetido nos quinze dialogs: a frase tem que ser uma
+  só), e travar o botão segue **duas regras que não se deduzem do
+  diff**: (1) o `useEscolas` roda em todo perfil, mas só o admin global vê
+  o select e manda o campo, então contar a falha dele sem
+  `ehAdminGlobal &&` deixaria o **diretor** sem criar turma por causa de
+  uma lista que ele não consome; (2) travar só vale pro campo que a
+  própria validação já exige — professor na ocorrência e pagador no plano
+  são opcionais, e plano/escola só entram na criação, não na edição, então
+  ali o aviso aparece e o botão continua vivo. Quando os dois conjuntos
+  diferem, o dialog tem `falhouCarregar` (aviso) e `bloqueiaEnvio`
+  (botão) separados. Tem teste de mutação travando as três decisões.
 - **Mensagem de erro do backend como UI**: nos dialogs do financeiro o texto do DRF é mostrado em vez de um "erro ao salvar" genérico — é ali que as invariantes se explicam ("Ana já tem fatura na competência 03/2026", vigência sobreposta). Centralizado em `features/financeiro/erros.ts`.
 - **Status badges com paleta da marca** (em vez de red/amber/green/blue genérico do Tailwind):
   - Ocorrência aberta → terracota clarinho + texto destructive.

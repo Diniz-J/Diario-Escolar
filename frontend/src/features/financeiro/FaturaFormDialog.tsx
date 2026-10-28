@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { AlertaOpcoesIndisponiveis } from "@/components/AlertaOpcoesIndisponiveis";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -83,6 +84,12 @@ export function FaturaFormDialog({
   const [erro, setErro] = useState<string | null>(null);
 
   const planos = planosQuery.data ?? [];
+  // Plano e escola entram na validação só na criação (`!editando`),
+  // então editar uma fatura segue possível com a lista caída.
+  const falhouCarregar =
+    planosQuery.isError || (ehAdminGlobal && escolasQuery.isError);
+  const bloqueiaEnvio = !editando && falhouCarregar;
+
   const enviando = createMutation.isPending || updateMutation.isPending;
 
   // Pré-seleciona a única escola disponível (perfil comum só vê a sua).
@@ -245,6 +252,8 @@ export function FaturaFormDialog({
           </div>
         </div>
 
+        <AlertaOpcoesIndisponiveis falhou={falhouCarregar} />
+
         {erro && (
           <Alert variant="destructive">
             <AlertDescription>{erro}</AlertDescription>
@@ -260,7 +269,11 @@ export function FaturaFormDialog({
           >
             Cancelar
           </Button>
-          <Button type="button" onClick={salvar} disabled={enviando}>
+          <Button
+            type="button"
+            onClick={salvar}
+            disabled={enviando || bloqueiaEnvio}
+          >
             {enviando ? "Salvando..." : editando ? "Salvar" : "Criar fatura"}
           </Button>
         </DialogFooter>
