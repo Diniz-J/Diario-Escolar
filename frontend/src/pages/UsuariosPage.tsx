@@ -52,6 +52,13 @@ export function UsuariosPage() {
   const ativacao = useAtivacaoUsuario();
   const enviarReset = useEnviarResetSenha();
 
+  // Query que falha deixa `isLoading` false e `data` undefined, então o
+  // mapa sai vazio e o item "Ver ficha do professor" some de todo mundo
+  // — falha de rede virando "esta pessoa não tem ficha". O conserto é o
+  // aviso acima da tabela, não um guard aqui: guard não mudaria nada
+  // (sem dado o mapa já está vazio) e, no refetch que falha mantendo o
+  // dado anterior, esconderia atalho que ainda funciona. Ver "Query que
+  // falha não vira estado vazio" no CLAUDE.md.
   const professorPorUsuario = new Map(
     (professoresQuery.data ?? []).map((p) => [p.usuario, p.id]),
   );
@@ -131,6 +138,12 @@ export function UsuariosPage() {
         </p>
       ) : (
         <div className="rounded-lg border border-border bg-paper">
+          {professoresQuery.isError && (
+            <p className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+              Não foi possível carregar as fichas de professor, então o
+              atalho para elas não aparece nesta lista.
+            </p>
+          )}
           <Table>
             <TableHeader>
               <TableRow>

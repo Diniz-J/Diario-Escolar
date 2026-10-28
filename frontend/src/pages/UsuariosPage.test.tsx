@@ -138,6 +138,32 @@ describe("UsuariosPage", () => {
     expect(within(dialog).getByLabelText("Usuário")).toBeInTheDocument();
   });
 
+  it("não some com o atalho da ficha em silêncio quando ele falha ao carregar", async () => {
+    // `isLoading` volta a false quando a query falha, então sem o guard
+    // o mapa fica vazio e o item some como se a pessoa não tivesse
+    // ficha. Ver "Query que falha não vira estado vazio" no CLAUDE.md.
+    autenticarComo("diretor");
+    servidor.use(
+      http.get(`${API}/usuarios/`, () =>
+        HttpResponse.json([
+          usuario({ id: 2, username: "bia", first_name: "Bia", last_name: "Souza", perfil: "professor" }),
+        ]),
+      ),
+      http.get(`${API}/professores/`, () => new HttpResponse(null, { status: 500 })),
+      http.get(`${API}/escolas/`, () =>
+        HttpResponse.json([{ id: 1, nome: "Escola Teste" }]),
+      ),
+    );
+    renderizar(<UsuariosPage />);
+
+    // Controle positivo: a lista de usuários carregou, então o que falta
+    // abaixo é consequência da falha das fichas, não de tela vazia.
+    expect(await screen.findByText("Bia Souza")).toBeInTheDocument();
+    expect(
+      await screen.findByText(/não foi possível carregar as fichas/i),
+    ).toBeInTheDocument();
+  });
+
   it("mostra a recusa do backend em vez de um erro genérico", async () => {
     autenticarComo("diretor");
     responder([usuario()]);
