@@ -3,6 +3,8 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll } from "vitest";
 
+import axios from "axios";
+
 import { portalApi } from "@/features/portal/api";
 import { api } from "@/lib/api";
 
@@ -20,6 +22,11 @@ import { servidor } from "./servidor";
 for (const instancia of [api, portalApi]) {
   instancia.defaults.adapter = "fetch";
 }
+// O refresh de token sai pelo axios **global** (`axios.post` em
+// `executarRefresh`, de propósito: a instância tem interceptor e
+// recursionaria), então sem forçar o default o MSW não intercepta o
+// refresh e o caminho fica impossível de testar.
+axios.defaults.adapter = "fetch";
 
 // Requisição que nenhum handler cobre. O MSW loga e deixa o request
 // falhar, mas **não** reprova o teste por conta própria — e falha de
