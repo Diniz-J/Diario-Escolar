@@ -31,6 +31,8 @@ from __future__ import annotations
 from datetime import date
 from typing import Any, Iterator
 
+from django.utils import timezone
+
 from apps.escola.models import Aluno, Turma
 from apps.presenca.models import ItemPresenca
 
@@ -188,7 +190,16 @@ def _eventos_de_cadastro(aluno: Aluno) -> list[dict[str, Any]]:
     def _novo(registro, titulo: str, detalhe: str) -> dict[str, Any]:
         return {
             "tipo": TIPO_CADASTRO,
-            "data": registro.history_date.date().isoformat(),
+            # `history_date` é aware em UTC, e `.date()` numa aware
+            # devolve o dia DO TZINFO dela — não o do usuário. Das 21h
+            # em diante em São Paulo (UTC-3) isso adianta o evento um
+            # dia: a inativação feita às 22h aparecia no dia seguinte e
+            # sumia da janela "hoje". Mesmo alçapão que o `lib/datas.ts`
+            # documenta no front, deste lado. `localtime` converte pro
+            # fuso de `settings.TIME_ZONE` antes de extrair o dia.
+            "data": timezone.localtime(registro.history_date)
+            .date()
+            .isoformat(),
             "titulo": titulo,
             "detalhe": detalhe,
             "status": None,

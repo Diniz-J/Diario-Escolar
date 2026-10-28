@@ -6,7 +6,8 @@ diferente da frequência, o histórico cadastral lido inteiro e a lista de
 permissão de campos que mantém contato de responsável fora da tela do
 professor.
 """
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from datetime import timezone as dt_timezone
 
 from django.test import TestCase
 from django.utils import timezone
@@ -286,6 +287,33 @@ class TimelineServiceTests(TestCase):
         self.aluno.save(update_fields=["ativo"])
 
         timeline = montar_timeline(self.aluno, hoje, hoje)
+        self.assertIn("Aluno inativado", self._titulos(timeline))
+
+    def test_data_do_evento_cadastral_sai_no_fuso_local_nao_em_utc(self):
+        """`history_date` é UTC; o dia mostrado tem que ser o do usuário.
+
+        Fixa a hora em 2026-03-10 02:00 UTC, que em São Paulo (UTC-3) é
+        **ainda 09/03, às 23h**. Com `.date()` direto na aware, o evento
+        sairia como dia 10 e escaparia de uma janela fechada no dia 9 —
+        era assim que a inativação feita à noite sumia do "hoje". O
+        relógio entra fixo de propósito: a versão antiga só reprovava
+        entre 21h e meia-noite, então o teste passava o dia inteiro e
+        quebrava o CI de madrugada.
+        """
+        self.aluno.ativo = False
+        self.aluno.save(update_fields=["ativo"])
+        self.aluno.history.all().update(
+            history_date=datetime(2026, 3, 10, 2, 0, tzinfo=dt_timezone.utc)
+        )
+
+        timeline = montar_timeline(
+            self.aluno, date(2026, 3, 9), date(2026, 3, 9)
+        )
+        datas = {
+            evento["data"]
+            for evento in self._por_tipo(timeline, TIPO_CADASTRO)
+        }
+        self.assertEqual(datas, {"2026-03-09"})
         self.assertIn("Aluno inativado", self._titulos(timeline))
 
     def test_evento_cadastral_fora_da_janela_fica_de_fora(self):
