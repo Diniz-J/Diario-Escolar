@@ -14,7 +14,6 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from apps.common.authentication import StaffRefreshToken
 from apps.common.permissions import (
-    PERFIS_PRIVILEGIADOS,
     IsAdminOrDiretor,
     eh_admin_global,
 )
@@ -91,16 +90,34 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         return super().get_throttles()
 
     def _checar_alvo_privilegiado(self, alvo) -> None:
-        """Barra não-admin de mexer em conta privilegiada que não é a sua."""
+        """Barra não-admin de operar sobre a conta do admin global.
+
+        Era `alvo.perfil in PERFIS_PRIVILEGIADOS`, o que incluía
+        diretor, secretaria e coordenador. Estreitou pra `admin` em
+        out/2026 (decisão do Diniz) pra que a direção gerencie os
+        próprios pares sem `/admin/` — ver o `UsuarioSerializer`.
+
+        O que a mudança **não** afrouxa é o vetor que motivou este guard:
+        a secretaria trocava o email do admin e disparava
+        `enviar-reset-senha` pra receber o link na própria caixa,
+        tomando a conta sem nunca tocar em `password`. A conta do admin
+        segue intocável por não-admin em editar, apagar e resetar, que
+        são os três caminhos que chamam aqui.
+
+        Entre contas de nível-direção o movimento é lateral: elas são
+        aliases umas das outras em `apps/common/permissions.py` e já
+        tinham escrita total sobre a escola. O que se ganha tomando uma é
+        persistência, não alcance — e o `Usuario` é auditado.
+        """
         usuario = self.request.user
         if eh_admin_global(usuario):
             return
         if alvo.pk == usuario.pk:
             return
-        if alvo.perfil in PERFIS_PRIVILEGIADOS:
+        if eh_admin_global(alvo):
             raise PermissionDenied(
-                "Apenas um administrador pode operar sobre contas de "
-                "administração."
+                "Apenas um administrador pode operar sobre a conta de "
+                "administração global."
             )
 
     def perform_update(self, serializer) -> None:
