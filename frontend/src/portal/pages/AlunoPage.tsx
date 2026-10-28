@@ -2,22 +2,33 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { Skeleton } from "@/components/ui/skeleton";
+// `financeiro/constants` é modulo folha (so importa tipo, que some no
+// build), entao reusar daqui nao arrasta a arvore do staff pro chunk do
+// portal — e o formato de dinheiro e as cores de status ficam iguais aos
+// da tela da secretaria, em vez de uma segunda copia que diverge.
 import {
+  STATUS_FATURA,
+  formatarBRL,
+  formatarCompetencia,
+} from "@/features/financeiro/constants";
+import {
+  useFaturasFilho,
   useFilho,
   useMateriaisFilho,
   useOcorrenciasFilho,
 } from "@/features/portal/hooks";
-import type { PortalMaterial } from "@/features/portal/types";
+import type { PortalFatura, PortalMaterial } from "@/features/portal/types";
 
 import { formatarDataPura, formatarDiaDaDataHora } from "@/lib/datas";
 import { BoletimFilho } from "../components/BoletimFilho";
 
-type Aba = "boletim" | "ocorrencias" | "mural";
+type Aba = "boletim" | "ocorrencias" | "mural" | "mensalidades";
 
 const ABAS: { id: Aba; label: string }[] = [
   { id: "boletim", label: "Boletim" },
   { id: "ocorrencias", label: "Ocorrências" },
   { id: "mural", label: "Mural" },
+  { id: "mensalidades", label: "Mensalidades" },
 ];
 
 export function AlunoPage() {
@@ -106,6 +117,7 @@ export function AlunoPage() {
       )}
       {aba === "ocorrencias" && <Ocorrencias alunoId={id} />}
       {aba === "mural" && <Mural alunoId={id} ativo={filho.ativo} />}
+      {aba === "mensalidades" && <Mensalidades alunoId={id} />}
     </div>
   );
 }
@@ -210,6 +222,87 @@ function Mural({ alunoId, ativo }: { alunoId: number; ativo: boolean }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+function Mensalidades({ alunoId }: { alunoId: number }) {
+  const query = useFaturasFilho(alunoId);
+
+  if (query.isLoading) return <Skeleton className="h-24 w-full" />;
+  if (query.isError) {
+    return (
+      <p className="text-sm text-destructive">
+        Não foi possível carregar as mensalidades.
+      </p>
+    );
+  }
+  if ((query.data?.length ?? 0) === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Nenhuma mensalidade registrada.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="space-y-2">
+      {query.data?.map((f) => (
+        <li
+          key={f.id}
+          className="rounded-lg bg-paper border border-border p-4 space-y-2"
+        >
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="font-medium">{formatarCompetencia(f.competencia)}</span>
+            <span
+              className={[
+                "text-xs px-2 py-0.5 rounded shrink-0",
+                STATUS_FATURA[f.status as keyof typeof STATUS_FATURA]?.className ?? "",
+              ].join(" ")}
+            >
+              {STATUS_FATURA[f.status as keyof typeof STATUS_FATURA]?.label ?? f.status}
+            </span>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Vence em {formatarDataPura(f.vencimento)} · {formatarBRL(f.valor)}
+          </p>
+          {/* So aparece quando multa ou juros ja correram: repetir o mesmo
+              numero em duas linhas faria o pai procurar a diferenca. */}
+          {f.valor_atualizado !== f.valor && (
+            <p className="text-sm">
+              Com encargos até hoje:{" "}
+              <strong>{formatarBRL(f.valor_atualizado)}</strong>
+            </p>
+          )}
+          <LinkPagamento fatura={f} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Botão de pagamento, só se o link for http(s).
+ *
+ * Mesma razão do `LinkMaterial`: o backend valida o esquema, mas é aqui
+ * que o valor vira `href` no navegador do pai, e o link vem de fora (o
+ * gateway escreve esse campo). `noopener noreferrer` impede o destino de
+ * alcançar `window.opener`.
+ *
+ * Sem link, nada é renderizado: a escola ainda não emitiu a cobrança, e
+ * um botão morto só geraria ligação pra secretaria.
+ */
+function LinkPagamento({ fatura }: { fatura: PortalFatura }) {
+  const url = fatura.link_pagamento?.trim() ?? "";
+  if (!/^https?:\/\//i.test(url)) return null;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-block text-sm underline text-olive"
+    >
+      Pagar
+    </a>
   );
 }
 

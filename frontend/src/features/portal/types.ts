@@ -42,6 +42,19 @@ export interface PortalMaterial {
   publicado_em: string;
 }
 
+export interface PortalFatura {
+  id: number;
+  competencia: string;
+  valor: string;
+  vencimento: string;
+  status: string;
+  // Valor com multa e juros do dia, calculado no backend. Dinheiro é
+  // string e nada de aritmética aqui (ver CLAUDE.md, padroes de UI).
+  valor_atualizado: string;
+  // Vazio enquanto a escola não emitiu a cobrança no gateway.
+  link_pagamento: string;
+}
+
 export interface PortalComunicado {
   id: number;
   titulo: string;

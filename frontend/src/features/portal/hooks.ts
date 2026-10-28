@@ -6,6 +6,7 @@ import { portalApi } from "./api";
 import type {
   Paginado,
   PortalComunicado,
+  PortalFatura,
   PortalFilho,
   PortalMaterial,
   PortalOcorrencia,
@@ -76,6 +77,19 @@ export function useOcorrenciasFilho(alunoId: number | undefined) {
       const { data } = await portalApi.get<
         PortalOcorrencia[] | Paginado<PortalOcorrencia>
       >(`/alunos/${alunoId}/ocorrencias/`, { params: { page_size: "all" } });
+      return resultados(data);
+    },
+    enabled: alunoId != null && Number.isFinite(alunoId),
+  });
+}
+
+export function useFaturasFilho(alunoId: number | undefined) {
+  return useQuery({
+    queryKey: [...PORTAL_KEY, "faturas", alunoId],
+    queryFn: async (): Promise<PortalFatura[]> => {
+      const { data } = await portalApi.get<
+        PortalFatura[] | Paginado<PortalFatura>
+      >(`/alunos/${alunoId}/faturas/`, { params: { page_size: "all" } });
       return resultados(data);
     },
     enabled: alunoId != null && Number.isFinite(alunoId),
