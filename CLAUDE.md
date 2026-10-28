@@ -75,7 +75,7 @@ rede) — ver `src/test/` no mapa abaixo.
 - `Usuario(AbstractUser)` — `perfil` (admin/diretor/professor/secretaria/coordenador/inspetor) + FK opcional `escola`. **Auditado** (`HistoricalRecords(excluded_fields=["last_login"])` — `last_login` ficaria barulhento, o resto vai pro histórico inclusive `password` hash).
 - `UsuarioSerializer` — inclui `escola` nos fields (necessário pra criar Professor).
 - `UsuarioTokenObtainPairView` / `...Serializer` — JWT com claims `escola_id`, `perfil`, `username`, `first_name`, `last_name`.
-- `/usuarios/` restrito a admin/diretor (via `IsAdminOrDiretor`, que cobre também secretaria/coordenador como aliases).
+- `/usuarios/` restrito a admin/diretor (via `IsAdminOrDiretor`, que cobre também secretaria/coordenador como aliases). Desde out/2026 a direção gere os próprios pares na própria escola — ver "Senhas / acesso" no roadmap pro que ficou aberto e pro que continua fechado, que é onde a decisão está registrada.
 - **Fluxo de senha completo**: público (`/auth/password/reset/request|confirm/`), próprio usuário logado (`/auth/password/change/`) e **action de direção** (`POST /usuarios/<id>/enviar-reset-senha/`) que dispara o mesmo link de redefinição em nome do alvo. Toda a plumbing reusa `PasswordResetToken.gerar()` + `services.enviar_link_redefinicao()`. A action tem guard de IDOR inline (não-admin só dispara reset pra alguém da própria escola). Frontend: `useEnviarResetSenha` + item no ⋯ da `ProfessoresPage` + botão na header da `ProfessorDetalhePage`.
 
 **`escola/`** — núcleo do domínio. Cinco modelos:
@@ -349,7 +349,7 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 - **`components/AppLayout.tsx`** — shell: sidebar fixa olive-dark em ≥768px, drawer (`Sheet`) com hamburguer em <768px. Logo "Diário Diniz" em Fraunces no topo + perfil em mono uppercase + nav com barra ferrugem no ativo + rodapé com filete ferrugem + logout + versão.
 - **`components/ui/`** — shadcn (editável). `Sheet` e `Switch` foram adicionados manualmente (CLI travava em prompt).
 - **`index.css`** — paleta de marca em CSS variables no `:root` (`--olive`, `--olive-dark`, `--linho`, `--paper`, `--ferrugem`, `--tinta`, `--sepia`, `--creme`) + mapeamento dos tokens shadcn (`--background`, `--primary`, etc.) pra paleta. Light mode permanente (sem `.dark` block). `color-scheme: light` + meta tag desabilitam force-dark dos browsers.
-- **~29 pages** — Login, Dashboard, Alunos (+timeline do aluno), Turmas (+detalhe), Disciplinas, Professores (+detalhe — ficha 360º), PlanosEnsino (+detalhe), Ocorrencias (+detalhe), Presenca (+detalhe), Avaliacoes (+detalhe), PeriodosAvaliativos, NotasFinais, DiarioAula, Boletim, **Faturas + PlanosCobranca + FichaFinanceira** (financeiro; as duas primeiras sob um item só de sidebar com abas internas, a ficha alcançada pelo nome do aluno, pelo ⋯ da AlunosPage e pelo botão da TurmaDetalhePage), Import, ContaSenha/EsqueciSenha/RedefinirSenha, NotFound, Placeholder. **Todas no padrão visual `DESIGN.md`** (Fraunces + filete ferrugem + eyebrow mono + `bg-paper`), inclusive listagens/detalhes/forms. Polidas em ondas: Login/Sidebar/Dashboard (PRs #50-#52), depois listagens e detalhes ao longo de jun/2026.
+- **~29 pages** — Login, Dashboard, Alunos (+timeline do aluno), Turmas (+detalhe), Disciplinas, Professores (+detalhe — ficha 360º), PlanosEnsino (+detalhe), Ocorrencias (+detalhe), Presenca (+detalhe), Avaliacoes (+detalhe), PeriodosAvaliativos, NotasFinais, DiarioAula, Boletim, **Faturas + PlanosCobranca + FichaFinanceira** (financeiro; as duas primeiras sob um item só de sidebar com abas internas, a ficha alcançada pelo nome do aluno, pelo ⋯ da AlunosPage e pelo botão da TurmaDetalhePage), Import, **Usuarios** (gestão de conta do staff; Responsáveis é a tela do usuário externo), ContaSenha/EsqueciSenha/RedefinirSenha, NotFound, Placeholder. **Todas no padrão visual `DESIGN.md`** (Fraunces + filete ferrugem + eyebrow mono + `bg-paper`), inclusive listagens/detalhes/forms. Polidas em ondas: Login/Sidebar/Dashboard (PRs #50-#52), depois listagens e detalhes ao longo de jun/2026.
 - **`types/api.ts`** — interfaces espelhando os serializers (mantido à mão; drf-spectacular no backlog). Todos os `*Input` com FK `escola` têm o campo opcional (`escola?: number`) — backend deduz pelo JWT quando ausente.
 
 ### Padrões de UI consolidados
@@ -899,7 +899,45 @@ Pendências de segurança de produção ficam no `CLAUDE.local.md` (não version
 - ✅ Tela "Trocar minha senha" (`ContaSenhaPage`).
 - ✅ Reset por email (`EsqueciSenhaPage` + `RedefinirSenhaPage`) via Brevo.
 - ✅ Admin/direção reseta senha de terceiro pela UI — action `enviar-reset-senha` no `UsuarioViewSet` + botão na ficha do professor / ⋯ na listagem. PR #100.
-- Limitação restante: usuários puros (diretor/secretaria/coordenador sem perfil de professor) ainda dependem do `/admin/` do Django — não têm página de gestão dedicada. Fica pra quando uma `UsuariosPage` aparecer no roadmap.
+- ✅ **`UsuariosPage` entregue** (out/2026) — a limitação acima caiu. Tela
+  `/usuarios` com busca, badge de perfil, toggle "Mostrar inativos",
+  criação/edição, envio do link de senha e (des)ativação. Lista
+  professores junto, com o ⋯ linkando pra ficha: esconder daria dois
+  lugares pra procurar a mesma pessoa, duplicar daria duas verdades
+  sobre ela.
+
+  **A tela exigiu afrouxar permissão, e esse é o detalhe que importa.**
+  O backend barrava não-admin de criar ou editar conta de nível-direção
+  (`PERFIS_PRIVILEGIADOS` na criação, `_CAMPOS_SO_ADMIN` no update), ou
+  seja, barrava exatamente o caso que este item nomeia — a tela sairia
+  sem fazer a única coisa pela qual existe. Decisão de out/2026: a
+  direção gere os próprios pares **na própria escola**. O movimento é
+  lateral (secretaria, coordenador e diretor são aliases uns dos
+  outros), então o que se ganha tomando uma conta dessas é persistência,
+  não alcance — e `Usuario` é auditado.
+
+  As linhas que **não** se mexem, cada uma com um teste travando os dois
+  lados: `perfil=admin` nem criado nem promovido (é o que separa lateral
+  de escalada); `escola` admin-only no update (pulo de tenant), liberada
+  na criação presa à escola do autor (o cadastro de professor depende);
+  `password` admin-only no update (takeover silencioso — o caminho da
+  direção é o link de reset, que vai pro email do alvo); a conta do
+  admin global intocável por não-admin em editar, apagar e resetar; e
+  ninguém muda o próprio perfil nem se desativa (auto-tranco: dentro da
+  escola não sobraria quem destrancasse).
+
+  Conta criada pela tela nasce **sem senha utilizável**
+  (`set_unusable_password()`), então "existe" e "já entra" viraram
+  estados diferentes — o serializer expõe `senha_definida` e a linha
+  ganha o badge "aguardando senha", senão a secretaria reenvia link a
+  esmo.
+
+  Achado de teste de mutação que vale pra quem mexer: o guard da conta
+  do admin **não estava coberto por nada**. O admin global tem
+  `escola=None`, então o `get_queryset` já o escondia e a resposta saía
+  404 pelo escopo; as asserções aceitavam `(403, 404)` e passavam pelo
+  motivo errado. Os testes agora usam um admin **com** escola
+  preenchida, alcançável pelo queryset, e exigem 403 exato.
 
 ### Meta de curto prazo — STATUS
 Infra ✅, segurança operacional ✅, audit log ✅, comunicação por email **funcional em prod** ✅, **Sentry em prod ✅ (DSN setado + smoke test confirmado + captura de 4xx)**, **identidade visual completa ✅ (Login + Sidebar + Dashboard + listagens + detalhes + forms; DESIGN.md durável travado)**, auto-escopo de escola ✅, **diário de classe ✅ (5 fatias + redesenho do PDF #97)**, **fluxo de senha completo ✅ (próprio + esqueci + admin reseta de terceiro, PR #100)**, **performance ✅ (índices, annotates, bulk, prefetch + escopo obrigatório nos endpoints matriz)**. **Migração pra OVH: condicionada à venda** (decisão de out/2026). Não é

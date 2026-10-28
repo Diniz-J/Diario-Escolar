@@ -32,6 +32,7 @@ import { PresencaDetalhePage } from "@/pages/PresencaDetalhePage";
 import { ProfessorDetalhePage } from "@/pages/ProfessorDetalhePage";
 import { ProfessoresPage } from "@/pages/ProfessoresPage";
 import { ResponsaveisPage } from "@/pages/ResponsaveisPage";
+import { UsuariosPage } from "@/pages/UsuariosPage";
 import { PresencaPage } from "@/pages/PresencaPage";
 import { TurmaDetalhePage } from "@/pages/TurmaDetalhePage";
 import { TurmasPage } from "@/pages/TurmasPage";
@@ -74,6 +75,7 @@ export function AppRoutes() {
           <Route path="/comunicados" element={<ComunicadosPage />} />
           <Route path="/mural" element={<MuralPage />} />
           <Route path="/responsaveis" element={<ResponsaveisPage />} />
+          <Route path="/usuarios" element={<UsuariosPage />} />
           <Route
             path="/comunicados/:id"
             element={<ComunicadoDetalhePage />}

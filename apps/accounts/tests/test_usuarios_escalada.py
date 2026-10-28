@@ -221,16 +221,25 @@ class HijackPorEmailTests(_UsuarioEscaladaSetup):
         self.admin.refresh_from_db()
         self.assertEqual(self.admin.email, "adm@diariodiniz.local")
 
-    def test_secretaria_nao_edita_outra_conta_de_direcao(self):
+    def test_secretaria_edita_outra_conta_de_direcao_da_propria_escola(self):
+        """Invertido em out/2026 — antes era 403; ver o docstring da classe.
+
+        A direção passou a gerenciar os próprios pares pra não depender do
+        `/admin/`. O movimento é lateral: secretaria e diretor são aliases
+        em `apps/common/permissions.py` e já tinham escrita total sobre a
+        escola. O que fecha o laço do takeover descrito acima é o teste
+        vizinho, que mantém a conta do **admin** intocável — e é ela que
+        alcança as outras escolas.
+        """
         self._login(self.secretaria_a)
         resp = self.client.patch(
             self._url(self.diretor_a.id),
-            {"email": "atacante@example.com"},
+            {"email": "nova.diretora@example.com"},
             format="json",
         )
-        self.assertIn(resp.status_code, (403, 404), resp.data)
+        self.assertEqual(resp.status_code, 200, resp.data)
         self.diretor_a.refresh_from_db()
-        self.assertEqual(self.diretor_a.email, "dir_a@diariodiniz.local")
+        self.assertEqual(self.diretor_a.email, "nova.diretora@example.com")
 
     def test_secretaria_edita_a_propria_conta(self):
         """Mexer na própria conta continua liberado — não é escalada."""
@@ -244,11 +253,27 @@ class HijackPorEmailTests(_UsuarioEscaladaSetup):
         self.secretaria_a.refresh_from_db()
         self.assertEqual(self.secretaria_a.first_name, "Maria")
 
-    def test_secretaria_nao_dispara_reset_em_conta_de_direcao(self):
-        """Mesmo sem editar o email, reset de conta privilegiada é do admin."""
+    def test_secretaria_dispara_reset_em_conta_de_direcao_da_propria_escola(self):
+        """Invertido junto com a edição acima (out/2026).
+
+        O link vai pro email **do alvo**, não pro de quem dispara, então
+        isto não entrega a conta a ninguém — é o que torna o reset seguro
+        de delegar, ao contrário de definir `password` direto, que segue
+        sendo só do admin.
+        """
         self._login(self.secretaria_a)
         resp = self.client.post(
             f"/api/v1/usuarios/{self.diretor_a.id}/enviar-reset-senha/"
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.diretor_a.email])
+
+    def test_secretaria_nao_dispara_reset_na_conta_do_admin(self):
+        """A metade que NÃO foi invertida — é aqui que o takeover morre."""
+        self._login(self.secretaria_a)
+        resp = self.client.post(
+            f"/api/v1/usuarios/{self.admin.id}/enviar-reset-senha/"
         )
         self.assertIn(resp.status_code, (403, 404), resp.data)
         self.assertEqual(len(mail.outbox), 0)
@@ -421,3 +446,213 @@ class EscolaNulaTests(_UsuarioEscaladaSetup):
             format="json",
         )
         self.assertEqual(resp.status_code, 400, resp.data)
+
+
+class GestaoDePelaDirecaoTests(_UsuarioEscaladaSetup):
+    """O que a fatia de out/2026 abriu, e as linhas que ela manteve.
+
+    A direção passou a cadastrar e gerenciar os próprios pares pra não
+    depender do `/admin/` do Django (item 10 do roadmap). Cada teste
+    aqui é um lado dessa fronteira — os que passam a valer e os que
+    continuam fechados.
+    """
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        super().setUpTestData()
+        # Admin COM escola preenchida. O `cls.admin` do setup base tem
+        # `escola=None`, então o `get_queryset` da secretaria já o
+        # esconde e a resposta sai 404 pelo escopo — o que faz o guard
+        # `_checar_alvo_privilegiado` passar sem ser exercitado. Isto
+        # apareceu em teste de mutação: apagar o guard não reprovava
+        # nada. Com um admin dentro da escola o alvo é alcançável pelo
+        # queryset, e só o guard separa.
+        cls.admin_na_escola_a = Usuario.objects.create_user(
+            username="adm_a",
+            password=SENHA_VALIDA,
+            email="adm_a@diariodiniz.local",
+            perfil=Usuario.Perfil.ADMIN,
+            escola=cls.escola_a,
+        )
+
+    def test_secretaria_nao_edita_admin_alcancavel_pelo_queryset(self):
+        """403 exato, não `(403, 404)`: aqui é o guard que recusa.
+
+        Sem a asserção estrita o teste passaria pelo escopo de escola e
+        mediria a coisa errada.
+        """
+        self._login(self.secretaria_a)
+        resp = self.client.patch(
+            self._url(self.admin_na_escola_a.id),
+            {"email": "atacante@example.com"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 403, resp.data)
+        self.admin_na_escola_a.refresh_from_db()
+        self.assertEqual(
+            self.admin_na_escola_a.email, "adm_a@diariodiniz.local"
+        )
+
+    def test_secretaria_nao_reseta_senha_de_admin_alcancavel(self):
+        self._login(self.secretaria_a)
+        resp = self.client.post(
+            f"/api/v1/usuarios/{self.admin_na_escola_a.id}/enviar-reset-senha/"
+        )
+        self.assertEqual(resp.status_code, 403, resp.data)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_secretaria_nao_apaga_admin_alcancavel(self):
+        self._login(self.secretaria_a)
+        resp = self.client.delete(self._url(self.admin_na_escola_a.id))
+        self.assertEqual(resp.status_code, 403, resp.data)
+        self.assertTrue(
+            Usuario.objects.filter(pk=self.admin_na_escola_a.pk).exists()
+        )
+
+    def test_secretaria_cria_conta_de_direcao_na_propria_escola(self):
+        self._login(self.secretaria_a)
+        resp = self.client.post(
+            "/api/v1/usuarios/",
+            {
+                "username": "nova_sec",
+                "email": "nova.sec@example.com",
+                "perfil": Usuario.Perfil.SECRETARIA,
+                "escola": self.escola_a.id,
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        criado = Usuario.objects.get(username="nova_sec")
+        self.assertEqual(criado.perfil, Usuario.Perfil.SECRETARIA)
+        self.assertEqual(criado.escola_id, self.escola_a.id)
+
+    def test_conta_criada_sem_senha_nasce_sem_senha_utilizavel(self):
+        """O acesso chega pelo link de redefinição, não por senha digitada.
+
+        Sem o `set_unusable_password`, o hash ficaria em string vazia —
+        que não casa com senha nenhuma, mas também não é o marcador que
+        `has_usable_password()` entende, e a tela não teria como dizer
+        se a conta já foi ativada.
+        """
+        self._login(self.secretaria_a)
+        self.client.post(
+            "/api/v1/usuarios/",
+            {
+                "username": "sem_senha",
+                "email": "sem.senha@example.com",
+                "perfil": Usuario.Perfil.INSPETOR,
+                "escola": self.escola_a.id,
+            },
+            format="json",
+        )
+        self.assertFalse(
+            Usuario.objects.get(username="sem_senha").has_usable_password()
+        )
+
+    def test_secretaria_promove_professor_a_coordenador(self):
+        self._login(self.secretaria_a)
+        resp = self.client.patch(
+            self._url(self.professor_a.id),
+            {"perfil": Usuario.Perfil.COORDENADOR},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.professor_a.refresh_from_db()
+        self.assertEqual(self.professor_a.perfil, Usuario.Perfil.COORDENADOR)
+
+    def test_secretaria_desativa_conta_de_quem_saiu_da_escola(self):
+        """O caso urgente que motivou liberar `is_active`.
+
+        Se só o admin global cortasse acesso, revogar o acesso de quem
+        saiu viraria chamado externo — e revogação é a ação que menos
+        pode esperar.
+        """
+        self._login(self.secretaria_a)
+        resp = self.client.patch(
+            self._url(self.diretor_a.id), {"is_active": False}, format="json"
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.diretor_a.refresh_from_db()
+        self.assertFalse(self.diretor_a.is_active)
+
+    # --- As linhas que continuam fechadas ---
+
+    def test_secretaria_nao_cria_conta_admin(self):
+        self._login(self.secretaria_a)
+        resp = self.client.post(
+            "/api/v1/usuarios/",
+            {
+                "username": "backdoor",
+                "email": "backdoor@example.com",
+                "perfil": Usuario.Perfil.ADMIN,
+                "escola": self.escola_a.id,
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.assertIn("perfil", resp.data)
+        self.assertFalse(Usuario.objects.filter(username="backdoor").exists())
+
+    def test_secretaria_nao_promove_terceiro_a_admin(self):
+        self._login(self.secretaria_a)
+        resp = self.client.patch(
+            self._url(self.professor_a.id),
+            {"perfil": Usuario.Perfil.ADMIN},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.professor_a.refresh_from_db()
+        self.assertEqual(self.professor_a.perfil, Usuario.Perfil.PROFESSOR)
+
+    def test_secretaria_nao_edita_a_conta_do_admin(self):
+        self._login(self.secretaria_a)
+        resp = self.client.patch(
+            self._url(self.admin.id), {"is_active": False}, format="json"
+        )
+        self.assertIn(resp.status_code, (403, 404), resp.data)
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_active)
+
+    def test_secretaria_nao_move_usuario_para_outra_escola(self):
+        self._login(self.secretaria_a)
+        resp = self.client.patch(
+            self._url(self.professor_a.id),
+            {"escola": self.escola_b.id},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.assertIn("escola", resp.data)
+        self.professor_a.refresh_from_db()
+        self.assertEqual(self.professor_a.escola_id, self.escola_a.id)
+
+    def test_secretaria_nao_altera_o_proprio_perfil(self):
+        self._login(self.secretaria_a)
+        resp = self.client.patch(
+            self._url(self.secretaria_a.id),
+            {"perfil": Usuario.Perfil.DIRETOR},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.secretaria_a.refresh_from_db()
+        self.assertEqual(self.secretaria_a.perfil, Usuario.Perfil.SECRETARIA)
+
+    def test_secretaria_nao_desativa_a_propria_conta(self):
+        """Auto-tranco: dentro da escola não sobraria quem destrancasse."""
+        self._login(self.secretaria_a)
+        resp = self.client.patch(
+            self._url(self.secretaria_a.id), {"is_active": False}, format="json"
+        )
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.secretaria_a.refresh_from_db()
+        self.assertTrue(self.secretaria_a.is_active)
+
+    def test_secretaria_nao_gerencia_conta_de_outra_escola(self):
+        self._login(self.secretaria_a)
+        resp = self.client.patch(
+            self._url(self.professor_b.id),
+            {"perfil": Usuario.Perfil.COORDENADOR},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 404, resp.data)
+        self.professor_b.refresh_from_db()
+        self.assertEqual(self.professor_b.perfil, Usuario.Perfil.PROFESSOR)

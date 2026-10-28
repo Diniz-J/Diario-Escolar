@@ -3,7 +3,7 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from apps.common.permissions import PERFIS_PRIVILEGIADOS, eh_admin_global
+from apps.common.permissions import eh_admin_global
 
 from .models import Usuario
 
@@ -65,6 +65,15 @@ class UsuarioSerializer(serializers.ModelSerializer):
     # Email é a chave do fluxo de redefinição de senha — obrigatório no
     # cadastro (sobrescreve o `blank=True` herdado do AbstractUser).
     email = serializers.EmailField(required=True, allow_blank=False)
+    # A conta criada pela tela de usuários nasce sem senha utilizável (o
+    # acesso chega pelo link de redefinição), então "existe" e "já pode
+    # entrar" deixaram de ser a mesma coisa. Sem este campo a tela não
+    # teria como distinguir quem nunca ativou de quem está em uso, e a
+    # secretaria reenviaria link a esmo.
+    senha_definida = serializers.SerializerMethodField()
+
+    def get_senha_definida(self, obj) -> bool:
+        return obj.has_usable_password()
 
     class Meta:
         model = Usuario
@@ -81,19 +90,70 @@ class UsuarioSerializer(serializers.ModelSerializer):
             "escola",
             "is_active",
             "password",
+            "senha_definida",
         ]
-        read_only_fields = ["id"]
+        read_only_fields = ["id", "senha_definida"]
 
-    # Campos que só o admin global pode gravar numa atualização. `password`
-    # e `perfil` são os vetores de takeover/escalada; `escola` move o
-    # usuário de tenant; `is_active` permite trancar a conta de outro
-    # (inclusive a do admin).
-    _CAMPOS_SO_ADMIN = ("perfil", "password", "escola", "is_active")
+    # Campos que só o admin global grava, em criação ou atualização.
+    #
+    # `password` é o vetor de takeover silencioso: quem define a senha de
+    # um terceiro entra na conta dele sem passar por email nem token. A
+    # direção tem o caminho certo, que é a action `enviar-reset-senha` —
+    # o link vai pro email do próprio alvo e quem dispara nunca vê a
+    # senha. `escola` move o usuário de tenant, e numa instalação
+    # multi-escola isso é a fronteira do isolamento.
+    #
+    # `perfil` e `is_active` **saíram** desta lista (out/2026, decisão do
+    # Diniz): a direção precisa cadastrar a própria secretaria e cortar o
+    # acesso de quem saiu da escola sem depender do `/admin/`. Os dois
+    # ganharam regra própria abaixo em vez de liberação cega — ver
+    # `_validar_perfil_alvo` e `_validar_autoalteracao`.
+    _CAMPOS_SO_ADMIN = ("password", "escola")
 
     def validate_password(self, value: str) -> str:
         """Aplica os validadores configurados em AUTH_PASSWORD_VALIDATORS."""
         validate_password(value)
         return value
+
+    def _validar_perfil_alvo(self, attrs: dict) -> None:
+        """`admin` é a fronteira: nível-direção não cria nem promove a ela.
+
+        Secretaria, coordenador e diretor operam no mesmo nível (são
+        aliases em `apps/common/permissions.py`), então uma secretaria
+        cadastrar uma diretora é movimento **lateral** — ela já tinha
+        escrita total sobre os dados daquela escola. `admin` não: dá
+        bypass em toda permission class e alcança as outras escolas.
+        """
+        perfil = attrs.get("perfil")
+        if perfil is not None and perfil == Usuario.Perfil.ADMIN:
+            raise serializers.ValidationError(
+                {
+                    "perfil": (
+                        "Apenas um administrador pode criar ou promover "
+                        "conta com este perfil."
+                    )
+                }
+            )
+
+    def _validar_autoalteracao(self, attrs: dict, usuario) -> None:
+        """Ninguém muda o próprio perfil nem se desativa.
+
+        O auto-tranco é o motivo real: uma diretora que se desativa fica
+        de fora, e **dentro da escola não sobra quem a destranque** —
+        viraria chamado pro admin global. Mudar o próprio perfil é
+        higiene: não é escalada (o nível é o mesmo), mas não existe caso
+        de uso e esconde erro de clique.
+        """
+        if self.instance is None or self.instance.pk != usuario.pk:
+            return
+        if "perfil" in attrs and attrs["perfil"] != self.instance.perfil:
+            raise serializers.ValidationError(
+                {"perfil": "Você não pode alterar o seu próprio perfil."}
+            )
+        if attrs.get("is_active") is False:
+            raise serializers.ValidationError(
+                {"is_active": "Você não pode desativar a sua própria conta."}
+            )
 
     def validate(self, attrs: dict) -> dict:
         """Bloqueia escalada de privilégio por quem não é admin global.
@@ -109,14 +169,20 @@ class UsuarioSerializer(serializers.ModelSerializer):
         - criar uma conta `admin` nova pela porta de trás;
         - mover um usuário pra outra escola.
 
-        Regra: `perfil`, `password`, `escola` e `is_active` são de admin
-        global. Não-admin continua **criando** usuário (o cadastro de
-        professor depende disso), mas só com perfil sem privilégio e na
-        própria escola.
+        Regra hoje: `password` e `escola` são de admin global, em criação
+        e em atualização. `perfil` e `is_active` a direção mexe, com dois
+        limites — nunca pra/de `admin` (`_validar_perfil_alvo`) e nunca na
+        própria conta (`_validar_autoalteracao`).
 
         Pra redefinir a senha de um terceiro, a direção tem o caminho
         correto: a action `enviar-reset-senha`, que manda o link pro email
         do próprio alvo — quem dispara nunca vê nem define a senha.
+
+        Falta uma peça aqui que **não** é deste arquivo: quem é o alvo. O
+        serializer não barra operar sobre a conta do admin global, porque
+        o alvo é assunto da view (`_checar_alvo_privilegiado`), que roda
+        antes do save. Separar assim evita duas cópias da mesma regra com
+        vocabulário diferente.
         """
         request = self.context.get("request")
         if request is None or not request.user.is_authenticated:
@@ -126,7 +192,15 @@ class UsuarioSerializer(serializers.ModelSerializer):
 
         usuario = request.user
 
+        self._validar_perfil_alvo(attrs)
+
         if self.instance is not None:
+            # Só na ATUALIZAÇÃO. Na criação os dois são legítimos: a conta
+            # nasce agora, então definir a senha dela não toma nada de
+            # ninguém, e a `escola` é obrigatória pro cadastro de
+            # professor — presa à do autor pelo guard logo abaixo. É o
+            # update que os torna perigosos: aí existe um dono do outro
+            # lado, e trocar a escola dele é pulo de tenant.
             proibidos = sorted(
                 campo for campo in self._CAMPOS_SO_ADMIN if campo in attrs
             )
@@ -139,20 +213,10 @@ class UsuarioSerializer(serializers.ModelSerializer):
                         for campo in proibidos
                     }
                 )
+            self._validar_autoalteracao(attrs, usuario)
             return attrs
 
         # Criação.
-        perfil = attrs.get("perfil")
-        if perfil in PERFIS_PRIVILEGIADOS:
-            raise serializers.ValidationError(
-                {
-                    "perfil": (
-                        "Apenas um administrador pode criar usuário com "
-                        "este perfil."
-                    )
-                }
-            )
-
         escola = attrs.get("escola")
         if not usuario.escola_id:
             raise serializers.ValidationError(
@@ -174,6 +238,14 @@ class UsuarioSerializer(serializers.ModelSerializer):
         usuario = Usuario(**validated_data)
         if password:
             usuario.set_password(password)
+        else:
+            # Sem isto o hash fica em string vazia, que é um estado
+            # ambíguo: não casa com senha nenhuma, mas também não é o
+            # marcador de "inutilizável" que o `has_usable_password()`
+            # entende. A tela de usuários cria conta justamente sem
+            # senha (o acesso chega pelo link de redefinição), então
+            # este ramo deixou de ser teórico.
+            usuario.set_unusable_password()
         usuario.save()
         return usuario
 
