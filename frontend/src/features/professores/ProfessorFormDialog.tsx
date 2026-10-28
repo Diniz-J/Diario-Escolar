@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useMemo, useState, type FormEvent } from "react";
 
+import { AlertaOpcoesIndisponiveis } from "@/components/AlertaOpcoesIndisponiveis";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -120,6 +121,17 @@ export function ProfessorFormDialog({
       }))
     : [];
   const linhas = linhasEditadas ?? linhasDoProfessor;
+
+  // Duas réguas: o aviso cobre qualquer lista que falte, mas só a
+  // escola trava o envio. Turma e disciplina alimentam o seletor de
+  // lecionamento, que é opcional — travar por elas impediria
+  // cadastrar um professor que ganha o vínculo depois.
+  const falhouCarregar =
+    turmasQuery.isError ||
+    disciplinasQuery.isError ||
+    lecionamentosQuery.isError ||
+    (ehAdminGlobal && escolasQuery.isError);
+  const bloqueiaEnvio = ehAdminGlobal && escolasQuery.isError;
 
   const enviando =
     createUsuario.isPending ||
@@ -468,6 +480,8 @@ export function ProfessorFormDialog({
             )}
           </div>
 
+          <AlertaOpcoesIndisponiveis falhou={falhouCarregar} />
+
           {erro && (
             <Alert variant="destructive">
               <AlertDescription>{erro}</AlertDescription>
@@ -483,7 +497,7 @@ export function ProfessorFormDialog({
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={enviando}>
+            <Button type="submit" disabled={enviando || bloqueiaEnvio}>
               {enviando ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>

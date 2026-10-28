@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useMemo, useState, type FormEvent } from "react";
 
+import { AlertaOpcoesIndisponiveis } from "@/components/AlertaOpcoesIndisponiveis";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -110,6 +111,15 @@ export function OcorrenciaFormDialog({
     setTurmaEscolhida(novoTurmaId);
     setAlunoId("");
   }
+
+  // O aluno é exigido, e a turma é o que filtra a lista de alunos:
+  // sem as duas não há ocorrência a registrar. O professor é
+  // opcional no modelo, então a falha dele avisa sem travar.
+  const falhouCarregar =
+    turmasQuery.isError ||
+    alunosQuery.isError ||
+    professoresQuery.isError;
+  const bloqueiaEnvio = turmasQuery.isError || alunosQuery.isError;
 
   const enviando = createMutation.isPending || updateMutation.isPending;
 
@@ -302,6 +312,8 @@ export function OcorrenciaFormDialog({
             />
           </div>
 
+          <AlertaOpcoesIndisponiveis falhou={falhouCarregar} />
+
           {erro && (
             <Alert variant="destructive">
               <AlertDescription>{erro}</AlertDescription>
@@ -317,7 +329,7 @@ export function OcorrenciaFormDialog({
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={enviando}>
+            <Button type="submit" disabled={enviando || bloqueiaEnvio}>
               {enviando ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>

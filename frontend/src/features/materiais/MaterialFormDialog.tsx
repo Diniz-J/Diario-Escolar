@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useMemo, useState } from "react";
 
+import { AlertaOpcoesIndisponiveis } from "@/components/AlertaOpcoesIndisponiveis";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -102,6 +103,17 @@ export function MaterialFormDialog({
   );
 
   const professoresAtivos = (professoresQuery.data ?? []).filter((p) => p.ativo);
+  // O campo exigido é o lecionamento, e a direção chega nele pela
+  // lista de professores. Turma e disciplina só resolvem o rótulo
+  // exibido, então avisam sem travar.
+  const falhouCarregar =
+    professoresQuery.isError ||
+    turmasQuery.isError ||
+    disciplinasQuery.isError ||
+    lecionamentosQuery.isError;
+  const bloqueiaEnvio =
+    lecionamentosQuery.isError || professoresQuery.isError;
+
   const enviando = createMutation.isPending || updateMutation.isPending;
 
   async function salvar() {
@@ -270,6 +282,8 @@ export function MaterialFormDialog({
           </div>
         </div>
 
+        <AlertaOpcoesIndisponiveis falhou={falhouCarregar} />
+
         {erro && (
           <Alert variant="destructive">
             <AlertDescription>{erro}</AlertDescription>
@@ -285,7 +299,11 @@ export function MaterialFormDialog({
           >
             Cancelar
           </Button>
-          <Button type="button" onClick={salvar} disabled={enviando}>
+          <Button
+            type="button"
+            onClick={salvar}
+            disabled={enviando || bloqueiaEnvio}
+          >
             {enviando ? "Salvando..." : editando ? "Salvar" : "Publicar"}
           </Button>
         </DialogFooter>

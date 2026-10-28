@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useState, type FormEvent } from "react";
 
+import { AlertaOpcoesIndisponiveis } from "@/components/AlertaOpcoesIndisponiveis";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,6 +48,10 @@ export function RegistroFormDialog({
   // Outros perfis: backend deduz via JWT.
   const { ehAdminGlobal } = usePermissoes();
   const turmasQuery = useTurmas();
+
+  // A turma é exigida na validação de submit: sem a lista não há
+  // chamada a abrir.
+  const falhouCarregar = turmasQuery.isError;
   const createMutation = useCreateRegistro();
 
   const hoje = hojeISO();
@@ -153,6 +158,8 @@ export function RegistroFormDialog({
             />
           </div>
 
+          <AlertaOpcoesIndisponiveis falhou={falhouCarregar} />
+
           {erro && (
             <Alert variant="destructive">
               <AlertDescription>{erro}</AlertDescription>
@@ -168,7 +175,10 @@ export function RegistroFormDialog({
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={createMutation.isPending}>
+            <Button
+              type="submit"
+              disabled={createMutation.isPending || falhouCarregar}
+            >
               {createMutation.isPending ? "Criando..." : "Abrir chamada"}
             </Button>
           </DialogFooter>

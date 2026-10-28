@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useState, type FormEvent } from "react";
 
+import { AlertaOpcoesIndisponiveis } from "@/components/AlertaOpcoesIndisponiveis";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,6 +44,10 @@ export function PlanoEnsinoCreateDialog({
 }: PlanoEnsinoCreateDialogProps) {
   const turmasQuery = useTurmas();
   const disciplinasQuery = useDisciplinas();
+
+  // As duas são exigidas na validação de submit.
+  const falhouCarregar =
+    turmasQuery.isError || disciplinasQuery.isError;
   const createMutation = useCreatePlanoEnsino();
 
   const [turmaId, setTurmaId] = useState("");
@@ -156,6 +161,8 @@ export function PlanoEnsinoCreateDialog({
             </Select>
           </div>
 
+          <AlertaOpcoesIndisponiveis falhou={falhouCarregar} />
+
           {erro && (
             <Alert variant="destructive">
               <AlertDescription>{erro}</AlertDescription>
@@ -171,7 +178,10 @@ export function PlanoEnsinoCreateDialog({
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={createMutation.isPending}>
+            <Button
+              type="submit"
+              disabled={createMutation.isPending || falhouCarregar}
+            >
               {createMutation.isPending ? "Criando..." : "Criar"}
             </Button>
           </DialogFooter>

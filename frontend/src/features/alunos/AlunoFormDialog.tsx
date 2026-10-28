@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useState, type FormEvent } from "react";
 
+import { AlertaOpcoesIndisponiveis } from "@/components/AlertaOpcoesIndisponiveis";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,6 +71,10 @@ export function AlunoFormDialog({
     aluno?.email_responsavel ?? "",
   );
   const [erro, setErro] = useState<string | null>(null);
+
+  // A turma é exigida na validação de submit, então sem a lista não
+  // há como completar o cadastro.
+  const falhouCarregar = turmasQuery.isError;
 
   const enviando = createMutation.isPending || updateMutation.isPending;
 
@@ -243,6 +248,8 @@ export function AlunoFormDialog({
             </Label>
           </div>
 
+          <AlertaOpcoesIndisponiveis falhou={falhouCarregar} />
+
           {erro && (
             <Alert variant="destructive">
               <AlertDescription>{erro}</AlertDescription>
@@ -258,7 +265,7 @@ export function AlunoFormDialog({
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={enviando}>
+            <Button type="submit" disabled={enviando || falhouCarregar}>
               {enviando ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>

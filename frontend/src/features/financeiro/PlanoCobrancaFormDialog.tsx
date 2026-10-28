@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { AlertaOpcoesIndisponiveis } from "@/components/AlertaOpcoesIndisponiveis";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -95,6 +96,17 @@ export function PlanoCobrancaFormDialog({
   // criação). Criando, depende do que foi escolhido agora.
   const alunoDoPagador = editando ? plano.aluno : Number(alunoId) || null;
   const vinculosQuery = useVinculosDoAluno(alunoDoPagador);
+
+  // Aluno e escola entram na validação só na criação. Os vínculos
+  // alimentam o pagador, que é opcional no contrato, então a falha
+  // deles avisa sem travar.
+  const falhouCarregar =
+    alunosQuery.isError ||
+    vinculosQuery.isError ||
+    (ehAdminGlobal && escolasQuery.isError);
+  const bloqueiaEnvio =
+    !editando &&
+    (alunosQuery.isError || (ehAdminGlobal && escolasQuery.isError));
   const vinculos = vinculosQuery.data ?? [];
 
   // Trocar o aluno invalida o pagador escolhido: ele é responsável do
@@ -388,6 +400,8 @@ export function PlanoCobrancaFormDialog({
           </p>
         </div>
 
+        <AlertaOpcoesIndisponiveis falhou={falhouCarregar} />
+
         {erro && (
           <Alert variant="destructive">
             <AlertDescription>{erro}</AlertDescription>
@@ -403,7 +417,11 @@ export function PlanoCobrancaFormDialog({
           >
             Cancelar
           </Button>
-          <Button type="button" onClick={salvar} disabled={enviando}>
+          <Button
+            type="button"
+            onClick={salvar}
+            disabled={enviando || bloqueiaEnvio}
+          >
             {enviando ? "Salvando..." : editando ? "Salvar" : "Criar plano"}
           </Button>
         </DialogFooter>
