@@ -115,6 +115,10 @@ export function FaturaDetalheDialog({
               <h3 className={LABEL_CLASS}>Composição</h3>
               {itensQuery.isLoading ? (
                 <Skeleton className="h-10 w-full" />
+              ) : itensQuery.isError ? (
+                <p className="text-sm text-destructive">
+                  Não foi possível carregar a composição.
+                </p>
               ) : (itensQuery.data ?? []).length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   Sem detalhamento lançado.
@@ -140,6 +144,10 @@ export function FaturaDetalheDialog({
               <h3 className={LABEL_CLASS}>Pagamentos</h3>
               {pagamentosQuery.isLoading ? (
                 <Skeleton className="h-10 w-full" />
+              ) : pagamentosQuery.isError ? (
+                <p className="text-sm text-destructive">
+                  Não foi possível carregar os pagamentos desta fatura.
+                </p>
               ) : (pagamentosQuery.data ?? []).length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   Nenhum pagamento registrado.

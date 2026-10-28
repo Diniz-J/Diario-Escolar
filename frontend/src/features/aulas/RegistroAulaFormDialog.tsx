@@ -61,6 +61,12 @@ export function RegistroAulaFormDialog({
   const registro = registroQuery.data;
   // Aula conferida pela direção é só leitura — o professor não reabre.
   const somenteLeitura = registro?.status === "conferido";
+  // Query que falha deixa `isLoading` false e `data` undefined, então sem
+  // este guard a aula já registrada abriria com o textarea vazio E
+  // habilitado: salvar dali apagaria o conteúdo que está no banco. Pior,
+  // `somenteLeitura` também cai pra false e a aula conferida viraria
+  // editável. Enquanto não souber o que está lá, não deixa escrever.
+  const falhouCarregar = editando && registroQuery.isError;
 
   const conteudo =
     conteudoEditado ?? (editando ? (registro?.conteudo ?? "") : "");
@@ -128,12 +134,23 @@ export function RegistroAulaFormDialog({
             id="conteudo"
             rows={8}
             value={conteudo}
-            disabled={somenteLeitura || registroQuery.isLoading}
+            disabled={
+              somenteLeitura || registroQuery.isLoading || falhouCarregar
+            }
             onChange={(e) => setConteudoEditado(e.target.value)}
             className="w-full rounded-md border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition resize-y disabled:opacity-70"
             placeholder="O que foi trabalhado nesta aula?"
           />
         </div>
+
+        {falhouCarregar && (
+          <Alert variant="destructive">
+            <AlertDescription>
+              Não foi possível carregar o conteúdo desta aula. Feche e abra de
+              novo — salvar agora sobrescreveria o que já estava registrado.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {erro && (
           <Alert variant="destructive">
@@ -148,9 +165,9 @@ export function RegistroAulaFormDialog({
             onClick={() => onOpenChange(false)}
             disabled={enviando}
           >
-            {somenteLeitura ? "Fechar" : "Cancelar"}
+            {somenteLeitura || falhouCarregar ? "Fechar" : "Cancelar"}
           </Button>
-          {!somenteLeitura && (
+          {!somenteLeitura && !falhouCarregar && (
             <>
               <Button
                 type="button"
