@@ -126,7 +126,15 @@ mobile-first em `src/portal/`. Backend entregue até a fatia 5:
 autenticação isolada (`/api/v1/portal/auth/`, tokens com `tipo=responsavel`
 e `responsavel_id` — o staff recusa), convite e senha (`ConviteResponsavel`,
 comando `portal_convidar_responsaveis`) e leituras em `leituras.py`, todas a
-partir dos vínculos (`filhos_do`). Com a fatia 6 no ar, o portão
+partir dos vínculos (`filhos_do`). A última a entrar foi
+`FaturasFilhoView` (out/2026), que leva o `link_pagamento` do financeiro
+ao pai: quem vê é **todo responsável vinculado e não só o `pagador` do
+plano**, porque o email de pagamento já sai por `destinatarios_do_aluno`
+e alcança todos — restringir aqui deixaria o outro responsável com o
+aviso de "pagamento recebido" e nenhum lugar pra conferir; o `pagador` é
+o titular do boleto, não controle de acesso. Fatura **cancelada** não
+aparece (ato interno da secretaria), e filho inativo **continua vendo as
+dele**, como o boletim, divergindo do mural de propósito. Com a fatia 6 no ar, o portão
 "nenhum convite em produção" caiu — o link do email tem tela pra abrir.
 
 **`materiais/`** — mural do professor pra turma (fatia 5 do `PORTAL.md`).
@@ -736,9 +744,22 @@ devolve a terceira dessas mensagens: o front não tem como saber que o
 gateway não existe, e inventar um endpoint de capabilities pra uma
 instalação só não se paga.
 
-**Ainda falta de UI**: o campo de pagador no dialog do plano (hoje só
-dá pra definir pela API ou pelo `/admin/`, e sem ele a emissão recusa) e
-o `link_pagamento` no portal do responsável.
+**Campo de pagador entregue** (out/2026): select no
+`PlanoCobrancaFormDialog`, alimentado pelos vínculos **do próprio aluno**
+(`/vinculos-responsavel/?aluno=`) e não por toda a escola, porque o
+`clean()` do plano exige que o pagador seja responsável daquele aluno —
+uma lista mais larga ofereceria opção que o backend recusa. Trocar o
+aluno limpa o pagador. O campo é opcional: a escola que recebe Pix na
+conta e registra à mão nunca precisa de um, e exigir travaria o jeito
+como o módulo já opera. Limitação conhecida: o endpoint de vínculos não
+diz se o responsável tem CPF, então pagador sem CPF só é pego na emissão
+— que devolve a frase do backend no `Alert` do dialog.
+
+**`link_pagamento` no portal entregue** (out/2026): aba "Mensalidades" na
+página do filho, servida por `GET /portal/alunos/<id>/faturas/`. Duas
+decisões registradas no mapa de `portal/`, porque nenhuma se deduz do
+código: quem vê é **todo responsável vinculado** (não só o `pagador`), e
+**fatura cancelada fica de fora**.
 
 ### App mobile (PWA) — consideração (out/2026), NÃO comprometido
 

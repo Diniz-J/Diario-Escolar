@@ -18,12 +18,14 @@ from apps.boletins.services import montar_boletim
 from apps.common.pagination import PaginacaoCompulsoria
 from apps.comunicados.models import Comunicado, ComunicadoDestinatario
 from apps.escola.models import Aluno
+from apps.financeiro.models import Fatura
 from apps.materiais.models import Material
 from apps.ocorrencias.models import Ocorrencia
 
 from .authentication import IsResponsavel, PortalJWTAuthentication
 from .serializers import (
     ComunicadoPortalSerializer,
+    FaturaPortalSerializer,
     FilhoSerializer,
     MaterialPortalSerializer,
     OcorrenciaPortalSerializer,
@@ -193,6 +195,38 @@ class MateriaisFilhoView(_PortalMixin, generics.ListAPIView):
             )
             .select_related("disciplina", "professor__usuario")
             .order_by("-publicado_em", "-pk")
+        )
+
+
+class FaturasFilhoView(_PortalMixin, generics.ListAPIView):
+    """`GET /portal/alunos/<id>/faturas/` — as mensalidades do filho.
+
+    Quem vê é **todo responsável vinculado**, não só o `pagador` do plano.
+    O precedente é o email: `financeiro.notificacoes.notificar_pagamento`
+    resolve o destino por `destinatarios_do_aluno`, ou seja, todos os
+    vinculados. Restringir aqui ao pagador faria o outro responsável
+    receber "pagamento recebido" sem ter onde conferir. O `pagador` é o
+    titular do boleto (cláusula de contrato), não um controle de acesso.
+
+    Cancelada fica de fora: é ato interno da secretaria, e explicar um
+    cancelamento ao responsável é conversa dela, não da tela.
+
+    Filho desativado continua vendo as dele — é histórico do aluno, como
+    boletim e ocorrências. Diverge do mural de propósito, que é conteúdo
+    corrente da turma.
+    """
+
+    serializer_class = FaturaPortalSerializer
+    pagination_class = PaginacaoCompulsoria
+
+    def get_queryset(self):
+        aluno = filho_ou_404(self.request, self.kwargs["pk"])
+        return (
+            Fatura.objects.filter(aluno_id=aluno.pk, escola_id=aluno.escola_id)
+            .exclude(status=Fatura.Status.CANCELADO)
+            # `encargos()` lê multa e juros do plano por linha serializada.
+            .select_related("plano")
+            .order_by("-competencia", "-pk")
         )
 
 

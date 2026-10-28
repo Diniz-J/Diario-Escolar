@@ -5,6 +5,7 @@ from .leituras import (
     BoletimFilhoView,
     ComunicadoDetalheView,
     ComunicadosView,
+    FaturasFilhoView,
     FilhoDetalheView,
     FilhosView,
     MateriaisFilhoView,
@@ -47,6 +48,11 @@ urlpatterns = [
         "alunos/<int:pk>/ocorrencias/",
         OcorrenciasFilhoView.as_view(),
         name="portal_aluno_ocorrencias",
+    ),
+    path(
+        "alunos/<int:pk>/faturas/",
+        FaturasFilhoView.as_view(),
+        name="portal_aluno_faturas",
     ),
     path(
         "alunos/<int:pk>/materiais/",

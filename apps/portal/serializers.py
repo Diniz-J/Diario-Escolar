@@ -17,6 +17,7 @@ from apps.common.serializers import (
 from apps.common.texto import normalizar_email
 from apps.common.validators import apenas_digitos
 from apps.escola.models import Aluno
+from apps.financeiro.models import Fatura
 from apps.materiais.models import Material
 from apps.ocorrencias.models import Ocorrencia
 
@@ -73,6 +74,32 @@ class MaterialPortalSerializer(serializers.ModelSerializer):
     class Meta:
         model = Material
         fields = ["id", "titulo", "descricao", "link", "disciplina", "professor", "publicado_em"]
+        read_only_fields = fields
+
+
+class FaturaPortalSerializer(serializers.ModelSerializer):
+    """Mensalidade como o responsável a vê — valor, vencimento e o link.
+
+    `valor_atualizado` vem calculado do backend (multa e juros do dia, via
+    `Fatura.encargos`), nunca montado no front: é a mesma regra do
+    `FaturaSerializer` do staff, e duas aritméticas de dinheiro divergiriam.
+    """
+
+    valor_atualizado = serializers.DecimalField(
+        max_digits=10, decimal_places=2, read_only=True
+    )
+
+    class Meta:
+        model = Fatura
+        fields = [
+            "id",
+            "competencia",
+            "valor",
+            "vencimento",
+            "status",
+            "valor_atualizado",
+            "link_pagamento",
+        ]
         read_only_fields = fields
 
 

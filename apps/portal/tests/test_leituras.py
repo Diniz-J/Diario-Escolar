@@ -4,7 +4,8 @@ Verificação da fatia: responsável A não lê nada do aluno de B; id alheio
 na URL dá 404; rascunho invisível. Mais: período de outra escola, filho
 inativo, comunicado por log de entrega e ausência de N+1.
 """
-from datetime import date
+from datetime import date, timedelta
+from decimal import Decimal
 
 from django.db import connection
 from django.test import TestCase
@@ -18,6 +19,7 @@ from apps.accounts.models import Usuario
 from apps.avaliacao.models import PeriodoAvaliativo
 from apps.comunicados.models import Comunicado, ComunicadoDestinatario
 from apps.escola.models import Aluno, Escola, Professor, Turma
+from apps.financeiro.models import Fatura, PlanoCobranca
 from apps.ocorrencias.models import Ocorrencia
 from apps.portal.models import Responsavel, ResponsavelAluno
 from apps.portal.tokens import PortalRefreshToken
@@ -279,3 +281,112 @@ class ConsultasTests(_LeiturasSetup):
             )
         self.assertEqual(self._queries("portal_alunos"), filhos)
         self.assertEqual(self._queries("portal_aluno_ocorrencias", self.filho.pk), ocorrencias)
+
+
+class FaturasTests(_LeiturasSetup):
+    """Mensalidades no portal — quem vê, o que entra e o que fica de fora."""
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        super().setUpTestData()
+        cls.plano = cls._plano(cls.filho)
+        # Vencida há 30 dias: exercita multa e juros no `valor_atualizado`.
+        cls.vencida = cls._fatura(
+            cls.plano, cls.filho, date(2026, 3, 1),
+            vencimento=date.today() - timedelta(days=30),
+            status=Fatura.Status.VENCIDO,
+            link="https://pague.example.com/abc",
+        )
+        cls.cancelada = cls._fatura(
+            cls.plano, cls.filho, date(2026, 2, 1),
+            vencimento=date(2026, 2, 10),
+            status=Fatura.Status.CANCELADO,
+        )
+        plano_beto = cls._plano(cls.filho_beto)
+        cls.fatura_beto = cls._fatura(
+            plano_beto, cls.filho_beto, date(2026, 3, 1), vencimento=date(2026, 3, 10)
+        )
+
+    @staticmethod
+    def _plano(aluno):
+        return PlanoCobranca.objects.create(
+            escola=aluno.escola, aluno=aluno,
+            valor_mensalidade=Decimal("500.00"), dia_vencimento=10,
+            multa_percentual=Decimal("2.00"), juros_mes_percentual=Decimal("1.00"),
+            vigencia_inicio=date(2026, 1, 1),
+        )
+
+    @staticmethod
+    def _fatura(plano, aluno, competencia, *, vencimento, status=None, link=""):
+        return Fatura.objects.create(
+            escola=aluno.escola, plano=plano, aluno=aluno,
+            competencia=competencia, valor=Decimal("500.00"),
+            vencimento=vencimento,
+            status=status or Fatura.Status.PENDENTE,
+            link_pagamento=link,
+        )
+
+    def test_lista_traz_o_link_de_pagamento(self):
+        resposta = self._get("portal_aluno_faturas", self.filho.pk)
+        self.assertEqual(resposta.status_code, 200)
+        linhas = resposta.json()["results"]
+        self.assertEqual(
+            [linha["link_pagamento"] for linha in linhas],
+            ["https://pague.example.com/abc"],
+        )
+
+    def test_cancelada_nao_aparece(self):
+        resposta = self._get("portal_aluno_faturas", self.filho.pk)
+        ids = {linha["id"] for linha in resposta.json()["results"]}
+        self.assertIn(self.vencida.pk, ids)
+        self.assertNotIn(self.cancelada.pk, ids)
+
+    def test_valor_atualizado_traz_multa_e_juros_da_vencida(self):
+        resposta = self._get("portal_aluno_faturas", self.filho.pk)
+        linha = resposta.json()["results"][0]
+        self.assertEqual(linha["valor"], "500.00")
+        # O cálculo é do modelo; aqui só travamos que o campo não repete
+        # o valor nominal — encargo somado é o ponto do campo existir.
+        self.assertEqual(
+            Decimal(linha["valor_atualizado"]), self.vencida.valor_atualizado()
+        )
+        self.assertGreater(Decimal(linha["valor_atualizado"]), Decimal("500.00"))
+
+    def test_fatura_de_aluno_alheio_da_404(self):
+        resposta = self._get("portal_aluno_faturas", self.filho_beto.pk)
+        self.assertEqual(resposta.status_code, 404)
+
+    def test_responsavel_sem_ser_pagador_do_plano_ve_as_faturas(self):
+        """O `pagador` é titular do boleto, não controle de acesso.
+
+        O email de pagamento sai por `destinatarios_do_aluno`, que alcança
+        todos os vinculados — o portal tem que acompanhar.
+        """
+        segundo = self._responsavel(self.escola, "pai@example.com", [self.filho])
+        self.plano.pagador = segundo
+        self.plano.save(update_fields=["pagador"])
+
+        self._entrar(self.ana)  # Ana não é a pagadora.
+        resposta = self._get("portal_aluno_faturas", self.filho.pk)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertTrue(resposta.json()["results"])
+
+    def test_filho_inativo_continua_vendo_as_dele(self):
+        plano = self._plano(self.filho_inativo)
+        self._fatura(
+            plano, self.filho_inativo, date(2026, 3, 1), vencimento=date(2026, 3, 10)
+        )
+        resposta = self._get("portal_aluno_faturas", self.filho_inativo.pk)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(len(resposta.json()["results"]), 1)
+
+    def test_token_de_staff_e_recusado(self):
+        usuario = Usuario.objects.create_user(
+            username="dir", password="x", perfil=Usuario.Perfil.DIRETOR,
+            escola=self.escola,
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(usuario)}"
+        )
+        resposta = self._get("portal_aluno_faturas", self.filho.pk)
+        self.assertEqual(resposta.status_code, 401)
