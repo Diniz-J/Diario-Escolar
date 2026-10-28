@@ -108,6 +108,30 @@ export function useVinculosDoResponsavel(responsavelId: number | null) {
   });
 }
 
+/**
+ * Vínculos de UM aluno — quem pode ser o pagador do contrato dele.
+ *
+ * Mesmo endpoint e mesma regra de escopo do hook acima, trocando o lado
+ * do filtro. Existe separado porque a pergunta é outra: lá é "quais
+ * filhos esta pessoa acompanha", aqui é "quem pode receber a cobrança
+ * deste aluno" — e a resposta tem que ser só os vinculados, porque é
+ * isso que o `clean()` do `PlanoCobranca` exige. Oferecer qualquer
+ * responsável da escola poria um terceiro no boleto da família.
+ */
+export function useVinculosDoAluno(alunoId: number | null) {
+  return useQuery({
+    queryKey: [...VINCULOS_KEY, "do-aluno", alunoId],
+    enabled: alunoId != null,
+    queryFn: async (): Promise<VinculoResponsavel[]> => {
+      const { data } = await api.get<VinculoResponsavel[]>(
+        "/vinculos-responsavel/",
+        { params: { aluno: alunoId } },
+      );
+      return data;
+    },
+  });
+}
+
 // Mensagem de erro do backend, que aqui vem por campo
 // (`{responsavel: [...]}`, `{aluno: [...]}`) e não como `detail`: as duas
 // camadas de guard de escola reportam no campo que falhou, e a secretaria

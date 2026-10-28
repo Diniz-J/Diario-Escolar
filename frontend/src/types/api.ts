@@ -733,6 +733,11 @@ export interface PlanoCobranca {
   escola: number;
   aluno: number;
   aluno_nome: string;
+  // Titular da cobrança. Nulo enquanto o contrato não define quem paga —
+  // e sem ele a emissão no gateway recusa. O backend exige que seja um
+  // responsável **vinculado a este aluno**.
+  pagador: number | null;
+  pagador_nome: string;
   valor_mensalidade: string;
   dia_vencimento: number;
   desconto_tipo: DescontoTipo;
@@ -752,6 +757,9 @@ export interface PlanoCobranca {
 export type PlanoCobrancaInput = {
   escola?: number;
   aluno: number;
+  // Opcional: cobrança online é opt-in, e o contrato de quem recebe na
+  // secretaria nunca precisa de pagador.
+  pagador?: number | null;
   valor_mensalidade: string;
   dia_vencimento: number;
   desconto_tipo: DescontoTipo;

@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAlunos } from "@/features/alunos/hooks";
+import { useVinculosDoAluno } from "@/features/responsaveis/hooks";
 import { usePermissoes } from "@/features/auth/usePermissoes";
 import { useEscolas } from "@/features/escolas/hooks";
 import type { DescontoTipo, PlanoCobranca } from "@/types/api";
@@ -60,6 +61,9 @@ export function PlanoCobrancaFormDialog({
   const [alunoId, setAlunoId] = useState<string>(
     plano ? String(plano.aluno) : "",
   );
+  const [pagadorId, setPagadorId] = useState<string>(
+    plano?.pagador ? String(plano.pagador) : "",
+  );
   // Só a escolha explícita do admin; o valor que vale é o derivado abaixo.
   const [escolaId, setEscolaId] = useState<string>("");
   const [valor, setValor] = useState(plano?.valor_mensalidade ?? "");
@@ -81,6 +85,25 @@ export function PlanoCobrancaFormDialog({
   const [erro, setErro] = useState<string | null>(null);
 
   const enviando = createMutation.isPending || updateMutation.isPending;
+
+  // O pagador sai dos **vínculos deste aluno**, não da lista de
+  // responsáveis da escola: o `clean()` do backend exige que o titular da
+  // cobrança seja responsável do aluno, e oferecer os outros poria um
+  // terceiro no boleto da família.
+  //
+  // Editando, o aluno é fixo e vem do plano (o select dele só aparece na
+  // criação). Criando, depende do que foi escolhido agora.
+  const alunoDoPagador = editando ? plano.aluno : Number(alunoId) || null;
+  const vinculosQuery = useVinculosDoAluno(alunoDoPagador);
+  const vinculos = vinculosQuery.data ?? [];
+
+  // Trocar o aluno invalida o pagador escolhido: ele é responsável do
+  // anterior. Limpar no handler, e não num efeito, é o padrão da casa —
+  // e aqui é também o que evita mandar um par que o backend recusaria.
+  function escolherAluno(id: string) {
+    setAlunoId(id);
+    setPagadorId("");
+  }
 
   // Pré-seleciona a única escola disponível (perfil comum só vê a sua).
   const escolas = escolasQuery.data;
@@ -118,6 +141,10 @@ export function PlanoCobrancaFormDialog({
       vigencia_inicio: vigenciaInicio,
       // Vazio = vigência aberta (contrato corrente, sem término).
       vigencia_fim: vigenciaFim || null,
+      // Vazio = contrato sem titular de cobrança, que é o caso de quem
+      // recebe na secretaria. Manda `null` em vez de omitir pra que
+      // limpar o campo numa edição realmente limpe.
+      pagador: pagadorId ? Number(pagadorId) : null,
       // Vazio = deixa o backend aplicar o default de settings.
       ...(multa.trim() && { multa_percentual: multa.trim() }),
       ...(juros.trim() && { juros_mes_percentual: juros.trim() }),
@@ -180,7 +207,7 @@ export function PlanoCobrancaFormDialog({
           {!editando && (
             <div className="space-y-2">
               <Label className={LABEL_CLASS}>Aluno</Label>
-              <Select value={alunoId} onValueChange={setAlunoId}>
+              <Select value={alunoId} onValueChange={escolherAluno}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Escolha o aluno" />
                 </SelectTrigger>
@@ -192,6 +219,43 @@ export function PlanoCobrancaFormDialog({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+
+          {/* Só aparece quando há aluno: sem ele a lista seria vazia e o
+              campo, um mistério. */}
+          {alunoDoPagador != null && (
+            <div className="space-y-2">
+              <Label className={LABEL_CLASS}>Pagador</Label>
+              {vinculos.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {vinculosQuery.isPending
+                    ? "Carregando responsáveis..."
+                    : "Este aluno não tem responsável vinculado. Cadastre o vínculo em Responsáveis para poder emitir cobrança."}
+                </p>
+              ) : (
+                <>
+                  <Select value={pagadorId} onValueChange={setPagadorId}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Sem pagador definido" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {vinculos.map((v) => (
+                        <SelectItem
+                          key={v.responsavel}
+                          value={String(v.responsavel)}
+                        >
+                          {v.responsavel_nome} ({v.responsavel_email})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-sepia">
+                    Quem recebe a cobrança. Só é exigido para emitir no
+                    gateway — quem recebe na secretaria pode deixar vazio.
+                  </p>
+                </>
+              )}
             </div>
           )}
 
