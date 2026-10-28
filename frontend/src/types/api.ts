@@ -21,6 +21,10 @@ export interface Usuario {
   perfil: Perfil;
   escola: number | null;
   is_active: boolean;
+  // Falso enquanto a conta existe mas ninguém usou o link de
+  // redefinição — "criada" e "já entra" são estados diferentes desde
+  // que a tela passou a cadastrar sem senha.
+  senha_definida: boolean;
 }
 
 // Input pra criação de Usuario. `password` é write-only (não vem de
@@ -32,7 +36,7 @@ export type UsuarioInput = {
   first_name: string;
   last_name: string;
   perfil: Perfil;
-  escola: number;
+  escola?: number;
   is_active?: boolean;
   password?: string;
 };

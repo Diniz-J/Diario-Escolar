@@ -169,6 +169,26 @@ function SidebarBody({
             Financeiro
           </NavLink>
         )}
+        {/* Usuários é gestão de acesso do STAFF; Responsáveis, do
+            usuário externo. Separados porque são públicos diferentes e
+            modelos diferentes (`Usuario` x `Responsavel`), mesmo que a
+            permissão de hoje seja a mesma. */}
+        {podeGerirResponsaveis && (
+          <NavLink
+            to="/usuarios"
+            onClick={onNavigate}
+            className={({ isActive }) =>
+              cn(
+                "relative block pl-4 pr-3 py-2 text-sm rounded-md transition-colors border-l-2 border-transparent",
+                isActive
+                  ? "border-l-ferrugem font-medium text-creme bg-white/[0.04]"
+                  : "text-creme/75 hover:text-creme hover:bg-white/[0.04]",
+              )
+            }
+          >
+            Usuários
+          </NavLink>
+        )}
         {podeGerirResponsaveis && (
           <NavLink
             to="/responsaveis"

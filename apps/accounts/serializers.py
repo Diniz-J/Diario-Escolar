@@ -65,6 +65,15 @@ class UsuarioSerializer(serializers.ModelSerializer):
     # Email é a chave do fluxo de redefinição de senha — obrigatório no
     # cadastro (sobrescreve o `blank=True` herdado do AbstractUser).
     email = serializers.EmailField(required=True, allow_blank=False)
+    # A conta criada pela tela de usuários nasce sem senha utilizável (o
+    # acesso chega pelo link de redefinição), então "existe" e "já pode
+    # entrar" deixaram de ser a mesma coisa. Sem este campo a tela não
+    # teria como distinguir quem nunca ativou de quem está em uso, e a
+    # secretaria reenviaria link a esmo.
+    senha_definida = serializers.SerializerMethodField()
+
+    def get_senha_definida(self, obj) -> bool:
+        return obj.has_usable_password()
 
     class Meta:
         model = Usuario
@@ -81,8 +90,9 @@ class UsuarioSerializer(serializers.ModelSerializer):
             "escola",
             "is_active",
             "password",
+            "senha_definida",
         ]
-        read_only_fields = ["id"]
+        read_only_fields = ["id", "senha_definida"]
 
     # Campos que só o admin global grava, em criação ou atualização.
     #
