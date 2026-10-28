@@ -334,6 +334,19 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 - **Filete ferrugem como assinatura visual**: `h-px w-X bg-ferrugem` aparece debaixo de títulos em Login, Sidebar e Dashboard — marca de "encadernação" que conecta as telas visualmente.
 - **Dinheiro é string no front**: o `DecimalField` do DRF serializa `"1000.00"` pra não perder precisão em float, então os tipos declaram `string` e `formatarBRL` (em `features/financeiro/constants.ts`) só formata. **Nenhuma aritmética de dinheiro no front** — saldo, encargos e valor atualizado vêm calculados do backend.
 - **Data sem hora não passa por `new Date`**: `new Date("2026-03-10")` é lido como UTC e, em fuso negativo, volta como dia 9. `formatarData`/`formatarCompetencia` fazem split da string; e o default de "hoje" num input de data é montado campo a campo, porque `toISOString()` à noite viraria amanhã (data futura que o backend recusa).
+- **Query que falha não vira estado vazio**: no TanStack Query o `isLoading`
+  volta a **false** quando a query **falha**, então o skeleton sai e o
+  componente renderiza o ramo de lista vazia — a tela apresenta a falha de
+  rede como resposta do servidor ("nenhuma ocorrência em aberto", "nenhum
+  pagamento registrado", "você não tem cadastro de professor"). Todo ramo de
+  vazio tem que vir **depois** de um ramo de `isError`. Duas consequências
+  que doem mais que o texto errado: no financeiro a secretaria conclui que a
+  família não pagou, e num **form de edição** o campo abre vazio **e
+  habilitado** sobre um registro que existe, então salvar dali apaga o que
+  estava no banco — aí a correção não é mensagem, é **travar a escrita**
+  (`RegistroAulaFormDialog`). Pelo mesmo motivo, flag derivada de `data`
+  (`somenteLeitura = registro?.status === "conferido"`) cai pro lado
+  permissivo quando a leitura falha, e o travamento que ela fazia vai junto.
 - **Mensagem de erro do backend como UI**: nos dialogs do financeiro o texto do DRF é mostrado em vez de um "erro ao salvar" genérico — é ali que as invariantes se explicam ("Ana já tem fatura na competência 03/2026", vigência sobreposta). Centralizado em `features/financeiro/erros.ts`.
 - **Status badges com paleta da marca** (em vez de red/amber/green/blue genérico do Tailwind):
   - Ocorrência aberta → terracota clarinho + texto destructive.
