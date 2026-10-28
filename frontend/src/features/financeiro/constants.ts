@@ -1,4 +1,9 @@
-import type { DescontoTipo, FaturaStatus, PagamentoMetodo } from "@/types/api";
+import type {
+  DescontoTipo,
+  Fatura,
+  FaturaStatus,
+  PagamentoMetodo,
+} from "@/types/api";
 
 // Badges de status seguindo o molde de ocorrência (DESIGN.md §6.1), não os
 // pastels de presença (§6.2): status de fatura é estado de documento, do
@@ -72,4 +77,20 @@ export function formatarCompetencia(iso: string): string {
 // na competência, que é sempre o dia 1 do mês.
 export function competenciaDoMes(mes: string): string {
   return `${mes}-01`;
+}
+
+// Quem pode ir pro gateway. Fica aqui, e não repetido na página e no
+// dialog de detalhe, porque duas cópias divergiriam no dia em que o
+// backend mudar a regra — e aí um dos dois ofereceria um botão que só
+// devolve erro.
+//
+// O backend é a autoridade (recusa paga e cancelada, e é idempotente em
+// quem já tem `id_externo`); isto é só pra não mostrar uma ação que já se
+// sabe que não cabe. Fatura já emitida sai da lista porque o que ela
+// precisa é do link, não de uma segunda cobrança.
+export function podeEmitirCobranca(fatura: Fatura): boolean {
+  return (
+    !fatura.id_externo &&
+    (fatura.status === "pendente" || fatura.status === "vencido")
+  );
 }

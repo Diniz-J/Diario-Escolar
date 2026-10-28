@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/table";
 import { FaturaCancelDialog } from "@/features/financeiro/FaturaCancelDialog";
 import { FaturaDetalheDialog } from "@/features/financeiro/FaturaDetalheDialog";
+import { FaturaEmitirDialog } from "@/features/financeiro/FaturaEmitirDialog";
 import { FaturaFormDialog } from "@/features/financeiro/FaturaFormDialog";
 import { FinanceiroTabs } from "@/features/financeiro/FinanceiroTabs";
 import { PagamentoFormDialog } from "@/features/financeiro/PagamentoFormDialog";
@@ -36,6 +37,7 @@ import {
   competenciaDoMes,
   formatarBRL,
   formatarCompetencia,
+  podeEmitirCobranca,
 } from "@/features/financeiro/constants";
 import { useFaturasPaginated } from "@/features/financeiro/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
@@ -77,6 +79,7 @@ export function FaturasPage() {
   const [detalhe, setDetalhe] = useState<Fatura | null>(null);
   const [pagando, setPagando] = useState<Fatura | null>(null);
   const [cancelando, setCancelando] = useState<Fatura | null>(null);
+  const [emitindo, setEmitindo] = useState<Fatura | null>(null);
 
   // Busca server-side por nome e matrícula, com atraso pra não disparar
   // uma request por tecla. Reset de página no handler, não em efeito.
@@ -130,6 +133,11 @@ export function FaturasPage() {
     setPagando(fatura);
   }
 
+  function emitirCobranca(fatura: Fatura) {
+    setDetalhe(null);
+    setEmitindo(fatura);
+  }
+
   return (
     <div className="p-4 md:p-8 space-y-6">
       <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -159,6 +167,7 @@ export function FaturasPage() {
         fatura={detalhe}
         onOpenChange={(aberto) => !aberto && setDetalhe(null)}
         onRegistrarPagamento={registrarPagamento}
+        onEmitirCobranca={emitirCobranca}
       />
       <PagamentoFormDialog
         key={pagando?.id ?? "nenhum"}
@@ -169,6 +178,10 @@ export function FaturasPage() {
         fatura={cancelando}
         onOpenChange={(aberto) => !aberto && setCancelando(null)}
         onCancelada={voltarSeEsvaziou}
+      />
+      <FaturaEmitirDialog
+        fatura={emitindo}
+        onOpenChange={(aberto) => !aberto && setEmitindo(null)}
       />
 
       <div className="flex flex-wrap gap-3 items-end">
@@ -308,6 +321,13 @@ export function FaturasPage() {
                                   Registrar pagamento
                                 </DropdownMenuItem>
                               )}
+                            {podeEmitirCobranca(fatura) && (
+                              <DropdownMenuItem
+                                onClick={() => setEmitindo(fatura)}
+                              >
+                                Emitir cobrança
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem onClick={() => abrirForm(fatura)}>
                               Editar
                             </DropdownMenuItem>

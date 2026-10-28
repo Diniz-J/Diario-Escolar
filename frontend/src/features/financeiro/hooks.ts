@@ -155,6 +155,30 @@ export function useCancelarFatura() {
   });
 }
 
+// Emite a cobrança no gateway. Idempotente no backend: fatura que já tem
+// `id_externo` volta inalterada, então repetir não cria segunda cobrança.
+//
+// Sem `onError` aqui de propósito — quem chama (o dialog de confirmação)
+// mostra a mensagem do backend num `Alert` dentro do próprio dialog, que
+// é onde a secretaria está olhando. Um toast genérico aqui competiria com
+// ela e esconderia o que fazer ("responsável sem CPF", "plano sem
+// pagador", "cobrança online não está configurada").
+export function useEmitirCobranca() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number): Promise<Fatura> => {
+      const { data } = await api.post<Fatura>(
+        `/faturas/${id}/emitir-cobranca/`,
+      );
+      return data;
+    },
+    onSuccess: () => {
+      invalidarFinanceiro(qc);
+      toast.success("Cobrança emitida.");
+    },
+  });
+}
+
 export function useRegistrarPagamento() {
   const qc = useQueryClient();
   return useMutation({
