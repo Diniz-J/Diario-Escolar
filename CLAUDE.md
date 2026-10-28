@@ -309,6 +309,40 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 - **`lib/api.ts`** — axios único. Request interceptor injeta Bearer. Response interceptor: 401 → refresh → refaz request (promise compartilhada contra thundering herd).
 - **`lib/queryClient.ts`** — staleTime 30s, retry off pra 401/403.
 - **`lib/datas.ts`** — `hojeISO()`, o "hoje" dos inputs de data. Existe porque `new Date().toISOString().slice(0, 10)` converte pra UTC e, das 21h em diante num fuso negativo, devolve **amanhã** — e ocorrência e chamada recusam data futura no backend, então o turno noturno recebia formulário que o servidor rejeitava (o `max` do input vinha errado junto, então o browser nem barrava). Monta campo a campo pelos getters locais. Tem teste com fuso e relógio fixos (`datas.test.ts`) que reprova a implementação antiga. Mora aqui também a **formatação de data**, em três funções cujo nome diz o tipo do campo no backend, porque errar o par era o bug clássico: `formatarDataPura` pra `DateField` (split da string, porque `new Date("2026-03-10")` é lido como UTC e volta como dia 9), `formatarDataHora` pra `DateTimeField` (aí `new Date` é o certo — a string do DRF traz offset) e `formatarDiaDaDataHora` pro `DateTimeField` exibido só como dia. Consolidou **14 cópias locais** espalhadas em 13 arquivos; a `AlunoPage` do portal aplicava a de data pura em `publicado_em`, concatenando `T00:00:00` numa string que já tinha hora e offset, e o mural do pai mostrava **"Invalid Date"** em todo material (tem teste travando). Fica fora só o formatador do `BoletimFilho`, que é o formato compacto "10/03" sem ano. `isoDiasAtras(dias)` monta a ponta de trás dos filtros de janela ("últimos 30 dias") pelo mesmo caminho — `setDate` pra resolver virada de mês/ano/bissexto, e composição campo a campo na saída.
+- **`package.json` — o que é dependência de produção**: num SPA que vai
+  pra produção **buildado**, tudo que entra no bundle é bundle, então a
+  divisão `dependencies`/`devDependencies` não muda um byte do que é
+  servido. O que ela muda é o `npm audit --omit=dev` significar algo: com
+  ferramenta de build do lado de produção, uma vulnerabilidade real se
+  esconde no meio do ruído. Foi o que acontecia — o `shadcn` (CLI, mas
+  também origem do `@import "shadcn/tailwind.css"` no `index.css`) e o
+  `@tailwindcss/vite` estavam em `dependencies` e arrastavam
+  `@modelcontextprotocol/sdk` → `express` → `proxy-addr` (a única
+  **crítica**) e o `vite` com `postcss`/`nanoid`/`source-map-js`. Os dois
+  são build-time e foram pra `devDependencies`; mover não quebra instalação
+  só-produção porque **build já exigia devDeps** (`vite` e `typescript`
+  moram lá, e `build` é `tsc -b && vite build`), então esse cenário nunca
+  funcionou. Audit de produção: 24 achados → **zero**. Mas sem ilusão: a
+  reclassificação **não remove** nada da árvore — a crítica do
+  `proxy-addr` segue lá como dependência de build, e nunca foi servida ao
+  usuário (`express` não é importado em lugar nenhum). O que ela conserta é
+  o sinal: `npm audit --omit=dev` passa a falar do que é **entregue**, e aí
+  um achado ali é de verdade. O que de fato saiu de produção foi o bump
+  dentro dos ranges já declarados (axios 1.16.1 → 1.21.0, react-router-dom
+  7.15.1 → 7.18.5, follow-redirects 1.16.0 → 1.16.2), porque esses três
+  entram no bundle.
+- **`lib/api.test.ts`** — o refresh no 401, que era o caminho mais
+  consequente sem teste: se ele quebra, todo usuário é deslogado quando o
+  access expira e nenhum teste de tela nota. Prende quatro coisas: o
+  request original é refeito com o token novo (o chamador nunca vê o 401),
+  o refresh **rotacionado** é guardado e não o antigo (guardar o antigo dá
+  na mão um token já na blacklist e mata a sessão no ciclo seguinte), a
+  falha do refresh limpa o storage (é assim que o `AuthProvider` manda pro
+  login) e 401 simultâneos compartilham **um** refresh. Pra isso o
+  `setup.ts` força `adapter: "fetch"` também no **axios global**: o
+  `executarRefresh` usa `axios.post` de propósito (a instância tem
+  interceptor e recursionaria), e sem o default o MSW não intercepta o
+  refresh — era o que deixava esse caminho intestável.
 - **`lib/download.ts`** — `baixarArquivo()`: download autenticado via Blob (`window.location` perderia o Bearer). Usado por boletim, diário e relatórios; antes era copy-paste em dois `hooks.ts`. Desembrulha o corpo de erro, que com `responseType: "blob"` chega como Blob — sem isso a mensagem que o backend escreve (recorte grande demais pro PDF, por exemplo) nunca chega no toast. Equivalente no backend: `apps/common/pdf.py` (`render_pdf`, `caminho_logo`, `slug_arquivo`), que as três views de PDF compartilham.
 - **`test/`** — harness dos testes de componente (vitest + jsdom + testing-library + MSW). `render.tsx` tem o `renderizar()`, que monta os três contextos que as telas exigem (TanStack Query com `retry: false` — obrigatório, senão o teste de falha espera as tentativas antes de `isError` virar true; rota, porque os cards usam `<Link>`; e auth, porque `useAuth` lança erro explícito fora do provider). `autenticar.ts` semeia sessão forjando um JWT no localStorage — funciona porque o front **nunca** valida assinatura (`features/auth/jwt.ts`), então o token forjado é indistinguível de um real pra quem consome `useAuth`. `servidor.ts` nasce sem handler nenhum: cada teste declara os endpoints que usa.
   **Duas armadilhas pagas, e as duas produzem teste que passa pelo motivo errado** (o remédio das duas é um **controle positivo** ao lado de cada teste de erro — se o caminho felizmente carregado não for afirmado, nada garante que a falha veio do que o teste quis provar): (1) em jsdom o axios escolhe o adapter **XHR**, e a interceptação de XHR do MSW não funciona nessa combinação — todo request volta `Network Error`, então `setup.ts` força `adapter: "fetch"` nas duas instâncias (os interceptors de Bearer e de refresh são camada de axios, não de transporte, e seguem rodando); (2) requisição que nenhum handler cobre o MSW só **loga** — a falha de transporte é indistinguível de um 500 declarado, então `setup.ts` junta os `request:unhandled` e **reprova no `afterEach`** listando os endpoints esquecidos (pegou um `/planos-cobranca/` faltando no primeiro teste escrito). Em MSW 3 a opção do `listen` chama-se `onUnhandledFrame` (era `onUnhandledRequest` até a v2). E `defineConfig` sai do `vitest/config`, não do `vite` — com o do `vite`, `tsc -b` reprova o bloco `test` (TS2769) e o `npm run build` quebra junto.
@@ -423,7 +457,7 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
   Desde out/2026 existem **testes de componente** (ver `src/test/` no mapa):
   `npm test` roda os de função pura (`lib/datas.test.ts`) e os de tela no
   mesmo comando, e o CI já executa os dois.
-- O CI roda os dois no job de frontend. O `npm run lint` **não** é gate ainda: caiu de 30 pra **5 problemas** (out/2026). O padrão de casa pros FormDialogs é estado nascendo dos props mais `key={formKey}`, e quando o valor depende de query (escola/turma única, lecionamentos, conteúdo de aula, grade de notas, form do plano) ele é **derivado**: o estado guarda só o que o usuário tocou. Sobram: 3 `react-refresh` (forma padrão do shadcn e dos contexts — configuração, não código; o quarto era a `InicioPage` do portal exportando um formatador de data, e caiu quando ele virou `lib/datas`), 1 `no-control-regex` no `NomeArquivoDialog` (o código **está correto**, sanitiza nome de arquivo; cabe disable explicado) e 1 `set-state-in-effect` no `NotasFinaisPage`, que é decisão de desenho: o efeito dispara uma **escrita** (POST que inicializa as linhas) a partir dos três selects, então mover pros handlers significa três gatilhos que só devem disparar com o trio completo — ou discutir se essa inicialização idempotente não deveria ser query em vez de mutation.
+- O CI roda os dois no job de frontend, e o `npm run lint` **é gate** desde a PR #145 (`.github/workflows/ci.yml`, passo "Run lint") — lint sujo reprova a PR. Está em **zero** problemas sobre 173 arquivos (out/2026), então qualquer aviso novo é da sua mudança. O padrão de casa pros FormDialogs é estado nascendo dos props mais `key={formKey}`, e quando o valor depende de query (escola/turma única, lecionamentos, conteúdo de aula, grade de notas, form do plano) ele é **derivado**: o estado guarda só o que o usuário tocou.
 
 ### Código
 - Comentários **em português**. **Nunca emojis** em código ou respostas.
