@@ -431,6 +431,18 @@ despublicados". Link abre em aba nova com `rel="noopener noreferrer"`.
   virar problema na operação, o caminho natural é o portal mostrar só
   períodos encerrados (o `PeriodoAvaliativo` já calcula `estado`) — fatia
   própria, decidida com a escola.
+- **Mensalidades entraram no portal** (out/2026, fora das oito fatias
+  originais): `GET /portal/alunos/<id>/faturas/` e a aba "Mensalidades"
+  na página do filho, pra que o `link_pagamento` que a emissão do Asaas
+  grava chegue a quem paga. Segue a regra 4.2 (parte de `filhos_do`,
+  nunca do id da URL) e o portal continua só leitura — nada de registrar
+  pagamento por aqui. Duas decisões: **todo responsável vinculado vê**,
+  não só o `pagador` do plano, porque o email de pagamento já sai por
+  `destinatarios_do_aluno` e alcança todos (restringir deixaria o outro
+  com o aviso e sem onde conferir); e **fatura cancelada fica fora**,
+  por ser ato interno da secretaria. Se um dia a escola quiser esconder
+  o financeiro de um responsável específico, isso é campo novo no
+  vínculo, não o `pagador` fazendo dois papéis.
 - Anexo de arquivo no mural, se virar necessidade — depende de object
   storage.
 - Responsável com filhos em escolas diferentes: hoje `Responsavel` é
