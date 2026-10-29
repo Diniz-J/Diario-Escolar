@@ -807,8 +807,12 @@ não reabrir discussão:
   de API — além do histórico financeiro passar a morar no provedor, o que
   transforma "trocar de gateway" em migração de dados.
 - **Geração por management command + cron**, idempotente pela constraint
-  de banco. O projeto não tem fila (item 12 segue pendente); quando
-  tiver, a geração migra sem mexer no modelo.
+  de banco. O projeto segue **sem fila de broker** (ver item 12: o que
+  entrou foi outbox em banco, e o porquê está lá); o que mudou em
+  out/2026 é que o disparo deixou de ser pendência — quem chama os
+  commands é o workflow agendado do item 12b. Se um dia uma fila entrar,
+  a geração migra sem mexer no modelo: o que garante a idempotência é a
+  constraint, não o agendador.
 - **Gateway: Asaas**, atrás de interface (`gateways/base.py`), com client
   próprio fino em `httpx` — não existe SDK Python maduro (os que existem
   têm ≤3 estrelas; a maturidade do Asaas está no PHP).
@@ -1053,7 +1057,9 @@ folga muda o quanto a demo aperta.
 Quando a venda acontecer, a migração já está mapeada: provisionar VPS OVH,
 restaurar dump, ajustar `ALLOWED_HOSTS`/`CSRF_TRUSTED_ORIGINS`/
 `CORS_ALLOWED_ORIGINS`/`DATABASE_URL`, rotacionar `SECRET_KEY`, trocar
-`VITE_API_URL` no Vercel e criar as duas entradas de cron do financeiro.
+`VITE_API_URL` no Vercel e apontar o secret `BACKEND_URL` do workflow de
+tarefas pro endereço novo (as tarefas periódicas já não dependem de cron
+no servidor — ver item 12b).
 Frontend continua no Vercel — só backend+banco saem do Render.
 
 Frentes ativas enquanto isso: **melhorias de frontend** (mapeamento
