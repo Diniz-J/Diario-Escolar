@@ -434,6 +434,13 @@ ASAAS_TIMEOUT = config("ASAAS_TIMEOUT", default=10, cast=int)
 # corpo não validado ali deixaria qualquer um marcar fatura como paga.
 ASAAS_WEBHOOK_TOKEN = config("ASAAS_WEBHOOK_TOKEN", default="")
 
+# Token da rota que dispara as tarefas periódicas
+# (`apps/notificacoes/tarefas.py`), chamada pelo workflow agendado do
+# GitHub Actions. Vazio por default **de propósito**: sem ele a rota
+# recusa tudo, e é isso que impede que uma instalação sem configuração
+# nasça com endpoint aberto pra executar command.
+TAREFAS_TOKEN = config("TAREFAS_TOKEN", default="")
+
 SENTRY_DSN = config("SENTRY_DSN", default="")
 if SENTRY_DSN and not TESTING:
     import sentry_sdk

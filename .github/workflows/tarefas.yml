@@ -1,0 +1,53 @@
+# Gatilho das tarefas periódicas do projeto.
+#
+# Por que aqui e não no Render: o projeto não tem cron configurado em
+# ambiente nenhum, e o Actions agendado é gratuito — não entra provedor
+# novo, o repo já usa Actions, e a chamada ainda acorda o serviço que
+# hiberna no free tier.
+#
+# O que este workflow NÃO é: um lugar com acesso ao banco. Ele só faz uma
+# chamada HTTP autenticada por token. Rodar `manage.py` daqui exigiria o
+# `DATABASE_URL` de produção nos secrets do GitHub, e aí o CI passaria a
+# alcançar o banco da escola — bem pior que uma rota com token.
+#
+# Dois segredos, configurados em Settings → Secrets → Actions:
+#   BACKEND_URL    — raiz do backend, sem barra no fim
+#   TAREFAS_TOKEN  — o mesmo valor da env `TAREFAS_TOKEN` no servidor
+#
+# Sem eles o job termina avisando, em vez de falhar vermelho todo dia: um
+# repo sem os secrets é o estado normal de quem clonou o projeto.
+name: Tarefas periódicas
+
+on:
+  schedule:
+    # A cada 15 minutos. O horário do Actions agendado é melhor-esforço e
+    # atrasa sob carga da plataforma — irrelevante pra reenvio de email.
+    # Se um dia algo precisar de segundos, a resposta é fila com broker,
+    # não apertar este número.
+    - cron: "*/15 * * * *"
+  # Disparo manual, pra testar a configuração sem esperar o próximo ciclo.
+  workflow_dispatch:
+
+jobs:
+  executar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disparar as tarefas
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          TAREFAS_TOKEN: ${{ secrets.TAREFAS_TOKEN }}
+        run: |
+          if [ -z "$BACKEND_URL" ] || [ -z "$TAREFAS_TOKEN" ]; then
+            echo "BACKEND_URL ou TAREFAS_TOKEN não configurados — nada a fazer."
+            exit 0
+          fi
+
+          # `--max-time` generoso: o free tier do Render hiberna, e a
+          # primeira chamada depois disso paga o cold start do container.
+          # `--fail-with-body` pra que um 401 apareça no log com o corpo,
+          # em vez de só com o código.
+          curl --silent --show-error --fail-with-body \
+               --max-time 120 \
+               --request POST \
+               --header "X-Tarefas-Token: $TAREFAS_TOKEN" \
+               "$BACKEND_URL/api/v1/tarefas/executar/"
