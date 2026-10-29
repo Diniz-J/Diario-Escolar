@@ -1,12 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBoletimFilho, usePeriodos } from "@/features/portal/hooks";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 const ANUAL = "__anual__";
 
@@ -17,6 +10,13 @@ const ANUAL = "__anual__";
  * fatia 6): ela tem 469 linhas e arrasta exportação CSV/XLSX, geração de
  * PDF e layout de impressão — nada disso é do pai, e importar puxaria
  * tudo pro chunk do portal.
+ *
+ * Pelo mesmo motivo o seletor de período é `<select>` **nativo** e não o
+ * `Select` do shadcn: era o único uso de Radix pesado em todo o portal, e
+ * sozinho obrigava o pai a baixar o chunk do Radix inteiro. Num campo só,
+ * num lugar só, o nativo entrega a mesma função — e no celular ele abre a
+ * roleta do sistema, que é melhor que um popover. O `<select>` nativo já é
+ * o padrão da casa onde não se quer o peso: ver `ProfessorFormDialog`.
  */
 export function BoletimFilho({
   alunoId,
@@ -52,27 +52,29 @@ export function BoletimFilho({
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-sepia">
-          Período
-        </div>
-        <Select
-          value={periodoId ? String(periodoId) : ANUAL}
-          onValueChange={(v) =>
-            onPeriodoChange(v === ANUAL ? null : parseInt(v, 10))
-          }
+        <label
+          htmlFor="periodo"
+          className="block text-[11px] uppercase tracking-[0.18em] text-sepia"
         >
-          <SelectTrigger className="w-full sm:w-64">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ANUAL}>Ano inteiro</SelectItem>
-            {periodosQuery.data?.map((p) => (
-              <SelectItem key={p.id} value={String(p.id)}>
-                {p.nome} ({p.ano_letivo})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          Período
+        </label>
+        <select
+          id="periodo"
+          value={periodoId ? String(periodoId) : ANUAL}
+          onChange={(e) =>
+            onPeriodoChange(
+              e.target.value === ANUAL ? null : parseInt(e.target.value, 10),
+            )
+          }
+          className="w-full sm:w-64 rounded-md border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
+        >
+          <option value={ANUAL}>Ano inteiro</option>
+          {periodosQuery.data?.map((p) => (
+            <option key={p.id} value={String(p.id)}>
+              {p.nome} ({p.ano_letivo})
+            </option>
+          ))}
+        </select>
       </div>
 
       <section className="rounded-lg bg-paper border border-border p-4 space-y-3">

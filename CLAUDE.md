@@ -396,6 +396,21 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
   ali o aviso aparece e o botão continua vivo. Quando os dois conjuntos
   diferem, o dialog tem `falhouCarregar` (aviso) e `bloqueiaEnvio`
   (botão) separados. Tem teste de mutação travando as três decisões.
+- **No portal, peso de chunk é critério de escolha de componente**: o
+  `BoletimFilho` usa `<select>` **nativo** e não o `Select` do shadcn. Era
+  o único uso de Radix pesado em todo o portal, e sozinho obrigava o pai a
+  baixar o chunk do Radix — que staff e portal compartilhavam. Medido no
+  build, somando o JS gzipado de cada entrada: o portal caiu de **158,9
+  para 135,6 kB** (−23,3), e o staff subiu 1,2 kB (a maquinaria do Select
+  saiu do chunk comum e passou a ser contada nele). De quebra o campo
+  ganhou nome acessível: o rótulo era uma `<div>` solta, sem `htmlFor`,
+  então não havia `<label>` associado — o teste novo falha em
+  `findByLabelText` contra a versão antiga, que é o que impede a volta
+  silenciosa. Vale só pro portal: no staff o Radix já está pago, e lá o
+  `Select` do shadcn continua sendo o padrão. Tentativa descartada antes
+  desta: fatiar o Radix por primitivo no `manualChunks` rendia só 11,3 kB
+  e atribuía os internos compartilhados (`DismissableLayer`, `Portal`) ao
+  primeiro chunk que os pedisse, com nome que mentia.
 - **Mensagem de erro do backend como UI**: nos dialogs do financeiro o texto do DRF é mostrado em vez de um "erro ao salvar" genérico — é ali que as invariantes se explicam ("Ana já tem fatura na competência 03/2026", vigência sobreposta). Centralizado em `features/financeiro/erros.ts`.
 - **Status badges com paleta da marca** (em vez de red/amber/green/blue genérico do Tailwind):
   - Ocorrência aberta → terracota clarinho + texto destructive.
