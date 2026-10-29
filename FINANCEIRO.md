@@ -64,16 +64,34 @@ a idempotência é a constraint, não o agendador.
 
 Dois comandos, os dois seguros de repetir:
 
+**Quem dispara isso hoje** (out/2026): o workflow agendado
+`.github/workflows/tarefas.yml`, que chama
+`POST /api/v1/tarefas/executar/?tarefas=...`. Não é crontab no servidor
+— o projeto não tinha cron em ambiente nenhum, e por isso estes três
+commands existiam sem nunca rodar. O desenho da rota e o porquê do
+Actions estão no item 12b do `CLAUDE.md`.
+
+Os horários abaixo são os que o workflow usa. **Os minutos são quebrados
+de propósito**: o GitHub atrasa workflow agendado que cai na virada da
+hora, que é onde todo mundo agenda. A intenção é a mesma que o crontab
+original registrava (dia 1 de manhã, emissão meia hora depois da
+geração).
+
 ```cron
-# Gera as faturas do mês, todo dia 1 às 6h.
-0 6 1 * *  cd /app && python manage.py financeiro_gerar_faturas
+# Gera as faturas do mês, todo dia 1 — 03:11 em São Paulo.
+11 6 1 * *   tarefas=faturas
 
 # Emite no gateway o que a geração criou, meia hora depois.
-30 6 1 * *  cd /app && python manage.py financeiro_emitir_cobrancas
+41 6 1 * *   tarefas=cobrancas
 
-# Move pra `vencido` o que venceu, todo dia às 7h.
-0 7 * * *  cd /app && python manage.py financeiro_marcar_vencidas
+# Move pra `vencido` o que venceu — diário, 04:11 em São Paulo.
+# Junto vai o purge de token de redefinição expirado.
+11 7 * * *   tarefas=vencidas,tokens
 ```
+
+Num servidor com crontab próprio (fora do Render), as mesmas três linhas
+viram `cd /app && python manage.py <command>` — o command é o mesmo, só o
+agendador muda.
 
 A emissão é **entrada separada**, e não parte da geração, porque
 `gerar_faturas` roda numa transação e em lote: pendurar N chamadas HTTP

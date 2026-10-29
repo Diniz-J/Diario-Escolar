@@ -137,6 +137,20 @@ aparece (ato interno da secretaria), e filho inativo **continua vendo as
 dele**, como o boletim, divergindo do mural de propósito. Com a fatia 6 no ar, o portão
 "nenhum convite em produção" caiu — o link do email tem tela pra abrir.
 
+**`notificacoes/`** — outbox de email e gatilho das tarefas periódicas
+(item 12 do roadmap, onde o raciocínio completo está). `Mensagem` é uma
+linha por destinatário, gravada como `pendente` **antes** da tentativa e
+carimbada depois — é essa ordem que a faz sobreviver ao processo que
+morre no meio do envio. Usada pelos quatro caminhos que não deixavam
+rastro (ocorrência, pagamento, convite do portal, link de senha); o
+`comunicados` tem outbox próprio e **não** entrou. `services.py` tem
+`registrar` (grava), `despachar` (envia e carimba, com `propagar=True`
+pro caminho all-or-nothing do convite) e `enviar` (os dois, em thread via
+`transaction.on_commit`, que aqui é obrigatório porque a thread lê as
+linhas de volta). `tarefas.py` é a rota que o workflow agendado chama —
+segunda rota sem autenticação do projeto, com lista de permissão de
+command e token em `compare_digest`. Command `notificacoes_reenviar`.
+
 **`materiais/`** — mural do professor pra turma (fatia 5 do `PORTAL.md`).
 `Material` = turma + disciplina + professor + título + descrição + link
 (só http/https, sem upload). **Auditado**. Mesmo molde do `RegistroAula`:
@@ -631,7 +645,82 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
     A armadilha central está registrada lá e vale pra qualquer mexida
     futura no envio: o fallback pro campo antigo dispara por **ausência de
     vínculo**, nunca por ausência de destino — senão o opt-out vira nada.
-12. **Email assíncrono dedicado** — fila (Celery/Dramatiq/RQ) com retry + histórico, quando o volume crescer. Hoje é thread daemon best-effort. PENDENTE.
+12. ✅ **Email com retry e histórico** — entregue em out/2026, mas **não
+    com fila de broker**, e a razão importa: Celery, Dramatiq e RQ exigem
+    broker (Redis) e um segundo processo, e o Render free dá **um** web
+    service. Adotar qualquer uma delas não seria "item 12 entregue", seria
+    item 12 mais uma dependência de infra recorrente e mais um relógio de
+    expiração — a mesma armadilha que este roadmap já teme no Postgres
+    free da demo.
+
+    O que o item queria (retry + histórico) **já existia em produção no
+    caminho mais pesado**: o `ComunicadoDestinatario` é uma linha por
+    destinatário com `pendente`/`enviado`/`falhou`, e o
+    `comunicados_retomar` é o worker. Faltava compartilhar. A app
+    **`notificacoes`** generaliza isso pros quatro caminhos que não
+    deixavam rastro nenhum (ocorrência, pagamento, convite do portal e
+    link de senha): `Mensagem` é gravada **antes** da tentativa e
+    carimbada depois, e é essa ordem que a faz sobreviver ao processo que
+    morre no meio — rotina no Render. O `comunicados` **não** entrou: tem
+    semântica mais rica e lote de 150 rodando; dobrá-lo pra caber num
+    modelo genérico seria risco sem ganho.
+
+    Três coisas que não se deduzem do código:
+
+    **`transaction.on_commit` deixou de ser precaução.** A thread agora
+    **lê** as linhas de volta, então disparada antes do commit não
+    encontraria o que a request acabou de gravar. Três dos quatro
+    caminhos iniciavam a thread direto, e isso só funcionava porque
+    `ATOMIC_REQUESTS` está desligado. Ligar essa opção um dia quebraria o
+    envio em silêncio.
+
+    **`Mensagem` não herda `BaseModelEscopado`** apesar de ter `escola`:
+    lá o campo é obrigatório, e o reset de senha do admin global não tem
+    escola. A base deixaria justamente o caminho de recuperação de conta
+    sem rastro.
+
+    **`ORIGENS_RETENTAVEIS` exclui o que carrega token.** Convite
+    reenviado carrega token que o `emitir_link` já apagou (convite que
+    nunca saiu não pode aparecer como "expirado" pra quem nunca o
+    recebeu), e link de senha reenviado depois de uma hora chega morto.
+    Os dois continuam **gravados** — o rastro vale onde o reenvio não
+    vale. Daí também o `despachar(propagar=True)`, que existe só pro
+    caminho all-or-nothing do convite e sobe a exceção **original** do
+    provedor, porque é ela que distingue cota estourada de endereço
+    recusado.
+
+12b. ✅ **O gatilho que não existia** — `POST /api/v1/tarefas/executar/`
+    mais o workflow `.github/workflows/tarefas.yml`. Nada no projeto
+    disparava tarefa periódica: sem cron no Render, sem workflow
+    agendado. Por isso o `comunicados_retomar` era comando que ninguém
+    rodava e os três commands do financeiro estavam parados como
+    pendência operacional. O Actions agendado é gratuito, o repo já usa
+    Actions, e a chamada ainda **acorda o serviço que hiberna** no free
+    tier.
+
+    É a **segunda rota sem autenticação de usuário** do projeto e a
+    primeira que *executa* algo, então: lista de permissão mapeando
+    apelido a command fixo (aceitar o nome da request seria
+    `call_command` com entrada externa), token em `compare_digest` como
+    no webhook do Asaas, recusa quando a env está vazia, e falha de uma
+    tarefa não cancela as outras. O parâmetro `?tarefas=` é
+    **obrigatório** — com o financeiro na lista, um workflow que
+    esquecesse o parâmetro emitiria cobrança real a cada quinze minutos.
+
+    O workflow **não tem acesso ao banco** de propósito: rodar
+    `manage.py` de lá exigiria o `DATABASE_URL` de produção nos secrets
+    do GitHub, o que é pior que uma rota com token. Precisa de dois
+    secrets (`BACKEND_URL`, `TAREFAS_TOKEN`) e, sem eles, o job termina
+    avisando em vez de falhar vermelho a cada quinze minutos.
+
+    Limitação aceita: a latência da retentativa é a do cron, e o Actions
+    agendado atrasa sob carga. Irrelevante pra email; se um dia algo
+    precisar de segundos, a resposta é fila com broker, não apertar o
+    schedule.
+
+    **Falta setar `TAREFAS_TOKEN` no Render e os dois secrets no
+    GitHub.** Sem isso a rota recusa tudo e o workflow sai limpo sem
+    fazer nada — de propósito, mas também sem rodar nada.
 13. ✅ **Timeline do aluno** — app `timeline` (sem modelo) +
     `/alunos/:id/timeline`. Centraliza ocorrências, presença e as
     mudanças de cadastro que o audit log guarda (é o "reaproveitar
@@ -772,13 +861,13 @@ rede que travava a fatia 4 caiu quando `docs.asaas.com` entrou nos
 domínios liberados do ambiente — o adaptador foi escrito contra o
 contrato real (OpenAPI deles), que era a condição registrada aqui.
 
-**Pendência operacional de produção** (o que falta não é código): as
-**três** entradas de cron (`financeiro_gerar_faturas` dia 1,
-`financeiro_emitir_cobrancas` meia hora depois,
-`financeiro_marcar_vencidas` diário) precisam ser configuradas no
-servidor que hospedar o backend — sem elas nenhuma fatura é gerada nem
-emitida automaticamente, e é a tela "Nova fatura" que cobre o buraco
-hoje. Comandos e horários no `FINANCEIRO.md` §2.2. Faltam também as
+**Pendência operacional de produção** — **o cron saiu da lista**
+(out/2026): os três commands passaram a ser disparados pelo workflow
+agendado do Actions, junto do reenvio de email e do purge de token (ver
+item 12b do roadmap). Falta só setar `TAREFAS_TOKEN` no servidor e os
+secrets `BACKEND_URL`/`TAREFAS_TOKEN` no GitHub — sem eles o workflow
+sai limpo sem fazer nada, e é a tela "Nova fatura" que cobre o buraco.
+Faltam ainda as
 quatro envs do gateway (`ASAAS_API_KEY`, `ASAAS_BASE_URL`,
 `ASAAS_TIMEOUT`, `ASAAS_WEBHOOK_TOKEN` — §6) e o cadastro do hook no
 painel do Asaas apontando pra `/api/v1/financeiro/webhooks/asaas/` com o
@@ -968,7 +1057,8 @@ restaurar dump, ajustar `ALLOWED_HOSTS`/`CSRF_TRUSTED_ORIGINS`/
 Frontend continua no Vercel — só backend+banco saem do Render.
 
 Frentes ativas enquanto isso: **melhorias de frontend** (mapeamento
-iniciado em out/2026) e fila assíncrona pra email (item 12).
+iniciado em out/2026). O item 12 saiu da lista — ver o que de fato foi
+entregue lá, que não é fila de broker.
 
 ---
 
