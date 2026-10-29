@@ -183,8 +183,28 @@ class OcorrenciaEmailTests(TestCase):
                 raise SMTPException("endereço recusado pelo provedor")
             return original(self, *args, **kwargs)
 
+        # O log de erro passou a sair do outbox (`apps.notificacoes`), que
+        # é quem despacha desde que ele entrou — a asserção de
+        # comportamento abaixo é a mesma.
         with patch.object(EmailMultiAlternatives, "send", send_falhando):
-            with self.assertLogs("apps.ocorrencias.services", level="ERROR"):
+            with self.assertLogs("apps.notificacoes.services", level="ERROR"):
                 self.assertEqual(self._criar_ocorrencia(aluno), 201)
 
         self.assertEqual([email.to for email in mail.outbox], [["bom@example.com"]])
+
+        # E agora sobra rastro: a que falhou fica registrada com o erro do
+        # provedor em vez de sumir num log. É o ponto do outbox.
+        from apps.notificacoes.models import Mensagem
+
+        por_destino = {
+            m.destinatario: m for m in Mensagem.objects.all()
+        }
+        self.assertEqual(
+            por_destino["bom@example.com"].status, Mensagem.Status.ENVIADO
+        )
+        self.assertEqual(
+            por_destino["ruim@example.com"].status, Mensagem.Status.FALHOU
+        )
+        self.assertIn(
+            "recusado", por_destino["ruim@example.com"].erro
+        )
