@@ -49,11 +49,21 @@ HEADER_TOKEN = "HTTP_X_TAREFAS_TOKEN"
 TAREFAS: dict[str, str] = {
     "email": "notificacoes_reenviar",
     "comunicados": "comunicados_retomar",
+    # Financeiro e limpeza de token entraram aqui pela mesma razão do
+    # email: os commands existem desde as fatias do `FINANCEIRO.md` e
+    # nunca rodaram, porque não havia gatilho em ambiente nenhum.
+    "faturas": "financeiro_gerar_faturas",
+    "cobrancas": "financeiro_emitir_cobrancas",
+    "vencidas": "financeiro_marcar_vencidas",
+    "tokens": "purge_expired_tokens",
 }
 
 
 class ExecutarTarefasView(APIView):
-    """`POST /api/v1/tarefas/executar/?tarefas=email,comunicados`."""
+    """`POST /api/v1/tarefas/executar/?tarefas=email,comunicados`.
+
+    O parâmetro `tarefas` é obrigatório — ver `_tarefas_pedidas`.
+    """
 
     authentication_classes: list = []
     permission_classes = [AllowAny]
@@ -69,7 +79,10 @@ class ExecutarTarefasView(APIView):
         if pedidas is None:
             return Response(
                 {
-                    "detail": "Tarefa desconhecida.",
+                    "detail": (
+                        "Informe `?tarefas=` com um ou mais apelidos "
+                        "conhecidos."
+                    ),
                     "disponiveis": sorted(TAREFAS),
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -93,19 +106,26 @@ class ExecutarTarefasView(APIView):
 
     @staticmethod
     def _tarefas_pedidas(request) -> list[str] | None:
-        """Lê `?tarefas=a,b`. Sem parâmetro, roda todas.
+        """Lê `?tarefas=a,b`. **Obrigatório** — sem default de "todas".
 
-        Devolve None se alguma não existe — recusar o lote inteiro é
-        melhor que rodar metade em silêncio, porque quem escreveu o
-        workflow errado precisa ver o erro.
+        Rodar tudo por omissão era aceitável enquanto a lista só tinha
+        reenvio de email, que é idempotente e barato. Com o financeiro
+        dentro deixou de ser: `emitir_cobrancas` cria cobrança de verdade
+        no provedor, e um workflow que esquecesse o parâmetro emitiria a
+        cada quinze minutos. O parâmetro ausente agora é erro, que é
+        barulhento e reversível, em vez de um default que gasta dinheiro.
+
+        Devolve None pra parâmetro ausente ou com apelido desconhecido —
+        recusar o lote inteiro é melhor que rodar metade em silêncio,
+        porque quem escreveu o workflow errado precisa ver o erro.
         """
         bruto = request.query_params.get("tarefas", "").strip()
         if not bruto:
-            return sorted(TAREFAS)
+            return None
         pedidas = [parte.strip() for parte in bruto.split(",") if parte.strip()]
         if any(apelido not in TAREFAS for apelido in pedidas):
             return None
-        return pedidas
+        return sorted(set(pedidas))
 
     @staticmethod
     def _executar(command: str) -> dict:

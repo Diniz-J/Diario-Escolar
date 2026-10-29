@@ -149,6 +149,22 @@ class RotaDeTarefasTests(_Base):
         self.assertEqual(mensagem.status, Mensagem.Status.ENVIADO)
         self.assertEqual(len(mail.outbox), 1)
 
+    def test_sem_parametro_nao_roda_nada(self):
+        """Sem default de "todas": `emitir_cobrancas` cria cobrança real.
+
+        Enquanto a lista só tinha reenvio de email, rodar tudo por
+        omissão era barato e idempotente. Com o financeiro dentro, um
+        workflow que esquecesse o parâmetro emitiria cobrança a cada
+        quinze minutos — erro barulhento é melhor que default que gasta.
+        """
+        mensagem = self._envelhecer(self._mensagem(), 30)
+        resposta = self.client.post(self.url, HTTP_X_TAREFAS_TOKEN=TOKEN)
+        self.assertEqual(resposta.status_code, 400)
+
+        mensagem.refresh_from_db()
+        self.assertEqual(mensagem.status, Mensagem.Status.PENDENTE)
+        self.assertEqual(mail.outbox, [])
+
     def test_tarefa_desconhecida_recusa_o_lote(self):
         """Workflow escrito errado precisa ver o erro, não rodar metade."""
         resposta = self.client.post(
@@ -175,7 +191,10 @@ class RotaDeTarefasTests(_Base):
             "apps.notificacoes.tarefas.TAREFAS",
             {"email": "notificacoes_reenviar", "quebrada": "comando_que_nao_existe"},
         ):
-            resposta = self.client.post(self.url, HTTP_X_TAREFAS_TOKEN=TOKEN)
+            resposta = self.client.post(
+                f"{self.url}?tarefas=email,quebrada",
+                HTTP_X_TAREFAS_TOKEN=TOKEN,
+            )
 
         self.assertEqual(resposta.status_code, 200)
         resultados = resposta.json()["resultados"]
