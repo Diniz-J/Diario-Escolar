@@ -4,6 +4,10 @@ import logging
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 
+from apps.notificacoes.models import Mensagem
+from apps.notificacoes.services import despachar as despachar_notificacao
+from apps.notificacoes.services import registrar as registrar_notificacao
+
 from .models import PasswordResetToken, Usuario
 
 logger = logging.getLogger(__name__)
@@ -131,20 +135,24 @@ def enviar_link_redefinicao(usuario: Usuario, token_cru: str) -> None:
 </body>
 </html>"""
 
-    msg = EmailMultiAlternatives(
-        subject=assunto,
-        body=corpo_texto,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[usuario.email],
+    # Pelo outbox, **síncrono**: esta função roda na request de propósito
+    # (ver o docstring), e `registrar` + `despachar` preserva isso —
+    # `enviar` jogaria pra thread e mudaria o comportamento. O que se
+    # ganha é o rastro: antes, falha aqui era só um log, e a secretaria
+    # não tinha como saber que o link nunca chegou.
+    #
+    # Não entra em `ORIGENS_RETENTAVEIS`: o token expira em uma hora, e
+    # reenviar depois disso entregaria um link morto.
+    linhas = registrar_notificacao(
+        [(assunto, corpo_texto, corpo_html, usuario.email)],
+        origem=Mensagem.Origem.SENHA,
+        escola_id=usuario.escola_id,
+        referencia_id=usuario.pk,
     )
-    msg.attach_alternative(corpo_html, "text/html")
-
-    try:
-        msg.send(fail_silently=False)
-    except Exception:  # noqa: BLE001 — vira evento no Sentry
-        logger.exception(
-            "Falha ao enviar email de redefinição de senha",
+    if despachar_notificacao([linha.pk for linha in linhas]) == 0:
+        logger.warning(
+            "Email de redefinição de senha não saiu — ver a mensagem no "
+            "outbox para o erro do provedor.",
             extra={"usuario_id": usuario.id},
         )
         # Não relança — a view chamadora SEMPRE devolve 200 (anti-enumeração).
-        # O Sentry captura o erro pra investigação posterior.
