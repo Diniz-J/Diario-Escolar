@@ -448,8 +448,11 @@ despublicados". Link abre em aba nova com `rel="noopener noreferrer"`.
 - Responsável com filhos em escolas diferentes: hoje `Responsavel` é
   escopado por escola, o que basta no single-tenant. Vira questão real na
   FASE 5 (multi-tenancy).
-- Telefone e flag `recebe_notificacao` no responsável, já listados como
-  pendência do email de ocorrência no `CLAUDE.md`.
+- ~~Flag `recebe_notificacao` no responsável.~~ Entregue na fatia 2 do
+  [`RESPONSAVEIS.md`](./RESPONSAVEIS.md): é opt-out **só de email**, separado
+  de `ativo` de propósito — quem pede silêncio continua consultando o boletim
+  aqui. **Telefone** segue pendente: é outro canal e outro provedor, e está
+  registrado como fora de escopo no `RESPONSAVEIS.md` §7.
 - PDF do boletim no portal — fora da fatia 4 (WeasyPrint síncrono e lento
   no free tier). Entra se o pai pedir.
 
@@ -464,6 +467,8 @@ segurança e ficam fora deste arquivo (repo público): o detalhe está no
   numa aula) responde 500 em vez de 4xx. Caminho: exception handler do DRF
   em `apps/common/`, mensagem genérica sem listar objetos (vazaria dado
   entre escolas).
-- **Refresh do staff derrubava a sessão em ~2h** — o cliente guardava o
-  refresh antigo, que o backend põe na blacklist na rotação. Corrigido no
-  **#112** (aberto).
+- ~~**Refresh do staff derrubava a sessão em ~2h**~~ — o cliente guardava o
+  refresh antigo, que o backend põe na blacklist na rotação. Corrigido e
+  mergeado (#112), e hoje tem teste travando: o `lib/api.test.ts` prende que
+  o refresh **rotacionado** é o guardado, porque guardar o antigo dá na mão
+  um token já na blacklist e mata a sessão no ciclo seguinte.

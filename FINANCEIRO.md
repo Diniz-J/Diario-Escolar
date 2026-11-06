@@ -269,7 +269,8 @@ Aluno ──< PlanoCobranca ──< Fatura ──< FaturaItem   (CASCADE)
             unique(aluno, competencia) ◄── o invariante central
 ```
 
-- **`PlanoCobranca`** — `aluno`, `valor_mensalidade`, `dia_vencimento`,
+- **`PlanoCobranca`** — `aluno`, `pagador` (FK opcional pro `Responsavel`,
+  titular do boleto — ver §9), `valor_mensalidade`, `dia_vencimento`,
   `desconto_tipo` (nenhum/percentual/fixo) + `desconto_valor`,
   `multa_percentual`, `juros_mes_percentual`, `vigencia_inicio`,
   `vigencia_fim`, `ativo`. Métodos: `valor_efetivo()`, `vigente_em()`,
@@ -283,8 +284,14 @@ Aluno ──< PlanoCobranca ──< Fatura ──< FaturaItem   (CASCADE)
 - **`Pagamento`** — `fatura`, `valor`, `data`, `metodo`
   (pix/boleto/cartao/dinheiro), `referencia_externa`.
 
-Os quatro são auditados (`HistoricalRecords`) — é dinheiro, todo toque
-precisa de autor e diff.
+- **`EventoWebhook`** — o que o provedor mandou, gravado **antes** de ser
+  processado, com unique no id do evento. É o único modelo da app **não
+  escopado por escola**, porque o tenant só se descobre depois de achar a
+  fatura pelo `id_externo`. Ver §3.4.
+
+Os quatro primeiros são auditados (`HistoricalRecords`) — é dinheiro, todo
+toque precisa de autor e diff. O `EventoWebhook` não: é log de entrada, já
+imutável por construção.
 
 **Por que `valor` é congelado na fatura** e não lido do plano na hora de
 exibir: reajuste em maio não pode reescrever a fatura de março, que já foi
@@ -475,7 +482,7 @@ opção de secretaria: ela escolhe entre os quatro meios de sempre.
 
 ---
 
-## 7. Frontend (fatia 6)
+## 7. Frontend
 
 Duas telas sob um item só de sidebar, com abas internas
 (`FinanceiroTabs`): `/financeiro` (faturas) e `/financeiro/planos`. O item
@@ -529,6 +536,61 @@ do aluno na lista de faturas (quem já está olhando uma cobrança), o ⋯ da
 `TurmaDetalhePage`, que leva pra `/financeiro?turma=<id>` — situação da
 turma, não de um aluno. As três são de nível-diretor, como o endpoint.
 
+### 7.1. UI da emissão
+
+Item "Emitir cobrança" no ⋯ da `FaturasPage` **e** da
+`FichaFinanceiraPage`: as duas compartilham o `FaturaDetalheDialog`, então
+ligar numa obrigava ligar na outra. A confirmação é dialog próprio
+(`FaturaEmitirDialog`), no molde do `FaturaCancelDialog` — a ação sai do
+sistema, cria cobrança de verdade e é o provedor quem avisa o pagador, sem
+desfazer prático. O `link_pagamento` aparece no detalhe da fatura, que é o
+resultado visível da emissão.
+
+Duas decisões que valem pra quem mexer:
+
+- **`podeEmitirCobranca` mora em `features/financeiro/constants.ts`**, e não
+  repetida nas duas telas. Duas cópias divergiriam no dia em que a regra
+  mudar, e aí uma das duas ofereceria botão que só devolve erro.
+- **O erro não vai pra toast, vai pro `Alert` dentro do dialog.** É a frase
+  do backend que diz o que falta preencher ("o responsável está sem CPF",
+  "este plano não tem pagador definido", "cobrança online não está
+  configurada"), e toast some antes de a secretaria agir.
+
+Sem `ASAAS_API_KEY` o botão aparece e devolve a terceira dessas mensagens: o
+front não tem como saber que o gateway não existe, e inventar um endpoint de
+capabilities pra uma instalação só não se paga.
+
+### 7.2. Campo de pagador
+
+Select no `PlanoCobrancaFormDialog`, alimentado pelos vínculos **do próprio
+aluno** (`/vinculos-responsavel/?aluno=`) e não por toda a escola, porque o
+`clean()` do plano exige que o pagador seja responsável daquele aluno — uma
+lista mais larga ofereceria opção que o backend recusa. Trocar o aluno limpa
+o pagador.
+
+O campo é **opcional**: a escola que recebe Pix na conta e registra à mão
+nunca precisa de um, e exigir travaria o jeito como o módulo já opera.
+Limitação conhecida: o endpoint de vínculos não diz se o responsável tem
+CPF, então pagador sem CPF só é pego na emissão — que devolve a frase do
+backend no `Alert` do dialog.
+
+### 7.3. A fatura no portal do responsável
+
+`GET /portal/alunos/<id>/faturas/` e a aba "Mensalidades" na página do
+filho, pra que o `link_pagamento` chegue a quem paga sem passar pela
+secretaria. Duas decisões que não se deduzem do código:
+
+- **Todo responsável vinculado vê**, não só o `pagador` do plano. O email de
+  pagamento já sai por `destinatarios_do_aluno` e alcança todos —
+  restringir aqui deixaria o outro responsável com o aviso de "pagamento
+  recebido" e nenhum lugar pra conferir. O `pagador` é o titular do boleto,
+  não controle de acesso.
+- **Fatura cancelada fica de fora**, por ser ato interno da secretaria. E
+  filho inativo **continua vendo as dele**, como o boletim, divergindo do
+  mural de propósito.
+
+O portal segue só leitura: não registra pagamento.
+
 ---
 
 ## 8. Fatias
@@ -555,40 +617,54 @@ fatura no portal do responsável.
 
 ## 9. Estado
 
-**Fatias 1, 2 e 3 entregues.** O módulo está funcional ponta a ponta sem
-gateway: os quatro modelos, a API REST sob `/api/v1/`, e o `services.py`
-com geração recorrente idempotente, conciliação (registro e estorno) e o
-job de vencidas, com dois management commands pra cron. 150 testes.
+**Módulo completo.** As sete fatias entregues (§8), 270 testes. A escola
+opera tudo pela UI, sem passar pelo `/admin/`: cadastra o contrato, gera e
+emite a fatura, registra o pagamento que caiu na conta, estorna, cancela, e
+a ficha do aluno responde "quanto este aluno deve" com os totais somados no
+servidor.
 
-Uma escola já pode operar assim: cadastra o plano de cada aluno, o cron
-gera as faturas todo dia 1, a secretaria registra o Pix ou o dinheiro que
-recebeu e o status acompanha. O que falta é a cobrança sair
-automaticamente (fatias 4 e 5) e a tela (fatia 6).
-
-**Fatias 6 e 6b entregues**: a escola opera o módulo inteiro pela UI,
-sem passar pelo `/admin/`, e a ficha do aluno responde "quanto este aluno
-deve" com os totais somados no servidor.
-
-**Fatias 4 e 5 entregues**, e com elas o módulo fecha: a escola emite a
-cobrança (`POST /faturas/<id>/emitir-cobranca/` na tela, ou
+Com as fatias 4 e 5 o ciclo fecha sem ninguém abrir o sistema: a escola
+emite a cobrança (`POST /faturas/<id>/emitir-cobranca/` na tela, ou
 `financeiro_emitir_cobrancas` no cron), a família paga pelo link do
-provedor e o webhook concilia e avisa o responsável, sem ninguém abrir o
-sistema.
+provedor, o webhook concilia e o responsável recebe o aviso.
 
-O que a fatia 4 trouxe de schema, porque a emissão exigia: `pagador` no
-`PlanoCobranca` (FK pro `Responsavel`) e `id_externo_gateway` no
-`Responsavel`. O pagador mora no **contrato**, não no aluno, porque o
-aluno com mãe e pai vinculados tem dois responsáveis no portal e um só
-titular de boleto — deixar a escolha implícita ("o primeiro com CPF")
-faria o titular trocar sozinho no dia em que alguém preenchesse o CPF do
-outro. O `clean()` exige que o pagador seja responsável **daquele**
-aluno: cobrar em nome de quem não tem vínculo poria um terceiro no boleto
-da família. O `id_externo_gateway` existe porque criar cliente no Asaas
-**não** é idempotente — sem guardar o id, cada emissão abriria outro
-cadastro e espalharia o histórico da mesma família por vários clientes.
+E o módulo **continua operando sem gateway nenhum**, que é como ele roda
+hoje: a secretaria registra o Pix ou o dinheiro que recebeu. O gateway é
+integração, não dependência — era decisão de projeto (§1) e segue valendo
+depois de implementado.
 
-O que falta pra operar de verdade não é código: as **entradas de cron**
-(§2.2) e as quatro envs (§6) precisam ser configuradas no servidor, e o
-hook tem que ser cadastrado no painel do Asaas apontando pra
-`/api/v1/financeiro/webhooks/asaas/` com o mesmo `authToken` que entrar
-em `ASAAS_WEBHOOK_TOKEN`.
+### O que a emissão exigiu de schema
+
+`PlanoCobranca.pagador` (FK pro `Responsavel`) e
+`Responsavel.id_externo_gateway`.
+
+O pagador mora no **contrato**, não no aluno, porque o aluno com mãe e pai
+vinculados tem dois responsáveis no portal e um só titular de boleto —
+deixar a escolha implícita ("o primeiro com CPF") faria o titular trocar
+sozinho no dia em que alguém preenchesse o CPF do outro. O `clean()` exige
+que o pagador seja responsável **daquele** aluno: cobrar em nome de quem não
+tem vínculo poria um terceiro no boleto da família.
+
+O `id_externo_gateway` existe porque criar cliente no Asaas **não** é
+idempotente — sem guardar o id, cada emissão abriria outro cadastro e
+espalharia o histórico da mesma família por vários clientes.
+
+### O que falta não é código
+
+Nada disso bloqueia a operação manual; bloqueia a automática.
+
+- As **três entradas de cron** (§2.2). Sem elas nenhuma fatura é gerada nem
+  emitida sozinha, e é a tela "Nova fatura" que cobre o buraco. Não estão
+  configuradas em ambiente nenhum hoje.
+- As **quatro envs** do gateway (§6) e o **hook cadastrado** no painel do
+  Asaas, apontando pra `/api/v1/financeiro/webhooks/asaas/` com o mesmo
+  `authToken` que entrar em `ASAAS_WEBHOOK_TOKEN`.
+
+Passo a passo das duas coisas no [`DEPLOY.md`](./DEPLOY.md).
+
+### Limitação conhecida que não vale esconder
+
+Vigência sobreposta de plano é barrada só no `clean()` — duas requisições
+simultâneas passam. O caminho da exclusion constraint (`daterange` +
+`EXCLUDE USING gist`) está anotado no §3.2, com o motivo de não ter sido
+feito ainda.

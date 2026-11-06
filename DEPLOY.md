@@ -51,6 +51,16 @@ Adicione:
 | `ALLOWED_HOSTS` | o domínio do serviço, ex.: `diario-backend.onrender.com` |
 | `CSRF_TRUSTED_ORIGINS` | `https://diario-backend.onrender.com` |
 | `CORS_ALLOWED_ORIGINS` | a URL do frontend no Vercel (preencher depois da Parte 2) |
+| `FRONTEND_URL` | a URL do frontend, ex.: `https://diario-escolar.vercel.app` |
+| `BACKEND_URL` | a URL deste serviço, ex.: `https://diario-backend.onrender.com` |
+
+> **`FRONTEND_URL` não é cosmético.** É a base do link de redefinição de senha
+> e do link do convite do portal do responsável — os dois são montados no
+> backend e enviados por email. Com ela errada, o pai recebe um convite que
+> aponta pro lugar errado, e o erro só aparece do lado de quem clicou.
+> `BACKEND_URL` é a base da logo dentro dos emails; errada, o email chega sem
+> imagem, o que é cosmético. Os dois têm default apontando pro ambiente de
+> demonstração, então **esquecer de setar não quebra o boot** — quebra o link.
 
 Gerar `SECRET_KEY` (rode local):
 ```bash
@@ -112,14 +122,35 @@ Depois que o frontend tiver URL no Vercel:
 - [ ] O frontend no Vercel carrega a tela de login.
 - [ ] Login no frontend funciona (token vem do backend).
 - [ ] Criar/listar dados funciona (CORS ok).
+- [ ] `GET /api/v1/health/` responde `200` (o banco está de pé).
+- [ ] `FRONTEND_URL` aponta pro frontend certo — é a base dos links de email.
+- [ ] Um reset de senha chega na caixa de entrada e o link abre a tela certa.
 
-## Email de ocorrência (Brevo via HTTP API)
+Depois do básico, por frente (cada uma tem seção própria abaixo):
 
-Quando uma ocorrência é criada, o sistema envia um email ao responsável do
-aluno. O envio roda em **thread daemon** (fire-and-forget) — a request HTTP
-volta na hora; o email é melhor-esforço protegido (falha não trava o
-registro). Sem credencial nenhuma, o backend usa o console backend e só
-loga o conteúdo do email — útil pra dev local.
+- [ ] Email saindo pelo Brevo (`EMAIL_BACKEND` + `ANYMAIL_BREVO_API_KEY` + `DEFAULT_FROM_EMAIL`).
+- [ ] `SENTRY_DSN` no Render e `VITE_SENTRY_DSN` no Vercel.
+- [ ] Entradas de cron, se o ambiente oferecer agendador.
+- [ ] Envs do Asaas e webhook cadastrado, **se** a escola for cobrar online.
+- [ ] Contas do portal semeadas e o primeiro convite mandado pra você mesmo.
+
+## Email transacional (Brevo via HTTP API)
+
+Cinco coisas saem por email, e todas pelo mesmo backend:
+
+| O quê | Quando |
+|---|---|
+| Ocorrência | na criação, aos responsáveis do aluno (thread daemon) |
+| Comunicado | no disparo explícito, em lote (ver seção seguinte) |
+| Redefinição de senha | pedido do próprio usuário, ou disparado pela direção |
+| Convite do portal | pela tela `/responsaveis` ou pelo command de lote |
+| Pagamento recebido | quando o webhook do gateway concilia a fatura |
+
+Os de ocorrência e comunicado rodam em **thread daemon** (fire-and-forget): a
+request HTTP volta na hora e o email é melhor-esforço protegido por
+`try/except` — falha de envio não trava o registro, e vai pro log (e pro
+Sentry, via `logger.exception`). Sem credencial nenhuma, o backend usa o
+console backend e só loga o conteúdo do email — útil pra dev local.
 
 ### Por que Brevo (e não SMTP)?
 
@@ -158,9 +189,14 @@ código de envio não muda.
    Pode remover as envs antigas de SMTP (`EMAIL_HOST`, `EMAIL_PORT`,
    `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`) — anymail
    ignora.
-6. Cada aluno precisa ter **email do responsável** cadastrado (campo
-   obrigatório no cadastro). Alunos antigos sem responsável não recebem —
-   edite-os pra preencher.
+6. O destino do email é o **vínculo** `ResponsavelAluno`, não o campo de
+   texto do aluno: um aluno com mãe e pai vinculados gera **duas mensagens
+   individuais**, cada uma saudada pelo nome de quem recebe, e a falha de uma
+   não cala a outra. O `Aluno.email_responsavel` é fallback, e dispara por
+   **ausência de vínculo**, nunca por ausência de destino — se disparasse por
+   falta de destino, o opt-out (`Responsavel.recebe_notificacao`) viraria
+   nada. Ver [`RESPONSAVEIS.md`](./RESPONSAVEIS.md) §4.1. Aluno sem nenhum
+   dos dois não recebe, e isso fica como aviso no log.
 
 > O envio é em background com `EMAIL_TIMEOUT=10s` por segurança. Se o
 > email falhar, o erro vai pro log do Render como
@@ -199,6 +235,114 @@ a cada 10–15 minutos fecha o buraco automaticamente.
 Para saber quem recebeu, a página do comunicado tem o log de entrega por
 aluno (enviado / falhou / sem email cadastrado), com a mensagem de erro do
 provedor em cada falha — é ali que a cota estourada do Brevo aparece.
+
+## Financeiro: cobrança online (gateway Asaas)
+
+O módulo financeiro **funciona sem gateway**: a escola cadastra o plano de
+cada aluno, as faturas são geradas, e a secretaria registra o Pix que caiu na
+conta ou o dinheiro que entrou no balcão. É assim que ele opera hoje, em todo
+ambiente. A cobrança online é integração, não dependência.
+
+Pra ligar a emissão de boleto/Pix, quatro envs no Render — todas opcionais:
+
+| Key | Value |
+|---|---|
+| `ASAAS_API_KEY` | chave da API do Asaas. Sem ela, a tela mostra "cobrança online não está configurada" e o resto do módulo segue igual |
+| `ASAAS_BASE_URL` | `https://api-sandbox.asaas.com/v3` (default) ou a de produção |
+| `ASAAS_TIMEOUT` | segundos; default `10`, curto porque a emissão roda dentro de uma request da secretaria |
+| `ASAAS_WEBHOOK_TOKEN` | o `authToken` do cadastro do hook no painel deles |
+
+> **Chave e ambiente andam juntos.** Chave de sandbox com a URL de produção
+> (ou o contrário) devolve 401 `invalid_environment`. E `ASAAS_WEBHOOK_TOKEN`
+> **não é** a API key: é um segredo separado, que você escolhe ao cadastrar o
+> webhook — a documentação deles é explícita nisso.
+
+Depois das envs, cadastre o webhook no painel do Asaas apontando pra:
+
+```
+POST https://<seu-backend>/api/v1/financeiro/webhooks/asaas/
+```
+
+com o mesmo `authToken` que entrou em `ASAAS_WEBHOOK_TOKEN`. É a **única
+rota sem autenticação do projeto**: o token é comparado com
+`compare_digest`, o evento é gravado antes de ser processado, e o valor é
+**reconsultado no provedor antes de qualquer escrita de dinheiro** — o token
+prova quem mandou, não quanto entrou.
+
+O endpoint responde **200 mesmo quando o processamento falha**, de propósito:
+15 falhas consecutivas pausam a fila de entrega do Asaas, e uma fila pausada
+para a conciliação da escola inteira. O que falhou fica registrado no
+`EventoWebhook` e no Sentry.
+
+## Tarefas agendadas (cron)
+
+Nada disso é necessário pro sistema subir — mas sem as entradas do financeiro
+**nenhuma fatura é gerada ou emitida automaticamente**, e a escola depende da
+tela "Nova fatura" pra cada mês. Todos os comandos abaixo são idempotentes e
+seguros de repetir.
+
+```cron
+# Gera as faturas do mês. Idempotente pelo unique (aluno, competência).
+0 6 1 * *   cd /app && python manage.py financeiro_gerar_faturas
+
+# Emite no gateway o que a geração criou. Entrada SEPARADA de propósito:
+# gerar_faturas roda em transação e em lote, e pendurar N chamadas HTTP ali
+# prenderia o lock das faturas pelo tempo do provedor.
+30 6 1 * *  cd /app && python manage.py financeiro_emitir_cobrancas
+
+# Move pra `vencido` o que passou do vencimento.
+0 7 * * *   cd /app && python manage.py financeiro_marcar_vencidas
+
+# Retoma lote de comunicado cortado por deploy/restart. Sem nada travado,
+# não faz nada — por isso é seguro rodar de 10 em 10 minutos.
+*/10 * * * * cd /app && python manage.py comunicados_retomar
+
+# Apaga PasswordResetToken expirado há mais de 30 dias. A tabela cresce
+# indefinidamente sem isso.
+0 4 * * 0   cd /app && python manage.py purge_expired_tokens
+```
+
+Os três primeiros aceitam `--escola-id` e os dois primeiros `--dry-run`;
+`financeiro_gerar_faturas` aceita `--competencia YYYY-MM` pra regerar um mês
+específico e `financeiro_emitir_cobrancas` aceita `--competencia`.
+
+**Onde rodar.** O Cron Job do Render é recurso cobrado, e o free tier deste
+projeto não tem nem Pre-Deploy nem agendador (é por isso que o `migrate` e o
+backfill do audit log moram no [`entrypoint.sh`](./entrypoint.sh)). Enquanto o
+ambiente for o free tier, os caminhos são rodar o comando **local com
+`DATABASE_URL` apontando pra prod** ou um agendador externo. Confira no painel
+o que o seu plano oferece antes de assumir qualquer um dos dois.
+
+Na prática, hoje, nenhuma dessas entradas está configurada em ambiente nenhum
+— e é exatamente por isso que a tela "Nova fatura" existe. Quando a migração
+pra VPS acontecer, o cron do sistema resolve tudo isso de uma vez.
+
+## Portal do responsável: primeiro convite
+
+A conta do responsável **só existe por convite da escola** — não há
+auto-registro. Depois do deploy:
+
+1. Confira que `FRONTEND_URL` aponta pro frontend certo: é a base do link
+   que vai no email.
+2. Semeie as contas a partir dos alunos que já têm email de responsável
+   cadastrado (idempotente, deduplica irmãos pelo email, inclui aluno
+   inativo, pula aluno sem email):
+   ```bash
+   python manage.py portal_semear_responsaveis --dry-run
+   python manage.py portal_semear_responsaveis
+   ```
+   A conta nasce **sem senha utilizável**: o acesso vem do convite.
+3. Convide pela tela `/responsaveis` (botão Convidar, um a um) ou em lote:
+   ```bash
+   python manage.py portal_convidar_responsaveis --dry-run
+   python manage.py portal_convidar_responsaveis --limite 50
+   ```
+   O `--limite` existe porque a cota de 300 emails/dia do Brevo é
+   **compartilhada** com os comunicados e as ocorrências: convidar a escola
+   toda num dia pode consumir a cota e calar os avisos.
+
+> Mande o primeiro convite **pra você mesmo**, como conta de teste, antes de
+> mandar pra uma família.
 
 ## Observabilidade (Sentry)
 
@@ -254,3 +398,12 @@ Em ~10s o evento aparece no painel do Sentry. Apague a view depois.
 - Backup automatizado agendado (ver `scripts/README.md`).
 - Cache compartilhado (Redis) se rodar múltiplas réplicas — pro rate limit de
   login ser global.
+- **As entradas de cron** (seção acima). No free tier elas não existem; num
+  VPS é o cron do sistema, e aí a geração mensal da mensalidade passa a
+  acontecer sozinha.
+- Rotacionar `SECRET_KEY` e a senha do banco ao nascer o ambiente novo —
+  trocar segredo é barato no dia zero e caro depois, com sessão de gente
+  dentro.
+- Fila assíncrona dedicada (Celery/Dramatiq/RQ) se o volume de email crescer:
+  hoje o envio é thread daemon best-effort, e é o mesmo trabalho que tira o
+  PDF do WeasyPrint de dentro da request.
