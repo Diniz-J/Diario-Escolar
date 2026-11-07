@@ -75,6 +75,7 @@ Diario-Escolar/
 │   ├── portal/              — Responsavel + ResponsavelAluno + ConviteResponsavel
 │   │                          + destinatarios.py (origem única de quem recebe email)
 │   ├── materiais/           — Material (mural do professor pra turma: texto + link)
+│   ├── notificacoes/        — outbox de email (Mensagem) + rota das tarefas periódicas
 │   ├── financeiro/          — PlanoCobranca, Fatura, FaturaItem, Pagamento, EventoWebhook
 │   │                          + gateways/ (Asaas) + webhook de conciliação
 │   ├── planos_ensino/       — PlanoEnsino
@@ -281,6 +282,15 @@ Cada app de domínio segue o mesmo layout (`models.py`, `serializers.py`, `views
 - Action `agenda` (`?turma=&disciplina=&mes=YYYY-MM`): projeta os slots do mês a partir de `dias_semana` do `Lecionamento`, on-the-fly via `services.py` (sem tabela). Navega mês a mês; ignora feriados na v1.
 - Action `pdf` (`?professor=&data_inicio=&data_fim=&status=`): o diário impresso, com espaço de assinatura. Front entregue — diário do professor em `/diario`, ficha 360º do professor em `/professores/:id` (tabs Diário/Lecionamentos/Ocorrências/Dados) e card de pendência de conferência no dashboard.
 
+**`apps/notificacoes`**
+- `Mensagem` — uma linha por destinatário, gravada como `pendente` **antes** da tentativa de envio e carimbada depois. É essa ordem que faz o rastro sobreviver ao processo que morre no meio do envio, que é rotina no free tier do Render.
+- Existe porque quatro caminhos disparavam email em thread daemon e não deixavam rastro nenhum (ocorrência, pagamento, convite do portal e link de senha): falha virava uma linha de log, e a escola não tinha como saber que o responsável nunca foi avisado.
+- **Não** substitui o `ComunicadoDestinatario`. Aquele é o outbox do comunicado em lote, tem semântica mais rica (unique por `(comunicado, aluno, responsavel)`, materialização idempotente) e está em produção com lote de 150 — dobrá-lo pra caber num modelo genérico seria risco sem ganho.
+- Não herda `BaseModelEscopado` apesar de ter `escola`: na base o campo é obrigatório, e o reset de senha do admin global não tem escola, então a base deixaria justamente o caminho de recuperação de conta sem rastro.
+- `ORIGENS_RETENTAVEIS` **exclui o que carrega token**: convite reenviado carrega token que o `emitir_link` já apagou, e link de senha reenviado depois de uma hora chega morto. Os dois continuam **gravados** — o rastro vale onde o reenvio não vale.
+- `tarefas.py` — `POST /api/v1/tarefas/executar/?tarefas=...`, a rota que o workflow agendado chama. Segunda rota sem autenticação de usuário do projeto e a primeira que *executa* algo, então: lista de permissão mapeando apelido a command fixo (aceitar o nome vindo da request seria `call_command` com entrada externa), token em `compare_digest` como no webhook do Asaas, recusa quando a env está vazia, e falha de uma tarefa não cancela as outras.
+- `transaction.on_commit` aqui **não é precaução**: a thread lê as linhas de volta, então disparada antes do commit não encontraria o que a request acabou de gravar.
+
 **`apps/materiais`**
 - `Material` — mural do professor pra turma: turma + disciplina + professor + título + descrição + **link** (só `http`/`https`). Sem upload: não existe `FileField`/`MEDIA_ROOT` no projeto e o disco do Render é efêmero, então anexo exigiria object storage. Auditado.
 - Mesmo molde do `RegistroAula`: `Lecionamento` ativo obrigatório, professor só vê/edita os próprios e não publica em nome de outro (403), direção vê a escola toda. `DELETE` faz soft delete (`ativo=False`).
@@ -316,6 +326,8 @@ POST   /api/v1/auth/logout/         — blacklist do refresh (logout efetivo)
 POST   /api/v1/auth/password/reset/request/   — pede o link de redefinição (público)
 POST   /api/v1/auth/password/reset/confirm/   — redefine com o token do link (público)
 POST   /api/v1/auth/password/change/          — troca a própria senha (logado)
+
+POST   /api/v1/tarefas/executar/    — dispara os commands periódicos (?tarefas=, token em header)
 
 GET    /api/v1/ping/                — liveness (público)
 GET    /api/v1/health/              — readiness, checa o banco (público)
@@ -629,7 +641,8 @@ feature/* → develop → main
 - **Infra:** Docker (dev + prod), deploy no ar (Render + Vercel), backup do PostgreSQL (`scripts/`), CI no GitHub Actions.
 - **Segurança:** rate limit no login (5/min), JWT blacklist + rotação de refresh, hardening de produção (CSRF trusted origins, proxy SSL, cookies secure/HSTS), guard de IDOR consistente em todos os serializers com FK `escola`.
 - **Audit log:** `django-simple-history` nos **21 modelos** do núcleo (Usuario, Aluno, Professor, Lecionamento, Ocorrencia, RegistroPresenca, ItemPresenca, PlanoEnsino, RegistroAula, PeriodoAvaliativo, Avaliacao, NotaAvaliacao, NotaPeriodo, Comunicado, Material, Responsavel, ResponsavelAluno, PlanoCobranca, Fatura, FaturaItem, Pagamento) com aba History no `/admin/` mostrando diff lado a lado. Ficam fora `Escola`, `Turma` e `Disciplina`, que mudam raramente e não têm valor de auditoria. `populate_history --auto` no boot pra marco-zero dos registros anteriores ao audit log.
-- **Comunicação:** notificação por email ao responsável funcional em produção via **Brevo HTTP API** (`django-anymail`) — off-thread, protegido, sem domínio próprio, 300 emails/dia free. Resend e Gmail SMTP foram tentados e falharam pelo bloqueio de SMTP outbound do Render free desde set/2025.
+- **Comunicação:** notificação por email ao responsável funcional em produção via **Brevo HTTP API** (`django-anymail`) — off-thread, protegido, sem domínio próprio, 300 emails/dia free. Resend e Gmail SMTP foram tentados e falharam pelo bloqueio de SMTP outbound do Render free desde set/2025. **Outbox com retry e histórico** (`apps/notificacoes`): os quatro caminhos que não deixavam rastro agora gravam a mensagem antes de tentar enviar, e o reenvio é um command. Não é fila de broker de propósito — Celery/Dramatiq/RQ exigiriam Redis e um segundo processo, e o free tier dá um web service só.
+- **Tarefas periódicas:** o projeto não tinha agendador em ambiente nenhum, então os commands de cron existiam sem nunca rodar. O gatilho é `POST /api/v1/tarefas/executar/` chamado por workflow agendado no GitHub Actions — gratuito, sem provedor novo, e de quebra acorda o serviço que hiberna no free tier.
 - **Observabilidade:** Sentry SDK no backend e frontend — captura exceções não tratadas + `logger.error/exception` + erros de render React via `<Sentry.ErrorBoundary>`. Plano free (Developer) 5k events/mês.
 - **Produto:** Dashboard com métricas (7 cards, incluindo presença média e reincidência agregadas no backend) + filtro por turma; **avaliações e notas** (período avaliativo, avaliação, lançamento em lote, média final); **diário de classe** com visto da direção, agenda projetada da grade horária e PDF; **boletim** com PDF; **timeline do aluno**; **relatórios operacionais** em PDF/CSV/XLSX (frequência por turma, ocorrências, cadastral de alunos); **comunicados institucionais** com log de entrega por responsável; **mural de materiais**; **portal do responsável** (oito fatias, ver [`PORTAL.md`](./PORTAL.md)); **financeiro** completo, do contrato ao webhook de conciliação (ver [`FINANCEIRO.md`](./FINANCEIRO.md)); fluxo de senha completo (própria, esqueci, e a direção dispara o link de terceiro); gestão de contas do staff pela UI; soft delete + UX completa (toggle "Mostrar inativos" + Reativar); auto-escopo de escola em criação (multi-tenant invisível pro usuário); **import/export em massa CSV/XLSX** (6 entidades via `django-import-export`) com gating comercial por escola (flag `importacao_em_lote_habilitada`).
 - **Performance:** auditoria de queries fechada — índices simples e compostos, `annotate` no lugar de `COUNT` por linha, `bulk_*_with_history` no lançamento de notas, `Prefetch` do histórico, paginação nas listas navegáveis e **filtro de escopo obrigatório** nos endpoints matriz (a alternativa a paginar, que quebraria a chamada e o lançamento em lote).
@@ -640,8 +653,9 @@ feature/* → develop → main
 
 A lista priorizada por fases vive em [`CLAUDE.md`](./CLAUDE.md) (seção Roadmap). Resumo do que ainda falta:
 
-- **Comunicação:** fila assíncrona dedicada (Celery/Dramatiq/RQ) com retry e histórico — hoje o envio é thread daemon best-effort, e é a pendência que mais aparece no roadmap, porque o PDF síncrono e o email off-thread resolvem-se os dois com ela. Telefone do responsável fica de fora: é outro canal e outro provedor.
-- **Operação:** as três entradas de cron do financeiro e o `purge_expired_tokens` precisam ser configurados no servidor (ver [`DEPLOY.md`](./DEPLOY.md)); enquanto não forem, a fatura avulsa e o pagamento manual cobrem o buraco. `ProtectedError` ainda sai como 500 em vez de 4xx — falta um exception handler em `apps/common/`.
+- **Comunicação:** telefone do responsável — é outro canal e outro provedor. O retry e o histórico do email saíram do backlog com o outbox; o que fica de fora dele é o `comunicados`, que tem outbox próprio e lote rodando em produção.
+- **Operação:** os dois secrets do workflow agendado (`BACKEND_URL` e `TAREFAS_TOKEN`) e a env `TAREFAS_TOKEN` no servidor precisam ser preenchidos — sem eles o job termina avisando em vez de falhar, então o silêncio não aparece como vermelho. `ProtectedError` ainda sai como 500 em vez de 4xx: falta um exception handler em `apps/common/`.
+- **Produto:** o PDF do WeasyPrint segue síncrono na request. O outbox não resolve isso (ele é pra email), então o teto de linhas continua sendo a proteção do worker.
 - **Produto:** PWA (empacotar o front atual com manifest + service worker, pra chamada em sala e pro portal no celular) é consideração, não compromisso — o divisor de esforço é a chamada precisar ou não funcionar **offline**. Editar nome/email de responsável pela tela segue pelo `/admin/`.
 - **Dev experience:** drf-spectacular (gera client TypeScript), `repositories.py` por app quando houver query compartilhada entre services.
 - **SaaS futuro:** multi-tenancy real (middleware + RLS + billing), httpOnly cookies, LGPD formal.

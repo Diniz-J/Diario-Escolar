@@ -53,6 +53,7 @@ Adicione:
 | `CORS_ALLOWED_ORIGINS` | a URL do frontend no Vercel (preencher depois da Parte 2) |
 | `FRONTEND_URL` | a URL do frontend, ex.: `https://diario-escolar.vercel.app` |
 | `BACKEND_URL` | a URL deste serviço, ex.: `https://diario-backend.onrender.com` |
+| `TAREFAS_TOKEN` | segredo que autoriza o disparo das tarefas periódicas (ver seção própria) |
 
 > **`FRONTEND_URL` não é cosmético.** É a base do link de redefinição de senha
 > e do link do convite do portal do responsável — os dois são montados no
@@ -130,7 +131,7 @@ Depois do básico, por frente (cada uma tem seção própria abaixo):
 
 - [ ] Email saindo pelo Brevo (`EMAIL_BACKEND` + `ANYMAIL_BREVO_API_KEY` + `DEFAULT_FROM_EMAIL`).
 - [ ] `SENTRY_DSN` no Render e `VITE_SENTRY_DSN` no Vercel.
-- [ ] Entradas de cron, se o ambiente oferecer agendador.
+- [ ] `TAREFAS_TOKEN` no servidor e os dois secrets do workflow no GitHub.
 - [ ] Envs do Asaas e webhook cadastrado, **se** a escola for cobrar online.
 - [ ] Contas do portal semeadas e o primeiro convite mandado pra você mesmo.
 
@@ -146,11 +147,25 @@ Cinco coisas saem por email, e todas pelo mesmo backend:
 | Convite do portal | pela tela `/responsaveis` ou pelo command de lote |
 | Pagamento recebido | quando o webhook do gateway concilia a fatura |
 
-Os de ocorrência e comunicado rodam em **thread daemon** (fire-and-forget): a
-request HTTP volta na hora e o email é melhor-esforço protegido por
-`try/except` — falha de envio não trava o registro, e vai pro log (e pro
-Sentry, via `logger.exception`). Sem credencial nenhuma, o backend usa o
-console backend e só loga o conteúdo do email — útil pra dev local.
+O envio roda em **thread daemon** (fire-and-forget): a request HTTP volta na
+hora e o email é melhor-esforço protegido por `try/except` — falha de envio
+não trava o registro.
+
+**Mas falha não se perde mais.** Quatro desses caminhos (ocorrência,
+pagamento, convite do portal e link de senha) gravam uma `Mensagem` em
+`apps/notificacoes` **antes** de tentar enviar, e carimbam o resultado
+depois. É essa ordem que faz o rastro sobreviver ao processo que morre no
+meio — rotina no free tier. O que falhou volta pela tarefa `email`, abaixo,
+ou pelo `manage.py notificacoes_reenviar`.
+
+Duas coisas que o outbox **não** cobre, de propósito: o comunicado em lote,
+que tem outbox próprio (`ComunicadoDestinatario`) e retomada própria; e o
+reenvio do que carrega token — convite e link de senha ficam gravados, mas
+não são retentados, porque o token já foi invalidado ou já expirou e o
+reenvio entregaria um link morto.
+
+Sem credencial nenhuma, o backend usa o console backend e só loga o conteúdo
+do email — útil pra dev local.
 
 ### Por que Brevo (e não SMTP)?
 
@@ -229,8 +244,8 @@ python manage.py comunicados_retomar --id 42    # um específico
 
 O disparo carimba sinal de vida a cada 25 emails, então um lote saudável
 nunca é confundido com um travado. Sem nada travado o comando não faz
-nada, o que o torna seguro de agendar: se houver um cron disponível, rodar
-a cada 10–15 minutos fecha o buraco automaticamente.
+nada, o que o torna seguro de agendar — e é o que a tarefa `comunicados`
+faz, a cada quinze minutos, pelo workflow da seção seguinte.
 
 Para saber quem recebeu, a página do comunicado tem o log de entrega por
 aluno (enviado / falhou / sem email cadastrado), com a mensagem de erro do
@@ -274,48 +289,78 @@ O endpoint responde **200 mesmo quando o processamento falha**, de propósito:
 para a conciliação da escola inteira. O que falhou fica registrado no
 `EventoWebhook` e no Sentry.
 
-## Tarefas agendadas (cron)
+## Tarefas periódicas (quem dispara os commands)
 
-Nada disso é necessário pro sistema subir — mas sem as entradas do financeiro
-**nenhuma fatura é gerada ou emitida automaticamente**, e a escola depende da
-tela "Nova fatura" pra cada mês. Todos os comandos abaixo são idempotentes e
-seguros de repetir.
+O projeto **não tinha agendador em ambiente nenhum** — por isso
+`comunicados_retomar` e os três commands do financeiro existiam sem nunca
+rodar. Quem dispara hoje é um workflow agendado no GitHub Actions
+(`.github/workflows/tarefas.yml`), que faz uma chamada HTTP autenticada
+pra `POST /api/v1/tarefas/executar/?tarefas=<apelidos>`.
+
+Por que Actions e não cron no Render: é gratuito, não entra provedor novo,
+o repo já usa Actions, e a chamada ainda **acorda o serviço que hiberna**
+no free tier. E o workflow **não** tem acesso ao banco: rodar `manage.py`
+de lá exigiria o `DATABASE_URL` de produção nos secrets do GitHub, o que
+poria o CI alcançando o banco da escola — bem pior que uma rota com token.
+
+### Ligar (três valores)
+
+1. No servidor, defina a env `TAREFAS_TOKEN` com um segredo forte:
+   ```bash
+   python -c "import secrets; print(secrets.token_urlsafe(32))"
+   ```
+   Com ela vazia a rota **recusa tudo** — é o default, e é o estado certo
+   pra quem clonou o projeto.
+2. No GitHub, em **Settings → Secrets and variables → Actions**, crie:
+   - `BACKEND_URL` — raiz do backend, **sem barra no fim**.
+   - `TAREFAS_TOKEN` — exatamente o mesmo valor do passo 1.
+
+Sem os dois secrets o job termina avisando em vez de falhar vermelho a cada
+quinze minutos, porque repo clonado sem secrets é o estado normal. O custo
+disso é que **o silêncio não aparece como vermelho**: se a mensalidade não
+for gerada no dia 1, confira primeiro se os secrets existem.
+
+### O que roda, e quando
+
+| Agenda (UTC) | Apelidos | O que faz |
+|---|---|---|
+| `3,18,33,48 * * * *` | `email,comunicados` | reenvia o outbox e retoma lote de comunicado travado |
+| `11 7 * * *` | `vencidas,tokens` | marca fatura vencida e limpa token de redefinição expirado |
+| `11 6 1 * *` | `faturas` | gera as faturas da competência |
+| `41 6 1 * *` | `cobrancas` | emite as cobranças no gateway, meia hora depois |
+
+**Os minutos são quebrados de propósito.** O GitHub avisa que workflow
+agendado na virada da hora atrasa sob carga da plataforma, e é nela que
+todo mundo agenda. A intenção é a mesma que o `FINANCEIRO.md` §2.2
+registrava pra um crontab comum: dia 1 de manhã, emissão meia hora depois
+da geração.
+
+A emissão é entrada **separada** da geração porque `gerar_faturas` roda em
+transação e em lote: pendurar N chamadas HTTP ali prenderia o lock das
+faturas pelo tempo do provedor.
+
+Pra disparar à mão, a aba Actions tem **Run workflow** com o campo de
+apelidos (`workflow_dispatch`). O parâmetro `?tarefas=` é obrigatório na
+rota — com o financeiro na lista, um disparo sem recorte explícito seria
+fácil de errar.
+
+### Num servidor com crontab próprio
+
+Quando o backend sair do Render pra um VPS, as mesmas tarefas viram linhas
+de crontab chamando o command direto, e o workflow pode ser desligado:
 
 ```cron
-# Gera as faturas do mês. Idempotente pelo unique (aluno, competência).
-0 6 1 * *   cd /app && python manage.py financeiro_gerar_faturas
-
-# Emite no gateway o que a geração criou. Entrada SEPARADA de propósito:
-# gerar_faturas roda em transação e em lote, e pendurar N chamadas HTTP ali
-# prenderia o lock das faturas pelo tempo do provedor.
-30 6 1 * *  cd /app && python manage.py financeiro_emitir_cobrancas
-
-# Move pra `vencido` o que passou do vencimento.
-0 7 * * *   cd /app && python manage.py financeiro_marcar_vencidas
-
-# Retoma lote de comunicado cortado por deploy/restart. Sem nada travado,
-# não faz nada — por isso é seguro rodar de 10 em 10 minutos.
-*/10 * * * * cd /app && python manage.py comunicados_retomar
-
-# Apaga PasswordResetToken expirado há mais de 30 dias. A tabela cresce
-# indefinidamente sem isso.
-0 4 * * 0   cd /app && python manage.py purge_expired_tokens
+*/15 * * * * cd /app && python manage.py notificacoes_reenviar
+*/15 * * * * cd /app && python manage.py comunicados_retomar
+0 4 * * *    cd /app && python manage.py financeiro_marcar_vencidas
+0 4 * * 0    cd /app && python manage.py purge_expired_tokens
+0 6 1 * *    cd /app && python manage.py financeiro_gerar_faturas
+30 6 1 * *   cd /app && python manage.py financeiro_emitir_cobrancas
 ```
 
-Os três primeiros aceitam `--escola-id` e os dois primeiros `--dry-run`;
-`financeiro_gerar_faturas` aceita `--competencia YYYY-MM` pra regerar um mês
-específico e `financeiro_emitir_cobrancas` aceita `--competencia`.
-
-**Onde rodar.** O Cron Job do Render é recurso cobrado, e o free tier deste
-projeto não tem nem Pre-Deploy nem agendador (é por isso que o `migrate` e o
-backfill do audit log moram no [`entrypoint.sh`](./entrypoint.sh)). Enquanto o
-ambiente for o free tier, os caminhos são rodar o comando **local com
-`DATABASE_URL` apontando pra prod** ou um agendador externo. Confira no painel
-o que o seu plano oferece antes de assumir qualquer um dos dois.
-
-Na prática, hoje, nenhuma dessas entradas está configurada em ambiente nenhum
-— e é exatamente por isso que a tela "Nova fatura" existe. Quando a migração
-pra VPS acontecer, o cron do sistema resolve tudo isso de uma vez.
+Todos são idempotentes e seguros de repetir. Os do financeiro aceitam
+`--escola-id`, e a geração e a emissão aceitam `--competencia YYYY-MM` e
+`--dry-run`.
 
 ## Portal do responsável: primeiro convite
 
@@ -398,12 +443,14 @@ Em ~10s o evento aparece no painel do Sentry. Apague a view depois.
 - Backup automatizado agendado (ver `scripts/README.md`).
 - Cache compartilhado (Redis) se rodar múltiplas réplicas — pro rate limit de
   login ser global.
-- **As entradas de cron** (seção acima). No free tier elas não existem; num
-  VPS é o cron do sistema, e aí a geração mensal da mensalidade passa a
-  acontecer sozinha.
+- **Passar as tarefas periódicas pro crontab do sistema** (seção acima) e
+  desligar o workflow do Actions — some a dependência do GitHub pra que a
+  mensalidade seja gerada, e o disparo deixa de passar por uma rota pública
+  com token.
 - Rotacionar `SECRET_KEY` e a senha do banco ao nascer o ambiente novo —
   trocar segredo é barato no dia zero e caro depois, com sessão de gente
   dentro.
-- Fila assíncrona dedicada (Celery/Dramatiq/RQ) se o volume de email crescer:
-  hoje o envio é thread daemon best-effort, e é o mesmo trabalho que tira o
-  PDF do WeasyPrint de dentro da request.
+- Fila de broker (Celery/Dramatiq/RQ) **se** o volume justificar: hoje o
+  outbox cobre retry e histórico sem Redis nem segundo processo, que é o que
+  o free tier não dá. O que a fila resolveria e o outbox não é tirar o PDF
+  do WeasyPrint de dentro da request.

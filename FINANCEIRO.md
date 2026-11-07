@@ -54,13 +54,16 @@ Trocar Asaas por outro é reescrever um arquivo.
 
 ### 2.2. Geração por management command, não Celery
 
-O projeto não tem fila (`CLAUDE.md` FASE 4, item 12 — pendente). O
-assíncrono hoje é thread daemon (`ocorrencias`, `comunicados`) mais
-command idempotente de retomada (`comunicados_retomar`). A geração mensal
-segue o mesmo caminho: command + cron, idempotente pelo unique de banco.
+O projeto não tem fila de broker, e **não vai ter por ora**: o item 12 do
+`CLAUDE.md` foi entregue como outbox (`apps/notificacoes`) justamente
+porque Celery/Dramatiq/RQ exigiriam Redis e um segundo processo, e o
+Render free dá um web service só. O assíncrono é thread daemon mais
+registro gravado antes da tentativa, com command de reenvio. A geração
+mensal segue o mesmo princípio: command idempotente pelo unique de banco,
+disparado de fora.
 
-Quando a fila existir, a geração migra sem mudar o modelo — o que garante
-a idempotência é a constraint, não o agendador.
+Se a fila de broker um dia existir, a geração migra sem mudar o modelo —
+o que garante a idempotência é a constraint, não o agendador.
 
 Dois comandos, os dois seguros de repetir:
 
@@ -671,9 +674,12 @@ espalharia o histórico da mesma família por vários clientes.
 
 Nada disso bloqueia a operação manual; bloqueia a automática.
 
-- As **três entradas de cron** (§2.2). Sem elas nenhuma fatura é gerada nem
-  emitida sozinha, e é a tela "Nova fatura" que cobre o buraco. Não estão
-  configuradas em ambiente nenhum hoje.
+- Os **dois secrets do workflow** que dispara os commands (§2.2):
+  `BACKEND_URL` e `TAREFAS_TOKEN` em Settings → Secrets and variables →
+  Actions, mais a env `TAREFAS_TOKEN` com o mesmo valor no servidor. Sem
+  eles o job agendado termina avisando em vez de falhar, então o silêncio
+  não aparece como vermelho — nenhuma fatura é gerada nem emitida sozinha,
+  e é a tela "Nova fatura" que cobre o buraco.
 - As **quatro envs** do gateway (§6) e o **hook cadastrado** no painel do
   Asaas, apontando pra `/api/v1/financeiro/webhooks/asaas/` com o mesmo
   `authToken` que entrar em `ASAAS_WEBHOOK_TOKEN`.
