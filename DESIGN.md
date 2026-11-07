@@ -193,6 +193,38 @@ Usar em todas as páginas internas (Alunos, Turmas, Ocorrências, etc).
 
 ---
 
+### 5.6 Aviso de opções indisponíveis (`AlertaOpcoesIndisponiveis`)
+
+```
+[Alert variant="destructive", largura total, no topo do corpo do dialog]
+"Não foi possível carregar as opções deste formulário. Feche e abra de
+ novo; se continuar, recarregue a página."
+```
+
+Um componente só, em `components/`, para os quinze dialogs de formulário.
+A frase tem que ser **uma** — quinze cópias divergiriam, como divergiram as
+catorze cópias de formatador de data antes do `lib/datas.ts`.
+
+Por que existe: a lista que popula um `<Select>` falha, o select abre vazio,
+e o dialog fica indistinguível de "a escola não tem turma cadastrada". Pior,
+a validação de submit então responde "Selecione uma turma" — a tela **culpa
+o usuário** por uma falha de rede.
+
+Duas regras do travamento do botão que não se deduzem do visual:
+
+- O aviso conta a falha de uma lista **que aquele perfil realmente
+  consome**. O `useEscolas` roda em todo perfil, mas só o admin global vê o
+  select de escola, então contar a falha dele sem `ehAdminGlobal &&`
+  deixaria o **diretor** sem criar turma por causa de uma lista que ele nem
+  vê.
+- Travar o envio só vale pro campo que a própria validação já exige.
+  Professor na ocorrência e pagador no plano são opcionais, e plano/escola só
+  entram na criação — ali o aviso aparece e o botão continua vivo. Quando os
+  dois conjuntos diferem, o dialog tem `falhouCarregar` (aviso) e
+  `bloqueiaEnvio` (botão) separados.
+
+---
+
 ## 6. Status badges
 
 Duas famílias, deliberadamente diferentes — vivem em domínios
@@ -339,6 +371,13 @@ contexto). À direita ou na linha de baixo: botão primário
 Já aplicado no Dashboard quando não há turmas. Replicar em
 listas vazias e em fluxos onde o usuário ainda não cadastrou nada.
 
+**O ramo de vazio vem sempre depois do ramo de `isError`.** No TanStack Query
+o `isLoading` volta a `false` quando a query **falha**, então o skeleton sai
+e o componente cai no vazio — e a tela apresenta falha de rede como resposta
+do servidor ("nenhuma ocorrência em aberto", "nenhum pagamento registrado").
+É erro de desenho, não de código: a tela afirma um fato sobre os dados que
+ela não tem. Ver §8.8.
+
 ### 7.3 Forms e Dialogs
 
 - Dialog em `bg-paper` + `border-border` (default shadcn, herda
@@ -444,6 +483,36 @@ seguidos. Máximo um por bloco visual.
 
 Lucide só com função. Sem ícone "📅" ao lado do label de data, sem
 "👤" ao lado do nome. Tipografia já carrega hierarquia.
+
+### 8.8 Estado vazio sobre leitura que falhou
+
+❌ O que acontecia:
+
+```tsx
+if (isLoading) return <Skeleton />;
+if (!dados?.length) return <SemRegistros />;   // também pega o erro
+```
+
+✅ O que fazer:
+
+```tsx
+if (isLoading) return <Skeleton />;
+if (isError) return <FalhaDeLeitura />;        // antes do vazio
+if (!dados?.length) return <SemRegistros />;
+```
+
+Não é frescura de microcopy. Três formas de estrago, em ordem de gravidade:
+
+1. **Form de edição**: o campo abre vazio **e habilitado** sobre um registro
+   que existe, e salvar dali apaga o que estava no banco. Aqui a correção não
+   é mensagem, é **travar a escrita** (`RegistroAulaFormDialog`).
+2. **Flag derivada de `data`**: `somenteLeitura = registro?.status ===
+   "conferido"` cai pro lado **permissivo** quando a leitura falha, e o
+   travamento que ela fazia vai junto.
+3. **Leitura**: no financeiro, a secretaria conclui que a família não pagou.
+
+Nos dialogs, a forma própria disso é o `AlertaOpcoesIndisponiveis` (§5.6).
+Tem teste de mutação travando as decisões.
 
 ---
 
