@@ -19,6 +19,10 @@ from django.db import transaction
 from django.template.loader import render_to_string
 from django.utils import timezone
 
+from apps.notificacoes.models import Mensagem
+from apps.notificacoes.services import despachar as despachar_notificacao
+from apps.notificacoes.services import registrar as registrar_notificacao
+
 from .models import ConviteResponsavel, Responsavel
 
 logger = logging.getLogger(__name__)
@@ -83,6 +87,19 @@ def montar_email(responsavel, finalidade, token_cru: str) -> EmailMultiAlternati
     return msg
 
 
+def _alternativa_html(mensagem) -> str:
+    """Extrai a parte HTML de um `EmailMultiAlternatives` já montado.
+
+    O outbox guarda texto e HTML em colunas separadas, e `montar_email`
+    devolve a mensagem pronta — desmontar aqui evita mexer no construtor,
+    que é compartilhado com o comando de convite em lote.
+    """
+    for conteudo, tipo in getattr(mensagem, "alternatives", []):
+        if tipo == "text/html":
+            return conteudo
+    return ""
+
+
 def emitir_link(responsavel, finalidade, enviado_por=None) -> ConviteResponsavel:
     """Gera o link e envia o email, **síncrono**. Levanta se o envio falhar.
 
@@ -98,8 +115,30 @@ def emitir_link(responsavel, finalidade, enviado_por=None) -> ConviteResponsavel
     convite, token_cru = ConviteResponsavel.gerar(
         responsavel, finalidade, enviado_por=enviado_por
     )
+    # Pelo outbox, mas **síncrono e all-or-nothing** (`propagar=True`): a
+    # exceção original do provedor sobe, porque é ela que distingue cota
+    # estourada de endereço recusado — trocá-la por uma genérica cegaria
+    # o Sentry e quebraria quem trata o tipo.
+    #
+    # A linha do outbox fica como `falhou` de propósito, mesmo com o
+    # convite apagado: é o rastro de que se tentou avisar este
+    # responsável e não se conseguiu. Ela não será reenviada — convite
+    # não está em `ORIGENS_RETENTAVEIS`, porque o token foi destruído
+    # junto e o reenvio mandaria um link morto.
+    mensagem = montar_email(responsavel, finalidade, token_cru)
+    linhas = registrar_notificacao(
+        [(
+            mensagem.subject,
+            mensagem.body,
+            _alternativa_html(mensagem),
+            responsavel.email,
+        )],
+        origem=Mensagem.Origem.CONVITE_PORTAL,
+        escola_id=responsavel.escola_id,
+        referencia_id=convite.pk,
+    )
     try:
-        montar_email(responsavel, finalidade, token_cru).send(fail_silently=False)
+        despachar_notificacao([linha.pk for linha in linhas], propagar=True)
     except Exception:
         convite.delete()
         raise

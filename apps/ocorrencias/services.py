@@ -16,13 +16,12 @@ header de marca e o info box; clientes minimalistas (ou leitores
 acessíveis) veem o fallback em texto puro.
 """
 import logging
-import threading
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 
-from apps.common.logging import escola_context
+from apps.notificacoes.models import Mensagem
+from apps.notificacoes.services import enviar as enviar_notificacao
 from apps.portal.destinatarios import destinatarios_do_aluno
 
 logger = logging.getLogger(__name__)
@@ -88,53 +87,6 @@ def montar_email_ocorrencia(
     return assunto, texto, html
 
 
-def _enviar_mensagens(mensagens: list[tuple], ocorrencia_id, escola_id) -> None:
-    """Faz o envio SMTP/API de fato. Roda na thread daemon (ou síncrono em testes).
-
-    Recebe uma mensagem **por destinatário**, já montada: com mãe e pai
-    vinculados saem dois emails individuais, nunca um com os dois no `to`
-    — endereço de um responsável não é dado do outro (LGPD), e é o mesmo
-    princípio que o comunicado já segue.
-
-    Multipart: texto plano + alternativa HTML. NUNCA levanta exceção — o
-    erro é logado com stack trace e o loop segue pro próximo destinatário,
-    pra que o email inválido da mãe não impeça o do pai. Em produção isto
-    roda fora da request, então não há ninguém pra propagar o erro de
-    qualquer forma; a ocorrência já está persistida.
-
-    Recebe `escola_id` explícito e o reinjeta no `escola_context`: a thread
-    daemon não herda o ContextVar da request, então sem isto os logs de
-    envio sairiam sem a escola carimbada.
-    """
-    ctx = escola_context.set(escola_id)
-    try:
-        for assunto, texto, html, email_destino in mensagens:
-            try:
-                msg = EmailMultiAlternatives(
-                    subject=assunto,
-                    body=texto,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    to=[email_destino],
-                )
-                msg.attach_alternative(html, "text/html")
-                msg.send(fail_silently=False)
-            except Exception:
-                logger.exception(
-                    "Ocorrência %s: falha ao enviar email para %s.",
-                    ocorrencia_id,
-                    email_destino,
-                )
-            else:
-                logger.info(
-                    "Ocorrência %s: email enviado para %s.",
-                    ocorrencia_id,
-                    email_destino,
-                )
-    finally:
-        # Limpa o contexto: no caminho síncrono (testes) a thread é
-        # reaproveitada, então o escola_id não pode vazar pro próximo log.
-        escola_context.reset(ctx)
-
 
 def notificar_responsavel_ocorrencia(ocorrencia) -> int:
     """Notifica os responsáveis do aluno por email ao registrar a ocorrência.
@@ -144,13 +96,15 @@ def notificar_responsavel_ocorrencia(ocorrencia) -> int:
     aluno com mãe e pai cadastrados gera duas mensagens individuais.
 
     O assunto/corpo são montados aqui (na request, onde as relations e a
-    conexão de DB estão saudáveis); o envio SMTP é disparado numa thread
-    daemon pra não pendurar a resposta HTTP enquanto o provedor responde.
-    Em testes (`settings.TESTING`) o envio é síncrono pra manter o
-    `mail.outbox` determinístico.
+    conexão de DB estão saudáveis) e entregues ao outbox
+    (`apps/notificacoes`), que grava cada mensagem como pendente e só
+    então despacha — em thread daemon, pra não pendurar a resposta HTTP,
+    e síncrono em `settings.TESTING` pra manter o `mail.outbox`
+    determinístico.
 
-    Retorna quantas mensagens foram disparadas (0 = não havia para onde
-    mandar). NUNCA levanta exceção — o chamador (perform_create) não deve
+    Retorna quantas mensagens foram **registradas** (0 = não havia para
+    onde mandar). O desfecho de cada envio fica na linha do outbox, que
+    é onde a escola consulta se o responsável foi mesmo avisado. NUNCA levanta exceção — o chamador (perform_create) não deve
     ser interrompido por problema de email.
     """
     destinatarios = destinatarios_do_aluno(ocorrencia.aluno)
@@ -167,13 +121,13 @@ def notificar_responsavel_ocorrencia(ocorrencia) -> int:
         (*montar_email_ocorrencia(ocorrencia, destinatario.nome), destinatario.email)
         for destinatario in destinatarios
     ]
-    args = (mensagens, ocorrencia.id, ocorrencia.escola_id)
-
-    if getattr(settings, "TESTING", False):
-        # Síncrono em testes: o locmem backend é instantâneo e a asserção
-        # sobre mail.outbox precisa ser determinística (sem corrida de thread).
-        _enviar_mensagens(*args)
-    else:
-        # Fire-and-forget: o POST volta na hora; o email é melhor-esforço.
-        threading.Thread(target=_enviar_mensagens, args=args, daemon=True).start()
-    return len(mensagens)
+    # Passa pelo outbox (`apps/notificacoes`): a mensagem é gravada como
+    # pendente ANTES da tentativa, então o envio que morrer junto com o
+    # processo — deploy e restart são rotina no Render — deixa linha pro
+    # command de retentativa achar. Antes disto, a falha sumia num log.
+    return enviar_notificacao(
+        mensagens,
+        origem=Mensagem.Origem.OCORRENCIA,
+        escola_id=ocorrencia.escola_id,
+        referencia_id=ocorrencia.pk,
+    )
