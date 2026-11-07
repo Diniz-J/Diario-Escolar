@@ -18,13 +18,12 @@ consecutivas de entrega — pendurar a resposta dele esperando o provedor
 de email é como se chega lá.
 """
 import logging
-import threading
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 
-from apps.common.logging import escola_context
+from apps.notificacoes.models import Mensagem
+from apps.notificacoes.services import enviar as enviar_notificacao
 from apps.portal.destinatarios import destinatarios_do_aluno
 
 logger = logging.getLogger(__name__)
@@ -83,44 +82,6 @@ def montar_email_pagamento(
     return assunto, texto, html
 
 
-def _enviar_mensagens(mensagens: list[tuple], fatura_id, escola_id) -> None:
-    """Envia de fato. Roda na thread daemon (ou síncrono em testes).
-
-    NUNCA levanta exceção: o pagamento já está registrado e a fatura já
-    está quitada quando isto roda. O erro é logado com stack trace (e vai
-    pro Sentry pelo `LoggingIntegration`) e o loop segue pro próximo
-    destinatário, pra que o endereço inválido da mãe não impeça o do pai.
-
-    `escola_id` explícito porque a thread não herda o ContextVar da
-    request — sem reinjetar, o log de envio sairia sem a escola carimbada.
-    """
-    ctx = escola_context.set(escola_id)
-    try:
-        for assunto, texto, html, email_destino in mensagens:
-            try:
-                msg = EmailMultiAlternatives(
-                    subject=assunto,
-                    body=texto,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    to=[email_destino],
-                )
-                msg.attach_alternative(html, "text/html")
-                msg.send(fail_silently=False)
-            except Exception:
-                logger.exception(
-                    "Fatura %s: falha ao enviar aviso de pagamento para %s.",
-                    fatura_id,
-                    email_destino,
-                )
-            else:
-                logger.info(
-                    "Fatura %s: aviso de pagamento enviado para %s.",
-                    fatura_id,
-                    email_destino,
-                )
-    finally:
-        escola_context.reset(ctx)
-
 
 def notificar_pagamento(fatura, pagamento) -> int:
     """Avisa os responsáveis do aluno que o pagamento foi recebido.
@@ -146,11 +107,12 @@ def notificar_pagamento(fatura, pagamento) -> int:
         )
         for destinatario in destinatarios
     ]
-    args = (mensagens, fatura.pk, fatura.escola_id)
-
-    if getattr(settings, "TESTING", False):
-        # Síncrono em testes pra manter `mail.outbox` determinístico.
-        _enviar_mensagens(*args)
-    else:
-        threading.Thread(target=_enviar_mensagens, args=args, daemon=True).start()
-    return len(mensagens)
+    # Pelo outbox, como o email de ocorrência: a linha é gravada antes da
+    # tentativa, então falha deixa rastro em vez de só um log — e aviso de
+    # pagamento é retentável (ver ORIGENS_RETENTAVEIS).
+    return enviar_notificacao(
+        mensagens,
+        origem=Mensagem.Origem.PAGAMENTO,
+        escola_id=fatura.escola_id,
+        referencia_id=fatura.pk,
+    )
