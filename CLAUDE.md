@@ -425,6 +425,36 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
   desta: fatiar o Radix por primitivo no `manualChunks` rendia só 11,3 kB
   e atribuía os internos compartilhados (`DismissableLayer`, `Portal`) ao
   primeiro chunk que os pedisse, com nome que mentia.
+- **O que é montado no `App.tsx` é baixado pelos dois**: o `<Toaster>` do
+  sonner morava na raiz comum, então o chunk `index` que o responsável
+  baixa carregava a máquina de toast inteira — **10,1 kB gzip** — pra um
+  portal que não dispara nenhum. Os 117 `toast.success`/`toast.error` do
+  projeto estão todos nos `hooks.ts` das features do staff, e nada na
+  árvore do portal importa `sonner`. Montado no `StaffApp`, o portal caiu
+  de **138,7 para 128,6 kB** (−7,3%) e o staff ficou **igual** — o chunk
+  só mudou de lugar. A regra generaliza: provider ou componente montado no
+  `App.tsx` é peso das duas árvores, e só fica lá o que as duas usam (o
+  `QueryClientProvider` fica).
+- **O wrapper do sonner não segue o tema do sistema**: `theme` é fixo em
+  `"light"`, porque o app é light-mode permanente (`index.css` tem
+  `color-scheme: light` e o bloco `.dark` foi removido). O wrapper do
+  shadcn vinha com `useTheme()` do **`next-themes`** — pacote que nunca
+  teve `ThemeProvider` aqui, então caía sempre no default `"system"`, e
+  com ele o sonner lê `prefers-color-scheme` e marca
+  `data-sonner-theme="dark"`. O `style` inline do wrapper cobre só
+  `--normal-*` e **não** alcança as variáveis do `richColors`; como todo
+  toast daqui é `success` ou `error`, é justamente essa paleta que
+  aparecia. Medido no Chromium: `rgb(0, 31, 15)` de fundo com texto
+  `rgb(89, 243, 166)` contra os `rgb(236, 253, 243)` do claro — caixa
+  quase preta com verde-néon dentro de uma tela linho, no celular com
+  tema escuro. O `next-themes` saiu do `package.json` junto. Tem teste
+  que força `matchMedia` a dizer escuro e exige `data-sonner-theme="light"`.
+- **Precache do PWA ignora o split de chunk**: o `globPatterns` do
+  `vite.config.ts` pega `**/*.js`, e o manifest do service worker inclui
+  `StaffApp` **e** `PortalApp` (30 entradas, ~1120 KiB). Então pro
+  responsável que *instala* o PWA a separação de árvores não economiza
+  nada — o SW baixa a do staff junto. Aberto de propósito: restringir o
+  padrão é decisão à parte, e o PWA acabou de entrar.
 - **Mensagem de erro do backend como UI**: nos dialogs do financeiro o texto do DRF é mostrado em vez de um "erro ao salvar" genérico — é ali que as invariantes se explicam ("Ana já tem fatura na competência 03/2026", vigência sobreposta). Centralizado em `features/financeiro/erros.ts`.
 - **Status badges com paleta da marca** (em vez de red/amber/green/blue genérico do Tailwind):
   - Ocorrência aberta → terracota clarinho + texto destructive.
