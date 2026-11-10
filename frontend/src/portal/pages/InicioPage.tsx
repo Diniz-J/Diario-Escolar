@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 
+import { BotaoInstalarApp, usePodeInstalar } from "@/components/BotaoInstalarApp";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useComunicados, useFilhos } from "@/features/portal/hooks";
 import { formatarDataHora } from "@/lib/datas";
@@ -10,6 +11,7 @@ export function InicioPage() {
   const filhosQuery = useFilhos();
   const comunicadosQuery = useComunicados();
   const recentes = (comunicadosQuery.data ?? []).slice(0, MAX_RECENTES);
+  const podeInstalar = usePodeInstalar();
 
   return (
     <>
@@ -88,6 +90,20 @@ export function InicioPage() {
           </ul>
         )}
       </section>
+
+      {/* Instalar como app no celular. Some quando já instalado ou quando
+          o navegador não permite instalação (card inteiro escondido). */}
+      {podeInstalar && (
+        <section className="rounded-lg bg-paper border border-border p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="space-y-1">
+            <p className="font-medium">Tenha o Diário na tela inicial</p>
+            <p className="text-sm text-muted-foreground">
+              Instale o app no celular para abrir com um toque.
+            </p>
+          </div>
+          <BotaoInstalarApp className="w-full sm:w-auto shrink-0" />
+        </section>
+      )}
     </>
   );
 }

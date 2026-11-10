@@ -3,6 +3,7 @@ import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
 import logoBadge from "@/assets/logo/diario-diniz-badge-claro.svg";
+import { BotaoInstalarApp } from "@/components/BotaoInstalarApp";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -272,10 +273,17 @@ function SidebarBody({
         <button
           type="button"
           onClick={onLogout}
-          className="text-sm text-creme/75 hover:text-creme transition-colors"
+          className="text-sm text-creme/75 hover:text-creme transition-colors block"
         >
           Sair
         </button>
+        {/* Instalar como app (PWA). Some sozinho quando já instalado ou
+            quando o navegador não suporta. */}
+        <BotaoInstalarApp
+          variant="ghost"
+          size="sm"
+          className="mt-3 w-full justify-start px-2 text-creme/75 hover:text-creme hover:bg-white/[0.04]"
+        />
         <p className="mt-3 text-[10px] uppercase tracking-[0.18em] opacity-40">
           v1.0
         </p>
