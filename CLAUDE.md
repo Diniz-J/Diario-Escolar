@@ -449,12 +449,44 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
   quase preta com verde-néon dentro de uma tela linho, no celular com
   tema escuro. O `next-themes` saiu do `package.json` junto. Tem teste
   que força `matchMedia` a dizer escuro e exige `data-sonner-theme="light"`.
-- **Precache do PWA ignora o split de chunk**: o `globPatterns` do
-  `vite.config.ts` pega `**/*.js`, e o manifest do service worker inclui
-  `StaffApp` **e** `PortalApp` (30 entradas, ~1120 KiB). Então pro
-  responsável que *instala* o PWA a separação de árvores não economiza
-  nada — o SW baixa a do staff junto. Aberto de propósito: restringir o
-  padrão é decisão à parte, e o PWA acabou de entrar.
+- **Chunk de rota não entra no precache do PWA**: o `globPatterns` pegava
+  `**/*.js` e o service worker puxava `StaffApp` **e** `PortalApp` na
+  instalação — o SW é um só por origem, então o responsável que instalava
+  o PWA baixava a UI de gestão inteira (454 KiB, 107 kB gzip) e a
+  separação de árvores do `React.lazy` virava nada. Agora os dois estão no
+  `globIgnores`, com uma regra de `runtimeCaching` (`CacheFirst`, nome com
+  hash, `maxEntries: 6`) guardando o chunk que o usuário de fato carregou.
+  Duas coisas que não se deduzem do diff:
+  (1) não há download a mais na primeira visita, porque o SW instala
+  **depois** de a página já ter buscado o chunk; (2) por isso mesmo o
+  chunk só entra no cache de runtime da **segunda** visita em diante,
+  quando o SW controla a página — quem abre uma vez só e fica sem rede na
+  seguinte perde o chunk, o que antes não acontecia. Aceito porque offline
+  não é escopo do PWA hoje (ver "App mobile (PWA)": a decisão foi "com
+  conexão na sala") e portal e chamada dependem da API de todo jeito.
+  **Rota nova com `lazy` na raiz do `App.tsx` precisa entrar no
+  `globIgnores`**, senão volta pro precache de todo mundo em silêncio.
+  Verificado no Chromium nas duas pontas: visita ao `/portal` nunca pede
+  `StaffApp`, visita ao staff nunca pede `PortalApp`, e a terceira visita
+  offline (com `cache-control: no-store`, pra o cache HTTP não mascarar)
+  renderiza as duas telas.
+- **O precache é o shell, e só**: na mesma passada saíram dele os subsets
+  de fonte e os tamanhos de ícone que este app não pede. O `@font-face`
+  do fontsource traz `unicode-range` e os acentos do português são
+  **precompostos** (á = U+00E1, no subset `latin`), então cirílico e
+  vietnamita eram **29,7 KiB** baixados na instalação pra nunca serem
+  usados — continuam no build e vêm pela rede se um nome exigir. O
+  `latin-ext` ficou: é dele que saem os sobrenomes poloneses, húngaros e
+  tchecos do sul do país. Nos ícones, o `index.html` usa 16/32/180 e o
+  manifest usa 192/512; os outros quatro (**35,2 KiB**) não têm quem os
+  referencie no front e saíram do precache, sem apagar arquivo. Cuidado
+  com o de 128: o backend usa um de **cópia própria** em
+  `apps/common/static/branding/` no PDF e nos emails — o do
+  `frontend/public/` é que é órfão, e confundir os dois quebraria os
+  três templates de email. Somando tudo, o precache caiu de **1120 para
+  575 KiB** (25 → 16 entradas) e passou a ser exatamente o shell: entry,
+  chunk comum, CSS, fontes latinas, os ícones referenciados, `index.html`
+  e o manifest.
 - **Mensagem de erro do backend como UI**: nos dialogs do financeiro o texto do DRF é mostrado em vez de um "erro ao salvar" genérico — é ali que as invariantes se explicam ("Ana já tem fatura na competência 03/2026", vigência sobreposta). Centralizado em `features/financeiro/erros.ts`.
 - **Status badges com paleta da marca** (em vez de red/amber/green/blue genérico do Tailwind):
   - Ocorrência aberta → terracota clarinho + texto destructive.
