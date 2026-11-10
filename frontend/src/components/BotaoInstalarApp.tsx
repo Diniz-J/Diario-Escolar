@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { Download, Share } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -9,85 +9,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { usePwaInstall } from "@/lib/pwa";
 
-// Botão "Instalar app" (PWA). O comportamento muda por plataforma:
-//
-// - Android/Chrome e desktop (Chrome/Edge): o navegador dispara o evento
-//   `beforeinstallprompt`. Guardamos o evento e o botão o aciona —
-//   instalação nativa de verdade.
-// - iPhone/Safari: a Apple NÃO expõe instalação por JS. O botão abre um
-//   diálogo com o passo a passo (Compartilhar → Adicionar à Tela de Início).
-// - Já instalado (display-mode standalone), ou navegador sem suporte e
-//   não-iOS (ex.: Firefox/Safari desktop): o componente não renderiza nada.
-
-// `beforeinstallprompt` não está no lib DOM padrão do TS.
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
-}
-
-// Captura em nível de módulo: o `beforeinstallprompt` dispara cedo (no
-// load), antes de qualquer componente montar. Guardamos aqui e avisamos
-// os componentes vivos pelos inscritos — assim o botão funciona mesmo
-// montando depois do evento.
-let promptGuardado: BeforeInstallPromptEvent | null = null;
-const inscritos = new Set<() => void>();
-
-function notificar(): void {
-  for (const fn of inscritos) fn();
-}
-
-if (typeof window !== "undefined") {
-  window.addEventListener("beforeinstallprompt", (e) => {
-    // Impede o mini-infobar automático do Chrome: a instalação passa a
-    // ser só pelo nosso botão.
-    e.preventDefault();
-    promptGuardado = e as BeforeInstallPromptEvent;
-    notificar();
-  });
-  window.addEventListener("appinstalled", () => {
-    promptGuardado = null;
-    notificar();
-  });
-}
-
-function ehIOS(): boolean {
-  if (typeof navigator === "undefined") return false;
-  return /iphone|ipad|ipod/i.test(navigator.userAgent);
-}
-
-function jaInstalado(): boolean {
-  if (typeof window === "undefined") return false;
-  const standalone = window.matchMedia?.("(display-mode: standalone)").matches;
-  // iOS marca o app instalado via `navigator.standalone`.
-  const iosStandalone =
-    (navigator as unknown as { standalone?: boolean }).standalone === true;
-  return Boolean(standalone || iosStandalone);
-}
-
-function subscrever(callback: () => void): () => void {
-  inscritos.add(callback);
-  return () => {
-    inscritos.delete(callback);
-  };
-}
-
-// Snapshot como string estável (primitivo), pra não quebrar o
-// `useSyncExternalStore` com objeto novo a cada render.
-function snapshot(): string {
-  return `${promptGuardado !== null}|${jaInstalado()}`;
-}
-
-// Diz se há algo a oferecer: ou o prompt nativo (Android/desktop) ou o
-// caminho manual do iOS. Exposto pra quem envolve o botão num card poder
-// esconder o card inteiro (texto incluso) quando não há instalação possível.
-export function usePodeInstalar(): boolean {
-  const estado = useSyncExternalStore(subscrever, snapshot);
-  const temPrompt = estado.split("|")[0] === "true";
-  const instalado = estado.split("|")[1] === "true";
-  if (instalado) return false;
-  return temPrompt || ehIOS();
-}
+// Botão "Instalar app" (PWA). A lógica de plataforma mora em `@/lib/pwa`;
+// aqui é só a UI:
+// - Android/desktop: aciona o prompt nativo de instalação.
+// - iPhone/Safari: abre um diálogo com o passo a passo manual.
+// - Já instalado ou sem suporte: não renderiza nada.
 
 interface BotaoInstalarAppProps {
   variant?: React.ComponentProps<typeof Button>["variant"];
@@ -100,31 +28,18 @@ export function BotaoInstalarApp({
   size = "default",
   className,
 }: BotaoInstalarAppProps) {
-  const estado = useSyncExternalStore(subscrever, snapshot);
-  const temPrompt = estado.split("|")[0] === "true";
-  const instalado = estado.split("|")[1] === "true";
+  const { podeInstalar, temPrompt, iOS, instalar } = usePwaInstall();
   const [modalIOS, setModalIOS] = useState(false);
 
-  const iOS = ehIOS();
+  if (!podeInstalar) return null;
 
-  // Já instalado: não há o que oferecer.
-  if (instalado) return null;
-  // Sem prompt nativo e fora do iOS (ex.: Firefox/Safari desktop): o botão
-  // não teria o que fazer, então nem aparece.
-  if (!temPrompt && !iOS) return null;
-
-  async function instalar(): Promise<void> {
+  async function aoClicar(): Promise<void> {
     // iOS sem prompt nativo: só dá pra ensinar o caminho manual.
     if (iOS && !temPrompt) {
       setModalIOS(true);
       return;
     }
-    if (!promptGuardado) return;
-    await promptGuardado.prompt();
-    await promptGuardado.userChoice;
-    // O evento é de uso único: o browser o invalida após `prompt()`.
-    promptGuardado = null;
-    notificar();
+    await instalar();
   }
 
   return (
@@ -134,7 +49,7 @@ export function BotaoInstalarApp({
         variant={variant}
         size={size}
         className={className}
-        onClick={instalar}
+        onClick={aoClicar}
       >
         {iOS && !temPrompt ? <Share /> : <Download />}
         Instalar app

@@ -1,9 +1,10 @@
 import { Link } from "react-router-dom";
 
-import { BotaoInstalarApp, usePodeInstalar } from "@/components/BotaoInstalarApp";
+import { BotaoInstalarApp } from "@/components/BotaoInstalarApp";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useComunicados, useFilhos } from "@/features/portal/hooks";
 import { formatarDataHora } from "@/lib/datas";
+import { usePodeInstalar } from "@/lib/pwa";
 
 const MAX_RECENTES = 3;
 
