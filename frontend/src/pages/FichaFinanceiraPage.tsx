@@ -200,7 +200,7 @@ export function FichaFinanceiraPage() {
             {planos.map((plano) => (
               <li
                 key={plano.id}
-                className="flex flex-wrap items-baseline justify-between gap-3 rounded-md border border-border bg-paper p-4"
+                className="flex flex-wrap items-baseline justify-between gap-3 rounded-lg border border-border bg-paper p-4"
               >
                 <div className="space-y-1">
                   <p className="font-heading text-[18px] text-tinta">
@@ -342,7 +342,7 @@ export function FichaFinanceiraPage() {
             Nenhum pagamento registrado.
           </p>
         ) : (
-          <ul className="divide-y divide-border rounded-md border border-border bg-paper px-4">
+          <ul className="divide-y divide-border rounded-lg border border-border bg-paper px-4">
             {pagamentos.map((pagamento) => (
               <li
                 key={pagamento.id}
