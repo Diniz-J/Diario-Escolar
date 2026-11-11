@@ -41,6 +41,32 @@ if (typeof window !== "undefined") {
   });
 }
 
+// Opt-out manual do convite de instalação, por navegador.
+//
+// Existe por causa do iPhone: o `navigator.standalone` só é verdadeiro
+// DENTRO do app instalado, então o pai que adicionou o Diário à tela de
+// início e depois volta pela aba do Safari continuaria vendo o convite —
+// e não há API que diga o contrário (a Apple não expõe nenhuma). No
+// Android e no desktop o Chrome resolve sozinho (não dispara
+// `beforeinstallprompt` pra app já instalado), mas a chave vale pros
+// dois: quem pede pra sumir quer que suma.
+//
+// Mora no localStorage, então é por navegador e por aparelho, e volta se
+// o usuário limpar os dados do site. Aceitável: o pior caso é rever o
+// convite uma vez.
+const CHAVE_DISPENSADO = "pwa_instalacao_dispensada";
+
+function dispensado(): boolean {
+  if (typeof localStorage === "undefined") return false;
+  return localStorage.getItem(CHAVE_DISPENSADO) === "1";
+}
+
+/** Esconde o convite neste navegador, pra sempre. */
+export function dispensarInstalacao(): void {
+  localStorage.setItem(CHAVE_DISPENSADO, "1");
+  notificar();
+}
+
 export function ehIOS(): boolean {
   if (typeof navigator === "undefined") return false;
   return /iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -65,7 +91,7 @@ function subscrever(callback: () => void): () => void {
 // Snapshot como string estável (primitivo), pra não quebrar o
 // `useSyncExternalStore` com objeto novo a cada render.
 function snapshot(): string {
-  return `${promptGuardado !== null}|${jaInstalado()}`;
+  return `${promptGuardado !== null}|${jaInstalado()}|${dispensado()}`;
 }
 
 export interface EstadoInstalacao {
@@ -84,8 +110,9 @@ export function usePwaInstall(): EstadoInstalacao {
   const estado = useSyncExternalStore(subscrever, snapshot);
   const temPrompt = estado.split("|")[0] === "true";
   const instalado = estado.split("|")[1] === "true";
+  const foiDispensado = estado.split("|")[2] === "true";
   const iOS = ehIOS();
-  const podeInstalar = instalado ? false : temPrompt || iOS;
+  const podeInstalar = instalado || foiDispensado ? false : temPrompt || iOS;
 
   async function instalar(): Promise<void> {
     if (!promptGuardado) return;
