@@ -187,9 +187,14 @@ export function FichaFinanceiraPage() {
           Contratos
         </h2>
         {planos.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nenhum plano de cobrança cadastrado para este aluno.
-          </p>
+          // Invólucro da §7.2 sem título próprio: o <h2> da seção já é o
+          // título, e dois empilhados competiriam.
+          <div className="rounded-lg border border-border bg-paper p-6">
+            <p className="text-sm text-sepia max-w-xl">
+              Nenhum plano de cobrança cadastrado para este aluno. Sem
+              contrato, a geração mensal não tem de onde emitir fatura.
+            </p>
+          </div>
         ) : (
           <ul className="space-y-2">
             {planos.map((plano) => (
@@ -230,24 +235,27 @@ export function FichaFinanceiraPage() {
           Faturas
         </h2>
         {faturas.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nenhuma fatura emitida. A geração mensal cria a partir do
-            contrato.
-          </p>
+          <div className="rounded-lg border border-border bg-paper p-6">
+            <p className="text-sm text-sepia max-w-xl">
+              Nenhuma fatura emitida. A geração mensal cria a partir do
+              contrato.
+            </p>
+          </div>
         ) : (
-          <div className="rounded-md border border-border bg-paper">
+          <div className="rounded-lg border border-border bg-paper overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Competência</TableHead>
-                  <TableHead className="hidden sm:table-cell">
+                  {/* Headers em eyebrow mono — padrão do DESIGN.md §7.1. */}
+                  <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">Competência</TableHead>
+                  <TableHead className="hidden sm:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
                     Vencimento
                   </TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                  <TableHead className="hidden md:table-cell text-right">
+                  <TableHead className="text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">Valor</TableHead>
+                  <TableHead className="hidden lg:table-cell text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
                     Saldo
                   </TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">Status</TableHead>
                   <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
@@ -269,7 +277,7 @@ export function FichaFinanceiraPage() {
                       <TableCell className="text-right">
                         {formatarBRL(fatura.valor)}
                       </TableCell>
-                      <TableCell className="hidden md:table-cell text-right">
+                      <TableCell className="hidden lg:table-cell text-right">
                         {formatarBRL(fatura.saldo)}
                       </TableCell>
                       <TableCell>

@@ -238,27 +238,34 @@ export function FaturasPage() {
           vazia aqui não significa que não há cobrança em aberto.
         </p>
       ) : faturas.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Nenhuma fatura neste recorte.
-        </p>
+        <div className="rounded-lg border border-border bg-paper p-6 space-y-2">
+          <p className="font-heading text-lg text-tinta">
+            Nenhuma fatura neste recorte
+          </p>
+          <p className="text-sm text-sepia max-w-xl">
+            Troque o filtro para ver as outras, ou use "Nova fatura" para
+            lançar uma avulsa.
+          </p>
+        </div>
       ) : (
         <>
-          <div className="rounded-md border border-border bg-paper">
+          <div className="rounded-lg border border-border bg-paper overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Aluno</TableHead>
-                  <TableHead className="hidden sm:table-cell">
+                  {/* Headers em eyebrow mono — padrão do DESIGN.md §7.1. */}
+                  <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">Aluno</TableHead>
+                  <TableHead className="hidden sm:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
                     Competência
                   </TableHead>
-                  <TableHead className="hidden md:table-cell">
+                  <TableHead className="hidden lg:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
                     Vencimento
                   </TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                  <TableHead className="hidden lg:table-cell text-right">
+                  <TableHead className="text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">Valor</TableHead>
+                  <TableHead className="hidden lg:table-cell text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
                     Saldo
                   </TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">Status</TableHead>
                   <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
@@ -271,7 +278,7 @@ export function FaturasPage() {
                       className="cursor-pointer"
                       onClick={() => setDetalhe(fatura)}
                     >
-                      <TableCell>
+                      <TableCell className="whitespace-normal">
                         {/* Leva à ficha do aluno. `stopPropagation` porque
                             a linha inteira abre o detalhe da fatura. */}
                         <Link
@@ -285,7 +292,7 @@ export function FaturasPage() {
                       <TableCell className="hidden sm:table-cell">
                         {formatarCompetencia(fatura.competencia)}
                       </TableCell>
-                      <TableCell className="hidden md:table-cell">
+                      <TableCell className="hidden lg:table-cell">
                         {formatarDataPura(fatura.vencimento)}
                       </TableCell>
                       <TableCell className="text-right">
