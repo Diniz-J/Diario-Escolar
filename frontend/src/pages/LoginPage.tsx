@@ -2,6 +2,7 @@ import axios from "axios";
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
+import { BotaoInstalarApp } from "@/components/BotaoInstalarApp";
 import { useAuth } from "@/features/auth/useAuth";
 
 // Login — paleta olive/linho (Diário Diniz).
@@ -130,6 +131,16 @@ export function LoginPage() {
             {enviando ? "Acessando..." : "Acessar →"}
           </button>
         </form>
+
+        {/* Instalar como app. Fica aqui, e não só dentro da sidebar,
+            porque a sidebar exige estar logado — quem abre o endereço
+            cai nesta tela e é aqui que ele decide instalar. Some
+            sozinho quando já instalado ou sem suporte. */}
+        <BotaoInstalarApp
+          variant="outline"
+          size="sm"
+          className="mt-8 w-full"
+        />
 
         {/* Rodapé sutil — paleta visível em 2 dots + versão. */}
         <div className="mt-12 flex items-center gap-2 text-[11px] text-sepia">
