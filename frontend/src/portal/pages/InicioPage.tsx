@@ -57,6 +57,22 @@ export function InicioPage() {
         )}
       </section>
 
+      {/* Instalar como app no celular. Fica ANTES dos comunicados: no
+          fim da página ele caía abaixo da dobra e só era encontrado por
+          quem rolava até o fim. Some quando já instalado ou quando o
+          navegador não permite instalação (card inteiro escondido). */}
+      {podeInstalar && (
+        <section className="rounded-lg bg-paper border border-border p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="space-y-1">
+            <p className="font-medium">Tenha o Diário na tela inicial</p>
+            <p className="text-sm text-muted-foreground">
+              Instale o app no celular para abrir com um toque.
+            </p>
+          </div>
+          <BotaoInstalarApp className="w-full sm:w-auto shrink-0" />
+        </section>
+      )}
+
       <section className="space-y-3">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="font-heading text-[20px] tracking-tight text-tinta">
@@ -91,20 +107,6 @@ export function InicioPage() {
           </ul>
         )}
       </section>
-
-      {/* Instalar como app no celular. Some quando já instalado ou quando
-          o navegador não permite instalação (card inteiro escondido). */}
-      {podeInstalar && (
-        <section className="rounded-lg bg-paper border border-border p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="space-y-1">
-            <p className="font-medium">Tenha o Diário na tela inicial</p>
-            <p className="text-sm text-muted-foreground">
-              Instale o app no celular para abrir com um toque.
-            </p>
-          </div>
-          <BotaoInstalarApp className="w-full sm:w-auto shrink-0" />
-        </section>
-      )}
     </>
   );
 }
