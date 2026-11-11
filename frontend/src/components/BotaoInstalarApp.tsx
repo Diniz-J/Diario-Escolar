@@ -6,10 +6,11 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { usePwaInstall } from "@/lib/pwa";
+import { dispensarInstalacao, usePwaInstall } from "@/lib/pwa";
 
 // Botão "Instalar app" (PWA). A lógica de plataforma mora em `@/lib/pwa`;
 // aqui é só a UI:
@@ -76,6 +77,22 @@ export function BotaoInstalarApp({
               app na tela inicial.
             </li>
           </ol>
+          {/* Saída manual do convite. No iPhone a aba do Safari não tem
+              como saber que o app já foi adicionado à tela de início
+              (`navigator.standalone` só é verdadeiro dentro do app), e
+              sem isto o convite voltaria a cada visita pelo navegador.
+              Dispensar desmonta o componente inteiro — daí não precisar
+              fechar o diálogo antes. */}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={dispensarInstalacao}
+            >
+              Já instalei, não mostrar de novo
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

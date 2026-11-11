@@ -360,8 +360,16 @@ export function AppLayout() {
 
       {/* Sidebar desktop — só a partir de md. Largura levemente maior
           (60 vs 56) pra acomodar o padding mais respirado da nova
-          identidade. */}
-      <aside className="hidden md:flex w-60 flex-col shrink-0">
+          identidade.
+
+          `h-screen` + `sticky` porque o pai é `min-h-screen`: sem altura
+          própria, a aside esticava junto com o conteúdo do `main` e
+          ficava mais alta que a janela. O `overflow-y-auto` que o `nav`
+          já tinha nunca entrava em ação (não havia o que estourar), e o
+          rodapé — "Sair", "Instalar app", a versão — era empurrado pra
+          fora da tela. Em 1440x900 a versão já não aparecia. Com altura
+          fixa, quem rola é o `nav` e o rodapé fica sempre visível. */}
+      <aside className="hidden md:flex w-60 flex-col shrink-0 md:sticky md:top-0 md:h-screen">
         <SidebarBody
           perfilLabel={perfilLabel}
           onLogout={logout}
