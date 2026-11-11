@@ -353,7 +353,19 @@ contexto). À direita ou na linha de baixo: botão primário
   do scroll. Vale medir (`scrollWidth > clientWidth`) em vez de supor.
 - `TableCell` do shadcn traz `whitespace-nowrap`: conteúdo longo numa
   célula (nome + email + lista) estica a tabela além da viewport. Onde o
-  conteúdo pode quebrar, `whitespace-normal` na célula.
+  conteúdo pode quebrar, `whitespace-normal` na célula. Isso funciona
+  porque o `cn()` passa por **tailwind-merge**, que *remove* o
+  `whitespace-nowrap` da base — concatenar as duas classes à mão (num
+  protótipo, num harness de medição) deixa o `nowrap` vencer, porque ele
+  vem depois na folha e a ordem no atributo `class` não decide nada.
+- **`whitespace-normal` não quebra token sem espaço.** Email, URL e
+  matrícula longa não têm onde quebrar, então a coluna trava na largura
+  do token e a tabela estoura em toda viewport abaixo de `xl`. O lever é
+  **`break-all`** (`word-break`), e não `break-words`
+  (`overflow-wrap`): só o primeiro reduz o min-content que o algoritmo de
+  tabela usa pra dimensionar a coluna. Medido no log de entrega do
+  comunicado: a coluna de email ficava rígida em 306px e sozinha
+  estourava a tabela em +186px a 768px e +117px a 1024px.
 - Linhas de registro inativo: opacidade reduzida + badge `[ inativo ]`
   em `text-[10px] text-sepia uppercase`.
 

@@ -144,6 +144,7 @@ export function ComunicadoDetalhePage() {
           <h1 className="font-heading text-[28px] md:text-[34px] tracking-tight text-tinta leading-[1.15]">
             {comunicado.titulo}
           </h1>
+          <div className="h-px w-10 bg-ferrugem" />
           <div className="flex items-center gap-2">
             <span
               className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[comunicado.status]}`}
@@ -197,7 +198,7 @@ export function ComunicadoDetalhePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-heading tracking-tight">
+          <CardTitle className="font-heading text-lg tracking-tight">
             Mensagem
           </CardTitle>
         </CardHeader>
@@ -269,7 +270,7 @@ export function ComunicadoDetalhePage() {
       ) : (
         <Card>
           <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <CardTitle className="font-heading tracking-tight">
+            <CardTitle className="font-heading text-lg tracking-tight">
               Log de entrega
             </CardTitle>
             <Select value={filtroDest} onValueChange={setFiltroDest}>
@@ -364,30 +365,55 @@ export function ComunicadoDetalhePage() {
                 Nenhum destinatário neste filtro.
               </p>
             ) : (
-              <div className="rounded-lg border border-border overflow-hidden">
+              <div className="rounded-lg border border-border bg-paper overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Aluno</TableHead>
-                      <TableHead>Turma</TableHead>
-                      <TableHead>Responsável</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Status</TableHead>
+                      {/* Headers em eyebrow mono — DESIGN.md §7.1. Em
+                          mobile ficam só Aluno + Status (a pergunta do
+                          log é "chegou em quem"); responsável e email
+                          viram sublinha do aluno. Email volta em md,
+                          responsável em lg, turma em xl — esta tabela
+                          está dentro de um Card, então sobra menos
+                          largura que numa listagem. */}
+                      <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">Aluno</TableHead>
+                      <TableHead className="hidden xl:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                        Turma
+                      </TableHead>
+                      <TableHead className="hidden lg:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                        Responsável
+                      </TableHead>
+                      <TableHead className="hidden md:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                        Email
+                      </TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {destinatariosQuery.data?.map((d) => (
                       <TableRow key={d.id}>
-                        <TableCell className="font-medium">
+                        <TableCell className="font-medium whitespace-normal">
                           {d.aluno_nome}
+                          {/* Abaixo de lg as colunas de responsável e
+                              email somem; o log perderia justamente o
+                              destino sem esta linha. */}
+                          <span className="block text-xs font-normal text-muted-foreground lg:hidden">
+                            {d.nome_responsavel || "sem responsável"}
+                            {d.email && (
+                              <span className="md:hidden break-all">
+                                {" "}
+                                · {d.email}
+                              </span>
+                            )}
+                          </span>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
+                        <TableCell className="hidden xl:table-cell text-muted-foreground">
                           {d.turma_nome ?? "—"}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
+                        <TableCell className="hidden lg:table-cell text-muted-foreground">
                           {d.nome_responsavel || "—"}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
+                        <TableCell className="hidden md:table-cell text-muted-foreground whitespace-normal break-all">
                           {d.email || "—"}
                         </TableCell>
                         <TableCell>

@@ -94,6 +94,25 @@ export function ComunicadosPage() {
   const totalCount = comunicadosQuery.data?.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
+  // Mensagem do estado vazio por cenário (molde da `ResponsaveisPage`):
+  // busca sem resultado, filtro de status sem nenhum, e o cadastro
+  // zerado — este último é o que a escola nova vê, então aponta a saída.
+  function tituloVazio(): string {
+    if (busca.trim()) return "Nenhum comunicado encontrado";
+    if (filtroStatus !== FILTRO_TODOS) return "Nenhum comunicado aqui";
+    return "Nenhum comunicado criado";
+  }
+
+  function detalheVazio(): string {
+    if (busca.trim())
+      return "A busca cobre o título dos comunicados desta página. Tente outro termo.";
+    if (filtroStatus !== FILTRO_TODOS)
+      return "Nenhum comunicado neste status. Troque o filtro para ver os outros.";
+    return podeModificarCadastros
+      ? 'Use "Novo comunicado" para escrever o primeiro. Ele nasce como rascunho e só vira email quando você confirma o envio.'
+      : "A direção ainda não publicou nenhum comunicado.";
+  }
+
   return (
     <div className="p-4 md:p-8 space-y-6">
       <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -162,20 +181,36 @@ export function ComunicadosPage() {
           Não foi possível carregar os comunicados.
         </p>
       ) : filtrados.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Nenhum comunicado encontrado.
-        </p>
+        <div className="rounded-lg border border-border bg-paper p-6 space-y-2">
+          <p className="font-heading text-lg text-tinta">{tituloVazio()}</p>
+          <p className="text-sm text-sepia max-w-xl">{detalheVazio()}</p>
+        </div>
       ) : (
         <>
-          <div className="rounded-lg border border-border overflow-hidden">
+          <div className="rounded-lg border border-border bg-paper overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Título</TableHead>
-                  <TableHead>Destinatários</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Envio</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                  {/* Headers em eyebrow mono — padrão do DESIGN.md §7.1.
+                      Em mobile ficam só Título + Status + Ações: a linha
+                      é clicável e o resto está no detalhe. Envio volta em
+                      md, Destinatários em lg — a sidebar come 240px a
+                      partir de md, então em 768px sobram ~460px. */}
+                  <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                    Título
+                  </TableHead>
+                  <TableHead className="hidden lg:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                    Destinatários
+                  </TableHead>
+                  <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                    Status
+                  </TableHead>
+                  <TableHead className="hidden md:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                    Envio
+                  </TableHead>
+                  <TableHead className="text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                    Ações
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -185,8 +220,15 @@ export function ComunicadosPage() {
                     className="cursor-pointer"
                     onClick={() => navigate(`/comunicados/${c.id}`)}
                   >
-                    <TableCell className="font-medium">{c.titulo}</TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell className="font-medium whitespace-normal">
+                      {c.titulo}
+                      {/* Abaixo de lg a coluna de destino some; sem isto
+                          não dá pra saber a quem o comunicado foi. */}
+                      <span className="block text-xs font-normal text-muted-foreground lg:hidden">
+                        {c.destino_display}
+                      </span>
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-muted-foreground">
                       {c.destino_display}
                     </TableCell>
                     <TableCell>
@@ -196,7 +238,7 @@ export function ComunicadosPage() {
                         {STATUS_LABEL[c.status]}
                       </span>
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
+                    <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
                       {c.status === "rascunho" ? (
                         "Não enviado"
                       ) : (
