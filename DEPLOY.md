@@ -244,8 +244,9 @@ python manage.py comunicados_retomar --id 42    # um específico
 
 O disparo carimba sinal de vida a cada 25 emails, então um lote saudável
 nunca é confundido com um travado. Sem nada travado o comando não faz
-nada, o que o torna seguro de agendar — e é o que a tarefa `comunicados`
-faz, a cada quinze minutos, pelo workflow da seção seguinte.
+nada, o que o torna seguro de agendar. A tarefa `comunicados` do workflow
+é exatamente isso, mas a agenda dela está **desligada** por ora (ver a
+seção seguinte), então hoje a retomada é manual.
 
 Para saber quem recebeu, a página do comunicado tem o log de entrega por
 aluno (enviado / falhou / sem email cadastrado), com a mensagem de erro do
@@ -315,19 +316,31 @@ poria o CI alcançando o banco da escola — bem pior que uma rota com token.
    - `BACKEND_URL` — raiz do backend, **sem barra no fim**.
    - `TAREFAS_TOKEN` — exatamente o mesmo valor do passo 1.
 
-Sem os dois secrets o job termina avisando em vez de falhar vermelho a cada
-quinze minutos, porque repo clonado sem secrets é o estado normal. O custo
-disso é que **o silêncio não aparece como vermelho**: se a mensalidade não
-for gerada no dia 1, confira primeiro se os secrets existem.
+Sem os dois secrets o job termina avisando em vez de falhar vermelho,
+porque repo clonado sem secrets é o estado normal. O custo disso é que **o
+silêncio não aparece como vermelho**: se a mensalidade não for gerada no
+dia 1, confira primeiro se os secrets existem.
 
 ### O que roda, e quando
 
 | Agenda (UTC) | Apelidos | O que faz |
 |---|---|---|
-| `3,18,33,48 * * * *` | `email,comunicados` | reenvia o outbox e retoma lote de comunicado travado |
 | `11 7 * * *` | `vencidas,tokens` | marca fatura vencida e limpa token de redefinição expirado |
 | `11 6 1 * *` | `faturas` | gera as faturas da competência |
 | `41 6 1 * *` | `cobrancas` | emite as cobranças no gateway, meia hora depois |
+| ~~`3,18,33,48 * * * *`~~ | `email,comunicados` | **desligada** — reenvio do outbox e retomada de comunicado |
+
+**A agenda de 15 minutos está comentada** (nov/2026). Enquanto os secrets
+não existem o job sai limpo sem fazer nada, e naquela cadência eram ~96
+execuções verdes por dia enchendo a aba Actions — barato, mas soterra
+falha de CI de verdade no meio da lista. Religar é descomentar uma linha
+no workflow; o `case` do job já mapeia essa agenda, então não há segundo
+lugar pra mexer.
+
+O que ela fazia sai pelo disparo manual (**Run workflow**, que já vem com
+`email,comunicados`) ou pelo command direto. Isso **não** atrasa email: o
+envio é inline no momento do evento, e essa tarefa só retenta o que
+falhou — que fica gravado na `Mensagem` de qualquer jeito.
 
 **Os minutos são quebrados de propósito.** O GitHub avisa que workflow
 agendado na virada da hora atrasa sob carga da plataforma, e é nela que

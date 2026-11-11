@@ -15,8 +15,8 @@
 #   TAREFAS_TOKEN  — o mesmo valor da env `TAREFAS_TOKEN` no servidor
 #
 # Sem eles o job termina avisando, em vez de falhar vermelho a cada
-# quinze minutos: um repo sem os secrets é o estado normal de quem
-# clonou o projeto.
+# disparo: um repo sem os secrets é o estado normal de quem clonou o
+# projeto.
 #
 # **Os minutos são quebrados de propósito.** O GitHub avisa que workflow
 # agendado na virada da hora atrasa sob carga da plataforma, e é nela que
@@ -33,7 +33,21 @@ on:
   schedule:
     # A cada 15 minutos: reenvio do outbox e retomada de comunicado
     # travado no meio do lote.
-    - cron: "3,18,33,48 * * * *"
+    #
+    # DESLIGADA enquanto os secrets não existirem (nov/2026). Sem
+    # `BACKEND_URL`/`TAREFAS_TOKEN` o job sai limpo sem fazer nada, e
+    # nesta cadência eram ~96 execuções verdes por dia enchendo a aba
+    # Actions — barato (repo público tem Actions ilimitado), mas soterra
+    # falha de CI de verdade no meio da lista. As entradas mensais e a
+    # diária ficam de pé: são 2 execuções por dia, não incomodam, e
+    # mantêm o caminho exercitado.
+    #
+    # Pra religar: descomentar a linha abaixo. O `case` do job já mapeia
+    # esta agenda, então não há segundo lugar pra mexer. Enquanto está
+    # desligada, o reenvio do outbox e a retomada de comunicado saem pelo
+    # disparo manual (Run workflow, que já vem com `email,comunicados`)
+    # ou pelo command direto.
+    # - cron: "3,18,33,48 * * * *"
     # Diário, 04:11 em São Paulo: marca fatura vencida e limpa token de
     # redefinição expirado.
     - cron: "11 7 * * *"

@@ -782,13 +782,24 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
     no webhook do Asaas, recusa quando a env está vazia, e falha de uma
     tarefa não cancela as outras. O parâmetro `?tarefas=` é
     **obrigatório** — com o financeiro na lista, um workflow que
-    esquecesse o parâmetro emitiria cobrança real a cada quinze minutos.
+    esquecesse o parâmetro emitiria cobrança real a cada disparo.
 
     O workflow **não tem acesso ao banco** de propósito: rodar
     `manage.py` de lá exigiria o `DATABASE_URL` de produção nos secrets
     do GitHub, o que é pior que uma rota com token. Precisa de dois
     secrets (`BACKEND_URL`, `TAREFAS_TOKEN`) e, sem eles, o job termina
-    avisando em vez de falhar vermelho a cada quinze minutos.
+    avisando em vez de falhar vermelho.
+
+    **A agenda de 15 minutos está comentada** (nov/2026, a pedido do
+    Diniz). Enquanto os secrets não existem o job sai limpo sem fazer
+    nada, e naquela cadência eram ~96 execuções verdes por dia enchendo a
+    aba Actions — soterra falha de CI de verdade no meio da lista. As
+    entradas mensais e a diária seguem de pé. Religar é descomentar uma
+    linha; o `case` do job já mapeia a agenda, então não há segundo lugar
+    pra mexer. Enquanto está desligada, o reenvio do outbox e a retomada
+    de comunicado saem pelo disparo manual ou pelo command — e isso
+    **não** atrasa email, porque o envio é inline no momento do evento e
+    a tarefa só retenta o que falhou.
 
     Limitação aceita: a latência da retentativa é a do cron, e o Actions
     agendado atrasa sob carga. Irrelevante pra email; se um dia algo
