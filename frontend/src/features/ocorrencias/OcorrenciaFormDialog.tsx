@@ -307,7 +307,7 @@ export function OcorrenciaFormDialog({
               rows={5}
               value={descricao}
               onChange={(e) => setDescricao(e.target.value)}
-              className="w-full rounded-md border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition resize-y"
+              className="w-full rounded-lg border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition resize-y"
               placeholder="O que aconteceu?"
             />
           </div>

@@ -396,8 +396,21 @@ ela não tem. Ver §8.8.
   automaticamente).
 - Título do dialog em Fraunces, peso 500, tracking-tight.
 - Labels em **eyebrow mono** (consistente com Login).
-- Inputs idênticos ao Login: `bg-paper border border-border`, foco
-  `border-ferrugem` + `ring-2 ring-ferrugem/20`.
+- Inputs: `bg-paper border border-border`, foco `border-ferrugem` +
+  `ring-2 ring-ferrugem/20`. **O raio é `rounded-lg`** (`--radius`), que é
+  o do `Input`, do `Button` e do `SelectTrigger` do shadcn — e esses são
+  81 dos 87 campos do projeto. Campo escrito à mão (todo `<textarea>`, os
+  `<select>` nativos da ficha do professor e o do boletim no portal)
+  segue esse raio, senão destoa do campo de texto logo acima dele dentro
+  do mesmo dialog, que foi o que aconteceu até nov/2026.
+
+  **As três telas de autenticação são a exceção, e de propósito.** Login,
+  "esqueci minha senha" e "redefinir senha" não importam **nada** do
+  shadcn: campo, botão e caixa de erro são escritos à mão e todos em
+  `rounded-md`. Como não há componente do shadcn ao lado, não há o que
+  destoar — elas são coerentes consigo mesmas. Convergi-las é decisão de
+  desenho (mudaria a cara da primeira tela que o cliente vê), não
+  arrumação.
 - Ações no rodapé: botão secundário `variant="ghost"` à esquerda
   ("Cancelar"), primário olive à direita ("Salvar").
 - Validação inline em vermelho destructive — mesma família do Login.
