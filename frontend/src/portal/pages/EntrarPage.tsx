@@ -2,6 +2,7 @@ import axios from "axios";
 import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
+import { BotaoInstalarApp } from "@/components/BotaoInstalarApp";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -110,6 +111,12 @@ export function EntrarPage() {
         >
           Esqueci minha senha
         </Link>
+
+        {/* Instalar como app. É a tela onde o pai cai vindo do link do
+            convite, e até aqui ele não tem como chegar na home do
+            portal — onde mora o outro convite de instalação. Some
+            sozinho quando já instalado ou sem suporte. */}
+        <BotaoInstalarApp variant="outline" size="sm" className="w-full" />
       </div>
     </div>
   );
