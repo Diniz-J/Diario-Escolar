@@ -131,13 +131,20 @@ export function UsuariosPage() {
           Não foi possível carregar os usuários.
         </p>
       ) : usuarios.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {mostrarInativos
-            ? "Nenhum usuário inativo."
-            : "Nenhum usuário encontrado."}
-        </p>
+        <div className="rounded-lg border border-border bg-paper p-6 space-y-2">
+          <p className="font-heading text-lg text-tinta">
+            {mostrarInativos
+              ? "Nenhum usuário inativo"
+              : "Nenhum usuário encontrado"}
+          </p>
+          <p className="text-sm text-sepia max-w-xl">
+            {mostrarInativos
+              ? "Ninguém foi desativado. Desligue o filtro para ver as contas em uso."
+              : 'A busca cobre nome, usuário e email. Tente outro termo, ou use "Novo usuário" para cadastrar uma conta.'}
+          </p>
+        </div>
       ) : (
-        <div className="rounded-lg border border-border bg-paper">
+        <div className="rounded-lg border border-border bg-paper overflow-hidden">
           {professoresQuery.isError && (
             <p className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
               Não foi possível carregar as fichas de professor, então o
@@ -147,10 +154,15 @@ export function UsuariosPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead className="hidden sm:table-cell">Usuário</TableHead>
-                <TableHead className="hidden md:table-cell">Email</TableHead>
-                <TableHead>Perfil</TableHead>
+                {/* Headers em eyebrow mono — padrão do DESIGN.md §7.1. */}
+                <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">Nome</TableHead>
+                <TableHead className="hidden sm:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                  Usuário
+                </TableHead>
+                <TableHead className="hidden lg:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                  Email
+                </TableHead>
+                <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">Perfil</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
@@ -160,7 +172,7 @@ export function UsuariosPage() {
                 const souEu = u.id === user?.user_id;
                 return (
                   <TableRow key={u.id} className={u.is_active ? "" : "opacity-60"}>
-                    <TableCell>
+                    <TableCell className="whitespace-normal">
                       <span className="font-medium">
                         {[u.first_name, u.last_name].filter(Boolean).join(" ") ||
                           u.username}
@@ -182,7 +194,7 @@ export function UsuariosPage() {
                     <TableCell className="hidden sm:table-cell text-muted-foreground">
                       {u.username}
                     </TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground">
+                    <TableCell className="hidden lg:table-cell text-muted-foreground whitespace-normal break-all">
                       {u.email}
                     </TableCell>
                     <TableCell>

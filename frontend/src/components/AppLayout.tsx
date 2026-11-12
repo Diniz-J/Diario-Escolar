@@ -116,7 +116,13 @@ function SidebarBody({
         </p>
       </div>
 
-      <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
+      {/* `data-slot` liga a regra de scrollbar do `index.css`: o nav rola
+          em viewport baixo, mas o scrollbar nativo do Windows (grosso,
+          com setas, em tom claro) ficava berrante sobre o olive-dark. */}
+      <nav
+        data-slot="sidebar-nav"
+        className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto"
+      >
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}

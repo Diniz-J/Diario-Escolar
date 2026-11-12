@@ -56,6 +56,20 @@ describe("FaturasPage", () => {
     expect(await screen.findByText("Ana Lima")).toBeInTheDocument();
   });
 
+  it("mostra o estado vazio quando a API responde sem faturas", async () => {
+    autenticarComo("diretor");
+    responderFaturas(() => HttpResponse.json({ count: 0, results: [] }));
+    renderizar(<FaturasPage />, "/financeiro");
+
+    // Controle positivo do teste seguinte: sem esta asserção, a string lá
+    // poderia envelhecer junto com a cópia e o `queryByText` passaria a
+    // procurar um texto que não existe em tela nenhuma — nulo sempre, e
+    // verde pelo motivo errado.
+    expect(
+      await screen.findByText("Nenhuma fatura neste recorte"),
+    ).toBeInTheDocument();
+  });
+
   it("não deixa a falha passar por 'nenhuma fatura'", async () => {
     autenticarComo("diretor");
     responderFaturas(() => HttpResponse.json({ detail: "boom" }, { status: 500 }));
@@ -66,8 +80,11 @@ describe("FaturasPage", () => {
     expect(
       await screen.findByText(/Não foi possível carregar as faturas/),
     ).toBeInTheDocument();
+    // Título do estado vazio (§7.2 tirou o ponto final). A string tem que
+    // acompanhar a cópia: `queryByText` de um texto que não existe mais é
+    // sempre nulo, e o teste passaria sem provar nada.
     expect(
-      screen.queryByText("Nenhuma fatura neste recorte."),
+      screen.queryByText("Nenhuma fatura neste recorte"),
     ).not.toBeInTheDocument();
   });
 });

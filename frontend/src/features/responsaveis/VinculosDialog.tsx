@@ -153,7 +153,7 @@ export function VinculosDialog({
                 campo de responsável do cadastro dele.
               </p>
             ) : (
-              <ul className="divide-y divide-border rounded-md border border-border">
+              <ul className="divide-y divide-border rounded-lg border border-border">
                 {vinculos.map((v) => (
                   <li
                     key={v.id}

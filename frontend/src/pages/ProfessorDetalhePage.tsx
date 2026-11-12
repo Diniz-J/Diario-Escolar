@@ -494,7 +494,7 @@ function AulaItem({
 }) {
   const estilo = STATUS_AULA[aula.status];
   return (
-    <li className="rounded-md border border-border bg-paper px-4 py-3">
+    <li className="rounded-lg border border-border bg-paper px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-sm font-medium text-tinta tabular-nums">
           {formatarDataPura(aula.data)}
@@ -712,7 +712,7 @@ function OcorrenciasTab({
 
 function ContadorAula({ valor, label }: { valor: number; label: string }) {
   return (
-    <div className="rounded-md border border-border bg-paper px-4 py-3">
+    <div className="rounded-lg border border-border bg-paper px-4 py-3">
       <div className="font-heading text-2xl leading-none text-tinta tabular-nums">
         {valor}
       </div>

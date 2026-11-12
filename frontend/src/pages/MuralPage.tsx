@@ -123,6 +123,27 @@ export function MuralPage() {
     if (materiais.length === 1 && page > 1) setPage((p) => p - 1);
   }
 
+  // Estado vazio por cenário, no molde da `ResponsaveisPage`. O caso do
+  // inspetor é o que mais importa: sem cadastro de professor a lista é
+  // sempre vazia, e "nenhum publicado ainda" daria a entender que um dia
+  // vai ter. Mesmo tom do aviso do Diário de Aula.
+  function tituloVazio(): string {
+    if (!podePublicar && !professoresQuery.isLoading)
+      return "Esta área é de quem leciona";
+    if (mostrarDespublicados) return "Nenhum material despublicado";
+    return "Nenhum material publicado ainda";
+  }
+
+  function detalheVazio(): string {
+    if (!podePublicar && !professoresQuery.isLoading)
+      return "Seu usuário não tem um cadastro de professor vinculado, então não há mural para mostrar.";
+    if (mostrarDespublicados)
+      return "Nada foi tirado do ar. Desligue o filtro para ver o que está publicado.";
+    return podePublicar
+      ? 'Use "Publicar material" para deixar uma lista de exercícios, uma leitura ou um recado com link. Aparece no portal dos responsáveis.'
+      : "Nenhum material foi publicado nas turmas até agora.";
+  }
+
   function abrirForm(material: Material | null) {
     setEditando(material);
     setFormKey((k) => k + 1);
@@ -219,35 +240,32 @@ export function MuralPage() {
           Não foi possível carregar o mural.
         </p>
       ) : materiais.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {/* Sem cadastro de professor (ex.: inspetor) a lista é sempre
-              vazia — "nenhum publicado ainda" daria a entender que um dia
-              vai ter. Mesmo tom do aviso do Diário de Aula. */}
-          {!podePublicar && !professoresQuery.isLoading
-            ? "Esta área é de quem leciona — seu usuário não tem um cadastro de professor vinculado."
-            : mostrarDespublicados
-              ? "Nenhum material despublicado."
-              : "Nenhum material publicado ainda."}
-        </p>
+        <div className="rounded-lg border border-border bg-paper p-6 space-y-2">
+          <p className="font-heading text-lg text-tinta">{tituloVazio()}</p>
+          <p className="text-sm text-sepia max-w-xl">{detalheVazio()}</p>
+        </div>
       ) : (
         <>
-          <div className="rounded-lg border border-border overflow-hidden">
+          <div className="rounded-lg border border-border bg-paper overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Título</TableHead>
-                  <TableHead className="hidden md:table-cell">
+                  {/* Headers em eyebrow mono — padrão do DESIGN.md §7.1. */}
+                  <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">Título</TableHead>
+                  <TableHead className="hidden md:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
                     Turma — disciplina
                   </TableHead>
                   {ehDirecao && (
-                    <TableHead className="hidden lg:table-cell">
+                    <TableHead className="hidden lg:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
                       Professor
                     </TableHead>
                   )}
-                  <TableHead className="hidden sm:table-cell">
+                  <TableHead className="hidden sm:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
                     Publicado
                   </TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                  <TableHead className="text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                    Ações
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

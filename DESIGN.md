@@ -353,7 +353,19 @@ contexto). À direita ou na linha de baixo: botão primário
   do scroll. Vale medir (`scrollWidth > clientWidth`) em vez de supor.
 - `TableCell` do shadcn traz `whitespace-nowrap`: conteúdo longo numa
   célula (nome + email + lista) estica a tabela além da viewport. Onde o
-  conteúdo pode quebrar, `whitespace-normal` na célula.
+  conteúdo pode quebrar, `whitespace-normal` na célula. Isso funciona
+  porque o `cn()` passa por **tailwind-merge**, que *remove* o
+  `whitespace-nowrap` da base — concatenar as duas classes à mão (num
+  protótipo, num harness de medição) deixa o `nowrap` vencer, porque ele
+  vem depois na folha e a ordem no atributo `class` não decide nada.
+- **`whitespace-normal` não quebra token sem espaço.** Email, URL e
+  matrícula longa não têm onde quebrar, então a coluna trava na largura
+  do token e a tabela estoura em toda viewport abaixo de `xl`. O lever é
+  **`break-all`** (`word-break`), e não `break-words`
+  (`overflow-wrap`): só o primeiro reduz o min-content que o algoritmo de
+  tabela usa pra dimensionar a coluna. Medido no log de entrega do
+  comunicado: a coluna de email ficava rígida em 306px e sozinha
+  estourava a tabela em +186px a 768px e +117px a 1024px.
 - Linhas de registro inativo: opacidade reduzida + badge `[ inativo ]`
   em `text-[10px] text-sepia uppercase`.
 
@@ -384,8 +396,25 @@ ela não tem. Ver §8.8.
   automaticamente).
 - Título do dialog em Fraunces, peso 500, tracking-tight.
 - Labels em **eyebrow mono** (consistente com Login).
-- Inputs idênticos ao Login: `bg-paper border border-border`, foco
-  `border-ferrugem` + `ring-2 ring-ferrugem/20`.
+- Inputs: `bg-paper border border-border`, foco `border-ferrugem` +
+  `ring-2 ring-ferrugem/20`. **O raio é `rounded-lg`** (`--radius`), que é
+  o do `Input`, do `Button` e do `SelectTrigger` do shadcn — e esses são
+  81 dos 87 campos do projeto. Campo escrito à mão (todo `<textarea>`, os
+  `<select>` nativos da ficha do professor e o do boletim no portal)
+  segue esse raio, senão destoa do campo de texto logo acima dele dentro
+  do mesmo dialog, que foi o que aconteceu até nov/2026.
+
+  **As três telas de autenticação seguem a mesma regra desde nov/2026.**
+  Login, "esqueci minha senha" e "redefinir senha" não importam nada do
+  shadcn — campo, botão e caixa de aviso são escritos à mão — e por isso
+  viviam em `rounded-md`, coerentes entre si e divergentes do resto. O
+  Diniz decidiu convergir: as três agora são `rounded-lg` por inteiro, o
+  que faz o campo bater com o `Input`, o botão com o `Button` e a caixa
+  de aviso com o `Alert`. Verificado na página servida: o campo e o botão
+  do Login computam 10px, que é `--radius`.
+
+  Os `rounded-full` dos dois pontinhos do rodapé do Login ficam — são
+  marcador, não bloco.
 - Ações no rodapé: botão secundário `variant="ghost"` à esquerda
   ("Cancelar"), primário olive à direita ("Salvar").
 - Validação inline em vermelho destructive — mesma família do Login.
