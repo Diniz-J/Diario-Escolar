@@ -80,7 +80,7 @@ export function RedefinirSenhaPage() {
 
         {sucesso ? (
           <div className="space-y-6">
-            <p className="text-sm px-3 py-3 rounded-md bg-olive/10 text-olive border border-olive/20">
+            <p className="text-sm px-3 py-3 rounded-lg bg-olive/10 text-olive border border-olive/20">
               Senha redefinida. Redirecionando para o login...
             </p>
           </div>
@@ -101,7 +101,7 @@ export function RedefinirSenhaPage() {
                 minLength={8}
                 value={novaSenha}
                 onChange={(e) => setNovaSenha(e.target.value)}
-                className="w-full px-3 py-2.5 text-base rounded-md bg-paper border border-border text-tinta focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
+                className="w-full px-3 py-2.5 text-base rounded-lg bg-paper border border-border text-tinta focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
               />
             </div>
 
@@ -120,12 +120,12 @@ export function RedefinirSenhaPage() {
                 minLength={8}
                 value={confirmar}
                 onChange={(e) => setConfirmar(e.target.value)}
-                className="w-full px-3 py-2.5 text-base rounded-md bg-paper border border-border text-tinta focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
+                className="w-full px-3 py-2.5 text-base rounded-lg bg-paper border border-border text-tinta focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
               />
             </div>
 
             {erro && (
-              <p className="text-sm px-3 py-2 rounded-md bg-destructive/15 text-destructive border border-destructive/30">
+              <p className="text-sm px-3 py-2 rounded-lg bg-destructive/15 text-destructive border border-destructive/30">
                 {erro}
               </p>
             )}
@@ -133,7 +133,7 @@ export function RedefinirSenhaPage() {
             <button
               type="submit"
               disabled={confirmMutation.isPending}
-              className="w-full py-3 text-base font-medium rounded-md bg-olive text-creme hover:bg-olive-dark transition disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full py-3 text-base font-medium rounded-lg bg-olive text-creme hover:bg-olive-dark transition disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {confirmMutation.isPending ? "Salvando..." : "Salvar →"}
             </button>

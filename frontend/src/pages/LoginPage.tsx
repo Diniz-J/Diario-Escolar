@@ -86,7 +86,7 @@ export function LoginPage() {
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-3 py-2.5 text-base rounded-md bg-paper border border-border text-tinta focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
+              className="w-full px-3 py-2.5 text-base rounded-lg bg-paper border border-border text-tinta focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
             />
           </div>
 
@@ -112,12 +112,12 @@ export function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2.5 text-base rounded-md bg-paper border border-border text-tinta focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
+              className="w-full px-3 py-2.5 text-base rounded-lg bg-paper border border-border text-tinta focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
             />
           </div>
 
           {erro && (
-            <p className="text-sm px-3 py-2 rounded-md bg-destructive/15 text-destructive border border-destructive/30">
+            <p className="text-sm px-3 py-2 rounded-lg bg-destructive/15 text-destructive border border-destructive/30">
               {erro}
             </p>
           )}
@@ -125,7 +125,7 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={enviando}
-            className="w-full py-3 text-base font-medium rounded-md bg-olive text-creme hover:bg-olive-dark transition disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full py-3 text-base font-medium rounded-lg bg-olive text-creme hover:bg-olive-dark transition disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {enviando ? "Acessando..." : "Acessar →"}
           </button>

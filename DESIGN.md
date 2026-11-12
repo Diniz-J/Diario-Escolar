@@ -404,13 +404,17 @@ ela não tem. Ver §8.8.
   segue esse raio, senão destoa do campo de texto logo acima dele dentro
   do mesmo dialog, que foi o que aconteceu até nov/2026.
 
-  **As três telas de autenticação são a exceção, e de propósito.** Login,
-  "esqueci minha senha" e "redefinir senha" não importam **nada** do
-  shadcn: campo, botão e caixa de erro são escritos à mão e todos em
-  `rounded-md`. Como não há componente do shadcn ao lado, não há o que
-  destoar — elas são coerentes consigo mesmas. Convergi-las é decisão de
-  desenho (mudaria a cara da primeira tela que o cliente vê), não
-  arrumação.
+  **As três telas de autenticação seguem a mesma regra desde nov/2026.**
+  Login, "esqueci minha senha" e "redefinir senha" não importam nada do
+  shadcn — campo, botão e caixa de aviso são escritos à mão — e por isso
+  viviam em `rounded-md`, coerentes entre si e divergentes do resto. O
+  Diniz decidiu convergir: as três agora são `rounded-lg` por inteiro, o
+  que faz o campo bater com o `Input`, o botão com o `Button` e a caixa
+  de aviso com o `Alert`. Verificado na página servida: o campo e o botão
+  do Login computam 10px, que é `--radius`.
+
+  Os `rounded-full` dos dois pontinhos do rodapé do Login ficam — são
+  marcador, não bloco.
 - Ações no rodapé: botão secundário `variant="ghost"` à esquerda
   ("Cancelar"), primário olive à direita ("Salvar").
 - Validação inline em vermelho destructive — mesma família do Login.

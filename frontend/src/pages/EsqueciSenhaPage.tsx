@@ -57,7 +57,7 @@ export function EsqueciSenhaPage() {
 
         {enviado ? (
           <div className="space-y-6">
-            <p className="text-sm px-3 py-3 rounded-md bg-olive/10 text-olive border border-olive/20">
+            <p className="text-sm px-3 py-3 rounded-lg bg-olive/10 text-olive border border-olive/20">
               Se o usuário existir e tiver email cadastrado, um link de
               redefinição foi enviado. Verifique sua caixa de entrada (e o
               spam). O link expira em 1 hora.
@@ -85,12 +85,12 @@ export function EsqueciSenhaPage() {
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-3 py-2.5 text-base rounded-md bg-paper border border-border text-tinta focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
+                className="w-full px-3 py-2.5 text-base rounded-lg bg-paper border border-border text-tinta focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
               />
             </div>
 
             {erro && (
-              <p className="text-sm px-3 py-2 rounded-md bg-destructive/15 text-destructive border border-destructive/30">
+              <p className="text-sm px-3 py-2 rounded-lg bg-destructive/15 text-destructive border border-destructive/30">
                 {erro}
               </p>
             )}
@@ -98,7 +98,7 @@ export function EsqueciSenhaPage() {
             <button
               type="submit"
               disabled={requestMutation.isPending}
-              className="w-full py-3 text-base font-medium rounded-md bg-olive text-creme hover:bg-olive-dark transition disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full py-3 text-base font-medium rounded-lg bg-olive text-creme hover:bg-olive-dark transition disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {requestMutation.isPending ? "Enviando..." : "Enviar link →"}
             </button>
