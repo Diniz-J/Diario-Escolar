@@ -86,7 +86,7 @@ export function EnviarComunicadoDialog({
               )}
 
               {previa && (
-                <div className="rounded-md bg-muted p-3 space-y-1 text-sm">
+                <div className="rounded-lg bg-muted p-3 space-y-1 text-sm">
                   <div>
                     <strong className="text-foreground">
                       {previa.total_emails}

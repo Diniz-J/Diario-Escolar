@@ -415,6 +415,33 @@ ela não tem. Ver §8.8.
 
   Os `rounded-full` dos dois pontinhos do rodapé do Login ficam — são
   marcador, não bloco.
+
+### 7.3.1 Raio: uma regra só
+
+A pergunta "qual raio vai aqui" tem uma resposta, e ela não é o gosto de
+quem escreve a tela: **o que imita um componente do shadcn usa o raio
+dele**, que é `rounded-lg` (`--radius`) no `Input`, no `Button`, no
+`SelectTrigger`, no `Alert` e no `Card`. Vale pro campo escrito à mão
+(§7.3), pro botão escrito à mão e pra **caixa de aviso** — aquele
+parágrafo em `bg-destructive/15`, `bg-olive/10`, `bg-muted` ou
+`bg-paper` que explica o que deu errado, o que vai acontecer ou o que o
+recorte contém. Eram nove, espalhadas por seis telas, todas em
+`rounded-md`: desenhavam um `Alert` com o raio errado.
+
+Bloco em `bg-paper` com borda também é `rounded-lg`, pelo mesmo motivo
+(§7.1 pro wrapper de tabela, §7.2 pro estado vazio, §7.4 pro card de
+seção).
+
+Três famílias ficam **de propósito** em `rounded-md`, e nenhuma delas
+imita componente:
+
+- Os botões `P`/`A`/`J`/`R` da chamada (`PresencaDetalhePage`) — grade
+  de quadradinhos de 36px com paleta e hover próprios (§6.2); raio maior
+  os arredondaria até virar pílula.
+- Os itens de navegação da sidebar e o badge da marca (`AppLayout`) —
+  densidade alta, numa faixa estreita.
+- A barra fixa de "Salvar alterações" do plano de ensino — é fundo
+  translúcido com `backdrop-blur`, não card.
 - Ações no rodapé: botão secundário `variant="ghost"` à esquerda
   ("Cancelar"), primário olive à direita ("Salvar").
 - Validação inline em vermelho destructive — mesma família do Login.

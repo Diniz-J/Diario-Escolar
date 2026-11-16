@@ -204,7 +204,7 @@ export function AvaliacaoDetalhePage() {
         // Alerta em mostarda translúcida — mesma família dos badges "em
         // curso" (DESIGN.md §6.3), a 40% pra servir de fundo de bloco em
         // vez de etiqueta.
-        <div className="rounded-md border border-ferrugem/40 bg-mostarda/40 px-4 py-3 text-sm text-tinta">
+        <div className="rounded-lg border border-ferrugem/40 bg-mostarda/40 px-4 py-3 text-sm text-tinta">
           A data desta avaliação não cai em nenhum período avaliativo
           cadastrado. Cadastre um período em{" "}
           <Link
