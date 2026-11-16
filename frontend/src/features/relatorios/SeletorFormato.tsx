@@ -30,7 +30,7 @@ export function SeletorFormato({ valor, onChange }: SeletorFormatoProps) {
             key={opcao.valor}
             type="button"
             onClick={() => onChange(opcao.valor)}
-            className={`rounded-md border px-2 py-2 text-left transition-colors ${
+            className={`rounded-lg border px-2 py-2 text-left transition-colors ${
               valor === opcao.valor
                 ? "border-ferrugem bg-ferrugem/10"
                 : "border-border hover:bg-muted"

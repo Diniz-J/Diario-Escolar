@@ -158,27 +158,43 @@ export function PlanosCobrancaPage() {
           cadastrar — o contrato do aluno pode já existir.
         </p>
       ) : planos.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {mostrarEncerrados
-            ? "Nenhum plano encerrado."
-            : "Nenhum plano ativo. Cadastre o contrato do primeiro aluno."}
-        </p>
+        <div className="rounded-lg border border-border bg-paper p-6 space-y-2">
+          <p className="font-heading text-lg text-tinta">
+            {mostrarEncerrados
+              ? "Nenhum plano encerrado"
+              : "Nenhum plano ativo"}
+          </p>
+          <p className="text-sm text-sepia max-w-xl">
+            {mostrarEncerrados
+              ? "Nenhum contrato foi encerrado. Desligue o filtro para ver os que estão valendo."
+              : 'Use "Novo plano" para cadastrar o contrato do primeiro aluno — valor, dia de vencimento e vigência.'}
+          </p>
+        </div>
       ) : (
         <>
-          <div className="rounded-md border border-border bg-paper">
+          <div className="rounded-lg border border-border bg-paper overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Aluno</TableHead>
-                  <TableHead className="text-right">Mensalidade</TableHead>
-                  <TableHead className="hidden sm:table-cell text-right">
+                  {/* Headers em eyebrow mono — padrão do DESIGN.md §7.1.
+                      Em mobile ficam só Aluno + Efetivo + ⋯: efetivo é o
+                      que a escola cobra de fato; mensalidade cheia e
+                      desconto são a conta que leva até ele. Vencimento e
+                      vigência só em lg — com os dois em md as sete
+                      colunas estouravam os ~462px que sobram da sidebar
+                      (medido). */}
+                  <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">Aluno</TableHead>
+                  <TableHead className="hidden sm:table-cell text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                    Mensalidade
+                  </TableHead>
+                  <TableHead className="hidden sm:table-cell text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
                     Desconto
                   </TableHead>
-                  <TableHead className="text-right">Efetivo</TableHead>
-                  <TableHead className="hidden md:table-cell">
+                  <TableHead className="text-right text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">Efetivo</TableHead>
+                  <TableHead className="hidden lg:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
                     Vencimento
                   </TableHead>
-                  <TableHead className="hidden lg:table-cell">
+                  <TableHead className="hidden lg:table-cell text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
                     Vigência
                   </TableHead>
                   <TableHead className="w-10" />
@@ -191,7 +207,7 @@ export function PlanosCobrancaPage() {
                     className="cursor-pointer"
                     onClick={() => abrirForm(plano)}
                   >
-                    <TableCell>
+                    <TableCell className="whitespace-normal">
                       {plano.aluno_nome}
                       {!plano.ativo && (
                         <span className="ml-2 text-[11px] uppercase tracking-[0.14em] text-sepia">
@@ -199,7 +215,7 @@ export function PlanosCobrancaPage() {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="hidden sm:table-cell text-right">
                       {formatarBRL(plano.valor_mensalidade)}
                     </TableCell>
                     <TableCell className="hidden sm:table-cell text-right">
@@ -208,7 +224,7 @@ export function PlanosCobrancaPage() {
                     <TableCell className="text-right font-heading">
                       {formatarBRL(plano.valor_efetivo)}
                     </TableCell>
-                    <TableCell className="hidden md:table-cell">
+                    <TableCell className="hidden lg:table-cell">
                       dia {plano.dia_vencimento}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-sepia">

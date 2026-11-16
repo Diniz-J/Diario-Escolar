@@ -90,7 +90,7 @@ export function PagamentoFormDialog({
 
         {fatura && (
           <div className="space-y-4">
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-paper p-3 text-sm">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-paper p-3 text-sm">
               <dt className={LABEL_CLASS}>Saldo</dt>
               <dd className="text-right">{formatarBRL(fatura.saldo)}</dd>
               {temEncargos && (

@@ -233,7 +233,7 @@ export function DiarioAulaPage() {
                 return (
                   <li
                     key={slot.data}
-                    className="flex items-center gap-4 rounded-md border border-border bg-paper px-4 py-3"
+                    className="flex items-center gap-4 rounded-lg border border-border bg-paper px-4 py-3"
                   >
                     <div className="w-20 shrink-0">
                       <div className="text-sm font-medium text-tinta">

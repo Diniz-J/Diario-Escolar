@@ -189,6 +189,22 @@
   background: var(--muted-foreground);
 }
 
+/* Sidebar: rola sem scrollbar visível. O nav precisa de `overflow-y-auto`
+   (em viewport baixo os itens não cabem e o rodapé tem que ficar à vista),
+   mas o scrollbar nativo do Windows — track claro, grosso, com setas —
+   cortava a faixa olive-dark ao meio. Esconder é deliberado e não tira a
+   rolagem: roda, trackpad, teclado e arrasto continuam funcionando, e o
+   item cortado na borda de baixo é o que sinaliza que há mais.
+   Não reusa o bloco de `table-container` acima porque lá a barra fininha
+   é desejada: tabela que rola na horizontal sem barra nenhuma esconde
+   coluna sem avisar. */
+[data-slot="sidebar-nav"] {
+  scrollbar-width: none;
+}
+[data-slot="sidebar-nav"]::-webkit-scrollbar {
+  display: none;
+}
+
 /* Regras de impressão — usadas principalmente pelo boletim.
    Esconde sidebar via `aside { display: none }`, força fundo branco
    e texto preto pra economizar tinta. */

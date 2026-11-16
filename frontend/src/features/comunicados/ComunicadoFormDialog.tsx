@@ -231,7 +231,7 @@ export function ComunicadoFormDialog({
               rows={8}
               value={mensagem}
               onChange={(e) => setMensagem(e.target.value)}
-              className="w-full rounded-md border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition resize-y"
+              className="w-full rounded-lg border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition resize-y"
               placeholder="Escreva o comunicado como você quer que os responsáveis leiam."
             />
             <p className="text-xs text-muted-foreground">
@@ -275,7 +275,7 @@ export function ComunicadoFormDialog({
                     : "Nenhuma turma cadastrada."}
                 </p>
               ) : (
-                <div className="max-h-48 overflow-y-auto rounded-md border border-border p-3 space-y-2">
+                <div className="max-h-48 overflow-y-auto rounded-lg border border-border p-3 space-y-2">
                   {turmasDisponiveis.map((t) => (
                     <div key={t.id} className="flex items-center gap-2">
                       <input

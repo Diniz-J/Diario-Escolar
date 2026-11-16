@@ -115,14 +115,14 @@ export function ImportPage() {
     if (!resultado) return null;
     if (resultado.persistido) {
       return (
-        <p className="text-sm px-3 py-2 rounded-md bg-olive/10 text-olive border border-olive/20">
+        <p className="text-sm px-3 py-2 rounded-lg bg-olive/10 text-olive border border-olive/20">
           {resultado.criados} registros gravados. Pulados:{" "}
           {resultado.pulados.length}.
         </p>
       );
     }
     return (
-      <p className="text-sm px-3 py-2 rounded-md bg-paper border border-border text-sepia">
+      <p className="text-sm px-3 py-2 rounded-lg bg-paper border border-border text-sepia">
         Pré-visualização — nada foi salvo. {resultado.criados} seriam
         criados, {resultado.pulados.length} pulados.
       </p>
@@ -142,13 +142,13 @@ export function ImportPage() {
       </header>
 
       {escolasQuery.isError && (
-        <p className="text-sm px-3 py-2 rounded-md bg-paper border border-border text-destructive">
+        <p className="text-sm px-3 py-2 rounded-lg bg-paper border border-border text-destructive">
           Não foi possível carregar as escolas elegíveis. Recarregue a página.
         </p>
       )}
 
       {escolasQuery.isSuccess && escolas.length === 0 && (
-        <p className="text-sm px-3 py-2 rounded-md bg-paper border border-border text-sepia">
+        <p className="text-sm px-3 py-2 rounded-lg bg-paper border border-border text-sepia">
           Nenhuma escola elegível ao pacote de importação em lote. Habilite o
           flag <code>importacao_em_lote_habilitada</code> no /admin/ pra
           liberar.
@@ -220,7 +220,7 @@ export function ImportPage() {
             type="file"
             accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             onChange={handleArquivo}
-            className="block w-full text-sm text-tinta file:mr-3 file:py-2 file:px-3 file:rounded-md file:border file:border-border file:bg-paper file:text-tinta hover:file:bg-linho file:cursor-pointer"
+            className="block w-full text-sm text-tinta file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-border file:bg-paper file:text-tinta hover:file:bg-linho file:cursor-pointer"
           />
           {arquivo && (
             <p className="text-[11px] text-sepia">
@@ -270,7 +270,7 @@ export function ImportPage() {
         )}
 
         {erro && (
-          <p className="text-sm px-3 py-2 rounded-md bg-destructive/15 text-destructive border border-destructive/30">
+          <p className="text-sm px-3 py-2 rounded-lg bg-destructive/15 text-destructive border border-destructive/30">
             {erro}
           </p>
         )}

@@ -82,7 +82,7 @@ export function FaturaDetalheDialog({
               )}
             </div>
 
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-paper p-3 text-sm">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-paper p-3 text-sm">
               <dt className={LABEL_CLASS}>Valor</dt>
               <dd className="text-right">{formatarBRL(fatura.valor)}</dd>
               <dt className={LABEL_CLASS}>Pago</dt>

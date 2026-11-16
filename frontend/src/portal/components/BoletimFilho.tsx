@@ -66,7 +66,7 @@ export function BoletimFilho({
               e.target.value === ANUAL ? null : parseInt(e.target.value, 10),
             )
           }
-          className="w-full sm:w-64 rounded-md border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
+          className="w-full sm:w-64 rounded-lg border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
         >
           <option value={ANUAL}>Ano inteiro</option>
           {periodosQuery.data?.map((p) => (

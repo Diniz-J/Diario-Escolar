@@ -401,7 +401,7 @@ export function ProfessorFormDialog({
                 id="escola"
                 value={escolaEfetiva}
                 onChange={(e) => setEscolaId(e.target.value)}
-                className="w-full rounded-md border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
+                className="w-full rounded-lg border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
               >
                 <option value="">Selecione uma escola</option>
                 {escolasQuery.data?.map((e) => (
@@ -442,7 +442,7 @@ export function ProfessorFormDialog({
                       onChange={(e) =>
                         atualizarLinha(idx, "turmaId", e.target.value)
                       }
-                      className="flex-1 rounded-md border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
+                      className="flex-1 rounded-lg border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
                     >
                       <option value="">Turma</option>
                       {turmasDaEscola.map((t) => (
@@ -456,7 +456,7 @@ export function ProfessorFormDialog({
                       onChange={(e) =>
                         atualizarLinha(idx, "disciplinaId", e.target.value)
                       }
-                      className="flex-1 rounded-md border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
+                      className="flex-1 rounded-lg border border-border bg-paper px-3 py-2 text-sm focus:outline-none focus:border-ferrugem focus:ring-2 focus:ring-ferrugem/20 transition"
                     >
                       <option value="">Disciplina</option>
                       {disciplinasDaEscola.map((d) => (

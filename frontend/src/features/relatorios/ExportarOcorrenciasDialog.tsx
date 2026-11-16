@@ -76,7 +76,7 @@ export function ExportarOcorrenciasDialog({
           </div>
 
           {busca && (
-            <p className="rounded-md bg-muted px-3 py-2 text-[11px] leading-relaxed text-sepia">
+            <p className="rounded-lg bg-muted px-3 py-2 text-[11px] leading-relaxed text-sepia">
               A busca por “{busca}” filtra a tabela aqui no navegador e
               <strong className="font-medium"> não entra no arquivo</strong>
               . Pra recortar o arquivo, use status e período.
