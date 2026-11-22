@@ -16,6 +16,9 @@ from apps.common.serializers import (
     validate_escola_do_usuario,
 )
 
+from apps.common.permissions import eh_admin_global
+from apps.escola.models import Turma
+
 from .models import AulaGrade, TempoAula
 
 _ESCOLA_OPCIONAL = {"escola": {"required": False}}
@@ -202,4 +205,36 @@ class AulaGradeSerializer(
                     }
                 )
 
+        return attrs
+
+
+class ClonarGradeSerializer(serializers.Serializer):
+    """Entrada da action `clonar`: de qual turma pra qual turma.
+
+    As duas turmas são validadas contra a escola de quem está logado, e
+    não só entre si: um par consistente de outra escola passaria pelo
+    service (que compara origem com destino) sem nada a reclamar. É a
+    mesma dupla camada do vínculo do portal (`RESPONSAVEIS.md`).
+    """
+
+    turma_origem = serializers.PrimaryKeyRelatedField(
+        queryset=Turma.objects.all()
+    )
+    turma_destino = serializers.PrimaryKeyRelatedField(
+        queryset=Turma.objects.all()
+    )
+
+    def validate(self, attrs: dict) -> dict:
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user is None or eh_admin_global(user):
+            return attrs
+
+        escola_id = getattr(user, "escola_id", None)
+        for campo in ("turma_origem", "turma_destino"):
+            turma = attrs[campo]
+            if not escola_id or turma.escola_id != escola_id:
+                raise serializers.ValidationError(
+                    {campo: "Você só pode clonar grade da sua própria escola."}
+                )
         return attrs
