@@ -179,6 +179,31 @@ estourar como 500 (a mesma pegadinha do `FINANCEIRO.md` §5). O slot
 **não** é validado contra `Lecionamento.dias_semana`, que a grade vai
 substituir.
 
+**Frontend da grade (fatia 2)** — `/grade` monta a semana da turma e
+`/grade/tempos` é o catálogo, sob um item só de sidebar com abas internas
+(mesmo arranjo do financeiro: montar grade é cadastro anual, não tela de
+uso diário). Quatro decisões registradas porque nenhuma se deduz do diff:
+(1) **a turma escolhida mora na URL** (`/grade?turma=<id>`, como
+`/financeiro?turma=`) — dá link direto e evita uma segunda fonte de
+verdade ao lado do select; (2) a matriz tem **scroll horizontal** no
+celular em vez de esconder colunas com `hidden sm:table-cell` como as
+listagens, porque numa grade os dois eixos **são** o dado e sumir com
+quarta-feira perde informação em vez de simplificar; (3) sábado entra por
+toggle, e um dia fora da semana útil aparece sozinho quando já tem aula
+lançada ali — senão o slot existiria sem nenhuma coluna que o mostrasse;
+(4) os derivados da tela (tempos ordenados, lookup do slot da célula,
+colunas) **não** usam `useMemo`: o React Compiler reprovava a memoização
+manual (`preserve-manual-memoization`, porque as deps saem de arrays
+derivados) e nessa escala — dezenas de slots por turma — o lookup linear
+não se paga como índice. A **clonagem** é action do backend
+(`POST /grade-aulas/clonar/`, `services.py`) e não N requisições do front,
+porque o mapeamento é por `(professor, disciplina)` na turma destino e por
+`ordem` do tempo dentro do turno dela, não por id — é o que faz clonar de
+2026 pra 2027 funcionar com turma, lecionamento e horário diferentes. O
+que não tem equivalente é **ignorado e reportado** na resposta, e o dialog
+mostra essa lista em vez de um toast: clonagem que omitisse isso faria a
+direção crer numa semana completa.
+
 **`materiais/`** — mural do professor pra turma (fatia 5 do `PORTAL.md`).
 `Material` = turma + disciplina + professor + título + descrição + link
 (só http/https, sem upload). **Auditado**. Mesmo molde do `RegistroAula`:
@@ -346,7 +371,7 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 
 ### Frontend — `frontend/src/`
 
-- **`features/<dominio>/hooks.ts`** — TanStack Query: `useXxx` (list), `useCreate`, `useUpdate`, `useDelete`/`useDeactivate`, com invalidação de cache + toast. Domínios: `alunos`, `auth`, `boletins`, `dashboard`, `disciplinas`, `escolas`, `lecionamentos`, `ocorrencias`, `planos-ensino`, `presenca`, `professores`, `timeline`, `turmas`, `usuarios`, `comunicados`, `financeiro`. O `features/dashboard/hooks.ts` nasceu com as métricas agregadas: as outras do dashboard são derivadas no front a partir dos hooks de outros domínios, e presença média e reincidência não dão — a primeira exigiria baixar todo o `ItemPresenca` da escola, a segunda agrupar ocorrência por aluno no cliente.
+- **`features/<dominio>/hooks.ts`** — TanStack Query: `useXxx` (list), `useCreate`, `useUpdate`, `useDelete`/`useDeactivate`, com invalidação de cache + toast. Domínios: `alunos`, `auth`, `boletins`, `dashboard`, `disciplinas`, `escolas`, `lecionamentos`, `ocorrencias`, `planos-ensino`, `presenca`, `professores`, `timeline`, `turmas`, `usuarios`, `comunicados`, `financeiro`, `grade`. O `features/dashboard/hooks.ts` nasceu com as métricas agregadas: as outras do dashboard são derivadas no front a partir dos hooks de outros domínios, e presença média e reincidência não dão — a primeira exigiria baixar todo o `ItemPresenca` da escola, a segunda agrupar ocorrência por aluno no cliente.
 - **`features/auth/`** — `AuthProvider`, `useAuth`, `usePermissoes` (regra de UI por perfil; `podeModificarCadastros` = admin/diretor), tokenStorage em localStorage, decode JWT. `user.escola_id` é o sinal usado pelos FormDialogs pra decidir se renderiza o select de escola.
 - **`lib/api.ts`** — axios único. Request interceptor injeta Bearer. Response interceptor: 401 → refresh → refaz request (promise compartilhada contra thundering herd).
 - **`lib/queryClient.ts`** — staleTime 30s, retry off pra 401/403.
@@ -391,7 +416,7 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 - **`components/AppLayout.tsx`** — shell: sidebar fixa olive-dark em ≥768px, drawer (`Sheet`) com hamburguer em <768px. Logo "Diário Diniz" em Fraunces no topo + perfil em mono uppercase + nav com barra ferrugem no ativo + rodapé com filete ferrugem + logout + versão.
 - **`components/ui/`** — shadcn (editável). `Sheet` e `Switch` foram adicionados manualmente (CLI travava em prompt).
 - **`index.css`** — paleta de marca em CSS variables no `:root` (`--olive`, `--olive-dark`, `--linho`, `--paper`, `--ferrugem`, `--tinta`, `--sepia`, `--creme`) + mapeamento dos tokens shadcn (`--background`, `--primary`, etc.) pra paleta. Light mode permanente (sem `.dark` block). `color-scheme: light` + meta tag desabilitam force-dark dos browsers.
-- **~29 pages** — Login, Dashboard, Alunos (+timeline do aluno), Turmas (+detalhe), Disciplinas, Professores (+detalhe — ficha 360º), PlanosEnsino (+detalhe), Ocorrencias (+detalhe), Presenca (+detalhe), Avaliacoes (+detalhe), PeriodosAvaliativos, NotasFinais, DiarioAula, Boletim, **Faturas + PlanosCobranca + FichaFinanceira** (financeiro; as duas primeiras sob um item só de sidebar com abas internas, a ficha alcançada pelo nome do aluno, pelo ⋯ da AlunosPage e pelo botão da TurmaDetalhePage), Import, **Usuarios** (gestão de conta do staff; Responsáveis é a tela do usuário externo), ContaSenha/EsqueciSenha/RedefinirSenha, NotFound, Placeholder. **Todas no padrão visual `DESIGN.md`** (Fraunces + filete ferrugem + eyebrow mono + `bg-paper`), inclusive listagens/detalhes/forms. Polidas em ondas: Login/Sidebar/Dashboard (PRs #50-#52), depois listagens e detalhes ao longo de jun/2026.
+- **~29 pages** — Login, Dashboard, Alunos (+timeline do aluno), Turmas (+detalhe), Disciplinas, Professores (+detalhe — ficha 360º), PlanosEnsino (+detalhe), Ocorrencias (+detalhe), Presenca (+detalhe), Avaliacoes (+detalhe), PeriodosAvaliativos, NotasFinais, DiarioAula, Boletim, **Faturas + PlanosCobranca + FichaFinanceira** (financeiro; as duas primeiras sob um item só de sidebar com abas internas, a ficha alcançada pelo nome do aluno, pelo ⋯ da AlunosPage e pelo botão da TurmaDetalhePage), **Grade + TemposAula** (grade horária, as duas sob um item só de sidebar com abas internas), Import, **Usuarios** (gestão de conta do staff; Responsáveis é a tela do usuário externo), ContaSenha/EsqueciSenha/RedefinirSenha, NotFound, Placeholder. **Todas no padrão visual `DESIGN.md`** (Fraunces + filete ferrugem + eyebrow mono + `bg-paper`), inclusive listagens/detalhes/forms. Polidas em ondas: Login/Sidebar/Dashboard (PRs #50-#52), depois listagens e detalhes ao longo de jun/2026.
 - **`types/api.ts`** — interfaces espelhando os serializers (mantido à mão; drf-spectacular no backlog). Todos os `*Input` com FK `escola` têm o campo opcional (`escola?: number`) — backend deduz pelo JWT quando ausente.
 
 ### Padrões de UI consolidados

@@ -194,8 +194,8 @@ lá a pergunta é "o que aconteceu", não "quantas faltas tem".
 
 | # | Fatia | Entrega |
 |---|---|---|
-| 1 | Grade — backend | este doc, `TempoAula`, `AulaGrade`, migration, admin, API só-direção |
-| 2 | Grade — frontend | tela de montagem por turma/ano letivo + clonar do ano anterior |
+| 1 | Grade — backend | **entregue** — este doc, `TempoAula`, `AulaGrade`, migration, admin, API só-direção |
+| 2 | Grade — frontend | **entregue** — `/grade` (matriz da turma) e `/grade/tempos` (catálogo), mais a action `clonar` que a tela consome |
 | 3 | Presença por tempo | §3.3 **mais** a régua da §4 — indivisível: separar deixa a frequência errada em produção entre os merges |
 | 4 | Tela de chamada | tempos pré-marcados pela grade, modo dia-todo, ajuste manual |
 | 5 | Aposentar `dias_semana` | `projetar_agenda` lê a grade; campo removido em migration |

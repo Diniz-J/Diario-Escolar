@@ -38,6 +38,7 @@ const NAV_ITEMS = [
   { to: "/comunicados", label: "Comunicados" },
   // Todo perfil do staff: professor publica o próprio, direção modera.
   { to: "/mural", label: "Mural" },
+  { to: "/grade", label: "Grade horária" },
   { to: "/presenca", label: "Presença" },
   { to: "/avaliacoes", label: "Avaliações" },
   { to: "/notas-finais", label: "Notas finais" },
