@@ -16,6 +16,7 @@ import { DisciplinasPage } from "@/pages/DisciplinasPage";
 import { EsqueciSenhaPage } from "@/pages/EsqueciSenhaPage";
 import { FaturasPage } from "@/pages/FaturasPage";
 import { FichaFinanceiraPage } from "@/pages/FichaFinanceiraPage";
+import { GradePage } from "@/pages/GradePage";
 import { ImportPage } from "@/pages/ImportPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { MuralPage } from "@/pages/MuralPage";
@@ -35,6 +36,7 @@ import { ResponsaveisPage } from "@/pages/ResponsaveisPage";
 import { UsuariosPage } from "@/pages/UsuariosPage";
 import { PresencaPage } from "@/pages/PresencaPage";
 import { TurmaDetalhePage } from "@/pages/TurmaDetalhePage";
+import { TemposAulaPage } from "@/pages/TemposAulaPage";
 import { TurmasPage } from "@/pages/TurmasPage";
 
 // Mapa central de rotas autenticadas. Páginas de ocorrências e presença
@@ -74,6 +76,10 @@ export function AppRoutes() {
           />
           <Route path="/comunicados" element={<ComunicadosPage />} />
           <Route path="/mural" element={<MuralPage />} />
+          {/* Grade horária: a semana da turma e o catálogo de tempos,
+              sob um item só de sidebar com abas internas. */}
+          <Route path="/grade" element={<GradePage />} />
+          <Route path="/grade/tempos" element={<TemposAulaPage />} />
           <Route path="/responsaveis" element={<ResponsaveisPage />} />
           <Route path="/usuarios" element={<UsuariosPage />} />
           <Route
