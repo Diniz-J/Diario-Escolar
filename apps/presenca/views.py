@@ -104,6 +104,35 @@ class RegistroPresencaViewSet(
             return {}
         return {"professor": meu}
 
+    def perform_update(self, serializer) -> None:
+        """Trava `professor` e `tempos` fora da direção.
+
+        Sem isso, um professor comum poderia PATCH `professor=outro` e
+        assinar por cima da chamada alheia, ou PATCH `tempos=[1,2,3]` num
+        registro antigo e inflar silenciosamente a carga horária histórica
+        — a régua da frequência pesa por `len(tempos)`, então o percentual
+        do boletim mudaria sem rastro na UI. Direção segue podendo corrigir
+        (é ela que cobre falta e normaliza lançamento errado).
+        """
+        if not _eh_direcao(self.request.user):
+            mudou_professor = (
+                "professor" in serializer.validated_data
+                and serializer.validated_data["professor"] is not None
+                and serializer.validated_data["professor"].pk
+                != serializer.instance.professor_id
+            )
+            mudou_tempos = (
+                "tempos" in serializer.validated_data
+                and list(serializer.validated_data["tempos"])
+                != list(serializer.instance.tempos or [])
+            )
+            if mudou_professor or mudou_tempos:
+                raise PermissionDenied(
+                    "Apenas a direção pode alterar o professor ou os tempos "
+                    "de um registro já lançado."
+                )
+        serializer.save()
+
     def perform_create(self, serializer) -> None:
         """Cria o registro e popula `ItemPresenca` para cada aluno ativo.
 

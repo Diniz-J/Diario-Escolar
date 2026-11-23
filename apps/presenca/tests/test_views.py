@@ -284,6 +284,74 @@ class RegistroValidationTests(_PresencaSetup):
         self.assertIn("1º", mensagens)
 
 
+class RegistroPatchOwnershipTests(_PresencaSetup):
+    """PATCH de `professor`/`tempos` por professor comum é bloqueado.
+
+    Sem essa trava, o diário vira livre-edição retroativa: qualquer
+    professor sobrescreve a assinatura do colega ou expande os tempos do
+    registro antigo e reescaluda a frequência ponderada em silêncio.
+    """
+
+    def _registro_ja_lancado(self, tempos=None):
+        return RegistroPresenca.objects.create(
+            escola=self.escola,
+            turma=self.turma,
+            data=date.today(),
+            tempos=tempos if tempos is not None else [1, 2],
+            professor=self.professor,
+        )
+
+    def test_professor_nao_patch_professor(self):
+        registro = self._registro_ja_lancado()
+        outro_doc = Usuario.objects.create_user(
+            username="doc2", password="x",
+            perfil=Usuario.Perfil.PROFESSOR, escola=self.escola,
+        )
+        outro = Professor.objects.create(escola=self.escola, usuario=outro_doc)
+        resp = self._request_registro(
+            "partial_update", "professor",
+            payload={"professor": outro.id}, pk=registro.id,
+        )
+        self.assertEqual(resp.status_code, 403)
+        self.assertIn("direção", str(resp.data))
+        registro.refresh_from_db()
+        self.assertEqual(registro.professor_id, self.professor.id)
+
+    def test_professor_nao_patch_tempos(self):
+        registro = self._registro_ja_lancado(tempos=[1])
+        resp = self._request_registro(
+            "partial_update", "professor",
+            payload={"tempos": [1, 2, 3]}, pk=registro.id,
+        )
+        self.assertEqual(resp.status_code, 403)
+        registro.refresh_from_db()
+        self.assertEqual(list(registro.tempos), [1])
+
+    def test_diretor_patch_professor_aceito(self):
+        registro = self._registro_ja_lancado()
+        outro_doc = Usuario.objects.create_user(
+            username="doc3", password="x",
+            perfil=Usuario.Perfil.PROFESSOR, escola=self.escola,
+        )
+        outro = Professor.objects.create(escola=self.escola, usuario=outro_doc)
+        resp = self._request_registro(
+            "partial_update", "diretor",
+            payload={"professor": outro.id}, pk=registro.id,
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        registro.refresh_from_db()
+        self.assertEqual(registro.professor_id, outro.id)
+
+    def test_professor_patch_observacao_aceito(self):
+        """Controle positivo: campos neutros continuam editáveis."""
+        registro = self._registro_ja_lancado()
+        resp = self._request_registro(
+            "partial_update", "professor",
+            payload={"observacao": "chuva forte"}, pk=registro.id,
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+
 class RegistroEscopoTests(TestCase):
     """Isolamento entre escolas via `EscopoEscolaMixin`."""
 
