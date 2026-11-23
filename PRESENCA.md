@@ -250,7 +250,26 @@ lá a pergunta é "o que aconteceu", não "quantas faltas tem".
 | 2 | Grade — frontend | **entregue** — `/grade` (matriz da turma) e `/grade/tempos` (catálogo), mais a action `clonar` que a tela consome |
 | 3 | Presença por tempo | **entregue** — §3.3 mais a régua da §4, na mesma PR |
 | 4 | Tela de chamada | **entregue** — tempos pré-marcados pela grade, modo dia-todo, ajuste manual, e o bloco visível na listagem e no detalhe |
-| 5 | Aposentar `dias_semana` | `projetar_agenda` lê a grade; campo removido em migration |
+| 5 | Aposentar `dias_semana` | **entregue** — `projetar_agenda` lê a grade, campo removido, e o serializer expõe `dias_grade` derivado |
 
 Ordem: grade antes da presença, pra a tela de chamada (fatia 4) nascer
 já com a sugestão e não ser reescrita.
+
+**As cinco fatias estão entregues.** Duas decisões da 5 que não estavam
+previstas aqui e valem registro:
+
+**O substituto do campo chama-se `dias_grade`, não `dias_semana`.** É
+derivado da grade e read-only, no molde do `ano_letivo` do mesmo
+serializer. O nome mudou de propósito: um read-only com o nome do campo
+removido aceitaria um PATCH e o descartaria em silêncio, e quem editasse
+os dias por ali concluiria que salvou. Vem anotado com
+`Coalesce(ArrayAgg(...), [])` no viewset — anotado porque a ficha do
+professor lista todos os vínculos dele e ler no serializer seria uma query
+por linha (tem `assertNumQueries` travando), e com `Coalesce` porque
+`ArrayAgg` devolve `NULL` em vez de lista vazia quando o vínculo não tem
+slot, e o front itera o valor.
+
+**A agenda do diário desduplica o dia.** A grade tem uma linha por tempo,
+então um dia de bloco duplo aparece duas vezes nela; o diário é por dia
+(§2.8), e sem o `set` a agenda mostraria a mesma aula duas vezes e a
+direção conferiria em dobro. Tem teste travando.

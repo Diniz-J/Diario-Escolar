@@ -1,13 +1,19 @@
-"""Cria um professor de teste com lecionamentos COM grade (`dias_semana`).
+"""Cria um professor de teste com grade horária montada.
 
-Pensado pra exercitar o Diário de Aula: sem `dias_semana` preenchido a
-agenda não projeta nenhum slot, e ainda não há tela pra editar a grade —
-então este seed monta tudo que o fluxo precisa de ponta a ponta:
+Pensado pra exercitar o Diário de Aula e a chamada por tempo: sem grade a
+agenda não projeta nenhum slot e a chamada não sugere tempo nenhum, então
+este seed monta tudo que o fluxo precisa de ponta a ponta:
 
 1. um `Usuario(perfil=professor)` com senha conhecida;
 2. o `Professor` vinculado;
 3. uma turma e duas disciplinas (reusa as existentes da escola se houver);
-4. dois `Lecionamento` com `dias_semana` preenchido (seg/qua e ter/qui).
+4. quatro `TempoAula` no turno da turma (o catálogo de horários);
+5. dois `Lecionamento` com slots de `AulaGrade` (seg/qua e ter/qui).
+
+A fonte dos dias era `Lecionamento.dias_semana`, removido em nov/2026 —
+agora quem diz é a grade (`apps.grade`, fatia 5 do `PRESENCA.md`). Já
+existe tela pra editar a grade (`/grade`), então este comando deixou de
+ser o único caminho; segue útil pra popular ambiente novo de uma vez.
 
 Idempotente: tudo via get_or_create; rodar de novo não duplica e
 re-garante a grade. A senha é sempre redefinida (é usuário de teste).
@@ -18,7 +24,7 @@ Uso (dev OU contra o banco de prod via DATABASE_URL local):
 
 Sem `--escola-id`, usa a primeira escola cadastrada.
 """
-from datetime import datetime
+from datetime import datetime, time
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
@@ -31,6 +37,7 @@ from apps.escola.models import (
     Professor,
     Turma,
 )
+from apps.grade.models import AulaGrade, TempoAula
 
 
 class Command(BaseCommand):
@@ -53,16 +60,27 @@ class Command(BaseCommand):
         professor = self._garantir_professor(escola=escola, usuario=usuario)
         turma = self._garantir_turma(escola=escola, ano=opts["ano"])
         disciplinas = self._garantir_disciplinas(escola=escola)
+        tempos = self._garantir_tempos(escola=escola, turma=turma)
 
-        # Grades distintas pra ter variedade de dias no diário.
+        # Dias distintos pra ter variedade no diário, e dois tempos
+        # seguidos em cada um — é o bloco duplo que a chamada por tempo
+        # existe pra representar.
         grades = [[0, 2], [1, 3]]  # seg/qua e ter/qui
-        for disciplina, dias in zip(disciplinas, grades):
-            self._garantir_lecionamento(
+        for indice, (disciplina, dias) in enumerate(zip(disciplinas, grades)):
+            lecionamento = self._garantir_lecionamento(
                 escola=escola,
                 professor=professor,
                 turma=turma,
                 disciplina=disciplina,
-                dias_semana=dias,
+            )
+            # Primeira disciplina no 1º/2º tempo, segunda no 3º/4º.
+            do_bloco = tempos[indice * 2 : indice * 2 + 2]
+            self._garantir_slots(
+                escola=escola,
+                lecionamento=lecionamento,
+                turma=turma,
+                dias=dias,
+                tempos=do_bloco,
             )
 
         self.stdout.write(
@@ -142,21 +160,53 @@ class Command(BaseCommand):
                 existentes.append(disciplina)
         return existentes[:2]
 
-    def _garantir_lecionamento(self, *, escola, professor, turma, disciplina, dias_semana):
+    def _garantir_tempos(self, *, escola, turma):
+        """Catálogo de quatro tempos de 50 minutos no turno da turma."""
+        tempos = []
+        for ordem in range(1, 5):
+            inicio = time(6 + ordem, 0)
+            fim = time(6 + ordem, 50)
+            tempo, criado = TempoAula.objects.get_or_create(
+                escola=escola,
+                turno=turma.turno,
+                ordem=ordem,
+                defaults={"hora_inicio": inicio, "hora_fim": fim, "ativo": True},
+            )
+            tempos.append(tempo)
+            self.stdout.write(
+                ("  + Tempo " if criado else "  = Tempo ")
+                + f"{ordem}º ({tempo.hora_inicio:%H:%M}-{tempo.hora_fim:%H:%M})."
+            )
+        return tempos
+
+    def _garantir_lecionamento(self, *, escola, professor, turma, disciplina):
         lecionamento, criado = Lecionamento.objects.get_or_create(
             professor=professor,
             turma=turma,
             disciplina=disciplina,
-            defaults={"escola": escola, "ativo": True, "dias_semana": dias_semana},
+            defaults={"escola": escola, "ativo": True},
         )
-        # Re-garante a grade mesmo se o vínculo já existia (ex.: criado
-        # antes do campo dias_semana existir).
-        if lecionamento.dias_semana != dias_semana or not lecionamento.ativo:
-            lecionamento.dias_semana = dias_semana
+        if not lecionamento.ativo:
             lecionamento.ativo = True
-            lecionamento.save(update_fields=["dias_semana", "ativo"])
+            lecionamento.save(update_fields=["ativo"])
         self.stdout.write(
             ("  + Lecionamento " if criado else "  = Lecionamento ")
-            + f"{disciplina.nome} (dias {dias_semana})."
+            + f"{disciplina.nome}."
         )
         return lecionamento
+
+    def _garantir_slots(self, *, escola, lecionamento, turma, dias, tempos):
+        """Põe o lecionamento na grade nos dias e tempos informados."""
+        for dia in dias:
+            for tempo in tempos:
+                _, criado = AulaGrade.objects.get_or_create(
+                    escola=escola,
+                    turma=turma,
+                    dia_semana=dia,
+                    tempo=tempo,
+                    defaults={"lecionamento": lecionamento, "ativo": True},
+                )
+                self.stdout.write(
+                    ("    + Grade " if criado else "    = Grade ")
+                    + f"dia {dia}, {tempo.ordem}º tempo."
+                )
