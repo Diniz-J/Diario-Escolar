@@ -80,3 +80,20 @@ export function formatarDataHora(iso: string | null): string {
 export function formatarDiaDaDataHora(iso: string): string {
   return new Date(iso).toLocaleDateString("pt-BR");
 }
+
+/**
+ * Dia da semana de uma data pura, na convenção do backend: 0=segunda …
+ * 6=domingo (a de `date.weekday()` do Python e do `Lecionamento.DiaSemana`).
+ *
+ * Monta a data pelo construtor de componentes, não por string: `new
+ * Date("2026-03-10")` é lido como UTC e, em fuso negativo, cai no dia 9 —
+ * o que aqui devolveria o dia da semana errado. E converte de `getDay()`
+ * (0=domingo) pra convenção do backend, porque é com ela que a grade
+ * horária é consultada; usar a do JavaScript direto pediria aula de
+ * domingo pra uma segunda.
+ */
+export function diaDaSemanaISO(iso: string): number {
+  const [ano, mes, dia] = iso.split("-").map(Number);
+  if (!ano || !mes || !dia) return 0;
+  return (new Date(ano, mes - 1, dia).getDay() + 6) % 7;
+}

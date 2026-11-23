@@ -249,7 +249,7 @@ lá a pergunta é "o que aconteceu", não "quantas faltas tem".
 | 1 | Grade — backend | **entregue** — este doc, `TempoAula`, `AulaGrade`, migration, admin, API só-direção |
 | 2 | Grade — frontend | **entregue** — `/grade` (matriz da turma) e `/grade/tempos` (catálogo), mais a action `clonar` que a tela consome |
 | 3 | Presença por tempo | **entregue** — §3.3 mais a régua da §4, na mesma PR |
-| 4 | Tela de chamada | tempos pré-marcados pela grade, modo dia-todo, ajuste manual |
+| 4 | Tela de chamada | **entregue** — tempos pré-marcados pela grade, modo dia-todo, ajuste manual, e o bloco visível na listagem e no detalhe |
 | 5 | Aposentar `dias_semana` | `projetar_agenda` lê a grade; campo removido em migration |
 
 Ordem: grade antes da presença, pra a tela de chamada (fatia 4) nascer

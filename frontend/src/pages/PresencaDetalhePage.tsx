@@ -21,6 +21,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAlunos } from "@/features/alunos/hooks";
 import { STATUS_PRESENCA } from "@/features/presenca/constants";
+import { descreverAula, faixaDeHorario } from "@/features/presenca/tempos";
 import {
   useDeleteRegistro,
   useItensDoRegistro,
@@ -28,6 +29,7 @@ import {
   useUpdateItemStatus,
 } from "@/features/presenca/hooks";
 import { useTurmas } from "@/features/turmas/hooks";
+import { formatarDataPura } from "@/lib/datas";
 import { cn } from "@/lib/utils";
 import type { PresencaStatus } from "@/types/api";
 
@@ -112,8 +114,16 @@ export function PresencaDetalhePage() {
               <p className="text-[11px] uppercase tracking-[0.18em] text-sepia">
                 {turma?.nome ?? `Turma #${registro.turma}`}
                 <span className="mx-1.5 text-border">·</span>
-                {new Date(registro.data + "T00:00:00").toLocaleDateString(
-                  "pt-BR",
+                {formatarDataPura(registro.data)}
+                {/* Qual aula é esta: a turma tem várias chamadas por dia
+                    desde que a presença passou a ser por tempo. */}
+                <span className="mx-1.5 text-border">·</span>
+                {descreverAula(registro)}
+                {faixaDeHorario(registro.tempos_detalhe) && (
+                  <>
+                    <span className="mx-1.5 text-border">·</span>
+                    {faixaDeHorario(registro.tempos_detalhe)}
+                  </>
                 )}
               </p>
             )}

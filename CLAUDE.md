@@ -118,6 +118,24 @@ view resolve o professor do usuário logado (molde do `RegistroAula`), a
 direção pode lançar por outro, e professor que tenta lançar em nome de
 outro leva 403 em vez de ter o campo sobrescrito calado.
 
+**Tela (fatia 4)** — o `RegistroFormDialog` ganhou o seletor de tempos
+(botões toggle, não checkbox: o professor lança no celular, em sala) com
+o bloco **pré-marcado pela grade** e a disciplina junto, mais "Dia todo"
+e "Limpar". `PresencaPage` ganhou a coluna "Aula" e a
+`PresencaDetalhePage` o bloco no header — sem isso as várias chamadas do
+mesmo dia apareceriam como linhas idênticas. Três decisões: (1) a
+sugestão segue o **cadastro de `Professor` do usuário logado, não o
+perfil**, porque o diretor que também dá aula tem grade própria e merece
+a mesma sugestão (tem teste travando os dois lados); (2) a disciplina só
+é sugerida quando os slots do dia são todos da mesma — dois tempos de
+matérias diferentes são duas chamadas, e preencher por palpite colocaria
+a aula errada no registro; (3) a falha de `/tempos-aula/` e
+`/grade-aulas/` **não** trava o envio, só a de `/turmas/`: sem catálogo o
+seletor nem aparece e o backend assume um tempo, que é como a escola sem
+grade montada opera. O estado guarda só o que o usuário tocou
+(`temposTocados`/`disciplinaTocada`), com o valor efetivo derivado da
+query — padrão da casa pros FormDialogs.
+
 **`portal/`** — portal do responsável (ver [`PORTAL.md`](./PORTAL.md)).
 `Responsavel` herda `AbstractBaseUser` **sem** ser `AUTH_USER_MODEL` (o
 projeto só tem um, e é `accounts.Usuario`) — ganha hash de senha e
@@ -415,7 +433,7 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 - **`features/auth/`** — `AuthProvider`, `useAuth`, `usePermissoes` (regra de UI por perfil; `podeModificarCadastros` = admin/diretor), tokenStorage em localStorage, decode JWT. `user.escola_id` é o sinal usado pelos FormDialogs pra decidir se renderiza o select de escola.
 - **`lib/api.ts`** — axios único. Request interceptor injeta Bearer. Response interceptor: 401 → refresh → refaz request (promise compartilhada contra thundering herd).
 - **`lib/queryClient.ts`** — staleTime 30s, retry off pra 401/403.
-- **`lib/datas.ts`** — `hojeISO()`, o "hoje" dos inputs de data. Existe porque `new Date().toISOString().slice(0, 10)` converte pra UTC e, das 21h em diante num fuso negativo, devolve **amanhã** — e ocorrência e chamada recusam data futura no backend, então o turno noturno recebia formulário que o servidor rejeitava (o `max` do input vinha errado junto, então o browser nem barrava). Monta campo a campo pelos getters locais. Tem teste com fuso e relógio fixos (`datas.test.ts`) que reprova a implementação antiga. Mora aqui também a **formatação de data**, em três funções cujo nome diz o tipo do campo no backend, porque errar o par era o bug clássico: `formatarDataPura` pra `DateField` (split da string, porque `new Date("2026-03-10")` é lido como UTC e volta como dia 9), `formatarDataHora` pra `DateTimeField` (aí `new Date` é o certo — a string do DRF traz offset) e `formatarDiaDaDataHora` pro `DateTimeField` exibido só como dia. Consolidou **14 cópias locais** espalhadas em 13 arquivos; a `AlunoPage` do portal aplicava a de data pura em `publicado_em`, concatenando `T00:00:00` numa string que já tinha hora e offset, e o mural do pai mostrava **"Invalid Date"** em todo material (tem teste travando). Fica fora só o formatador do `BoletimFilho`, que é o formato compacto "10/03" sem ano. `isoDiasAtras(dias)` monta a ponta de trás dos filtros de janela ("últimos 30 dias") pelo mesmo caminho — `setDate` pra resolver virada de mês/ano/bissexto, e composição campo a campo na saída.
+- **`lib/datas.ts`** — `hojeISO()`, o "hoje" dos inputs de data. Existe porque `new Date().toISOString().slice(0, 10)` converte pra UTC e, das 21h em diante num fuso negativo, devolve **amanhã** — e ocorrência e chamada recusam data futura no backend, então o turno noturno recebia formulário que o servidor rejeitava (o `max` do input vinha errado junto, então o browser nem barrava). Monta campo a campo pelos getters locais. Tem teste com fuso e relógio fixos (`datas.test.ts`) que reprova a implementação antiga. Mora aqui também a **formatação de data**, em três funções cujo nome diz o tipo do campo no backend, porque errar o par era o bug clássico: `formatarDataPura` pra `DateField` (split da string, porque `new Date("2026-03-10")` é lido como UTC e volta como dia 9), `formatarDataHora` pra `DateTimeField` (aí `new Date` é o certo — a string do DRF traz offset) e `formatarDiaDaDataHora` pro `DateTimeField` exibido só como dia. Consolidou **14 cópias locais** espalhadas em 13 arquivos; a `AlunoPage` do portal aplicava a de data pura em `publicado_em`, concatenando `T00:00:00` numa string que já tinha hora e offset, e o mural do pai mostrava **"Invalid Date"** em todo material (tem teste travando). Fica fora só o formatador do `BoletimFilho`, que é o formato compacto "10/03" sem ano. `diaDaSemanaISO(iso)` devolve o dia da semana na convenção do backend (0=segunda, a de `date.weekday()`), montando a data pelo construtor de componentes e convertendo de `getDay()` — é por ele que a chamada consulta a grade horária do dia, e usar a convenção do JavaScript direto pediria aula de domingo pra uma segunda. `isoDiasAtras(dias)` monta a ponta de trás dos filtros de janela ("últimos 30 dias") pelo mesmo caminho — `setDate` pra resolver virada de mês/ano/bissexto, e composição campo a campo na saída.
 - **`package.json` — o que é dependência de produção**: num SPA que vai
   pra produção **buildado**, tudo que entra no bundle é bundle, então a
   divisão `dependencies`/`devDependencies` não muda um byte do que é

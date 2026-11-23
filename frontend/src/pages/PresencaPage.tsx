@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { RegistroFormDialog } from "@/features/presenca/RegistroFormDialog";
 import { useRegistrosPaginated } from "@/features/presenca/hooks";
+import { descreverAula, faixaDeHorario } from "@/features/presenca/tempos";
 import { useTurmas } from "@/features/turmas/hooks";
 
 const PAGE_SIZE = 20;
@@ -177,6 +178,12 @@ export function PresencaPage() {
               <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
                 Data
               </TableHead>
+              {/* A turma passou a ter várias chamadas por dia, uma por
+                  bloco de tempos: sem esta coluna as linhas do mesmo dia
+                  seriam indistinguíveis. */}
+              <TableHead className="text-[11px] uppercase tracking-[0.15em] text-sepia font-normal">
+                Aula
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -189,12 +196,15 @@ export function PresencaPage() {
                   <TableCell>
                     <Skeleton className="h-4 w-24" />
                   </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-28" />
+                  </TableCell>
                 </TableRow>
               ))
             ) : registrosQuery.isError ? (
               <TableRow>
                 <TableCell
-                  colSpan={2}
+                  colSpan={3}
                   className="text-center text-destructive py-8"
                 >
                   Erro ao carregar chamadas.
@@ -203,7 +213,7 @@ export function PresencaPage() {
             ) : registrosFiltrados.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={2}
+                  colSpan={3}
                   className="text-center text-muted-foreground py-8"
                 >
                   {busca
@@ -224,6 +234,16 @@ export function PresencaPage() {
                   <TableCell className="tabular-nums whitespace-nowrap">
                     {new Date(r.data + "T00:00:00").toLocaleDateString(
                       "pt-BR",
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <span className="block text-sm leading-tight">
+                      {descreverAula(r)}
+                    </span>
+                    {faixaDeHorario(r.tempos_detalhe) && (
+                      <span className="block text-xs tabular-nums text-muted-foreground leading-tight">
+                        {faixaDeHorario(r.tempos_detalhe)}
+                      </span>
                     )}
                   </TableCell>
                 </TableRow>
