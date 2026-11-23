@@ -5,13 +5,7 @@
 
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import {
-  formatarDataHora,
-  formatarDataPura,
-  formatarDiaDaDataHora,
-  hojeISO,
-  isoDiasAtras,
-} from "./datas";
+import { diaDaSemanaISO, formatarDataHora, formatarDataPura, formatarDiaDaDataHora, hojeISO, isoDiasAtras } from "./datas";
 
 // Estes testes só fazem sentido em fuso negativo — é lá que a conversão
 // pra UTC troca o dia. Fixa São Paulo (UTC-3, sem horário de verão desde
@@ -115,5 +109,20 @@ describe("formatarDiaDaDataHora", () => {
     const instante = "2026-03-10T21:30:00-03:00";
     expect(new Date(`${instante}T00:00:00`).toString()).toBe("Invalid Date");
     expect(formatarDiaDaDataHora(instante)).toBe("10/03/2026");
+  });
+});
+
+describe("diaDaSemanaISO", () => {
+  it("usa a convenção do backend: 0 é segunda", () => {
+    // 2026-11-23 é uma segunda-feira.
+    expect(diaDaSemanaISO("2026-11-23")).toBe(0);
+    expect(diaDaSemanaISO("2026-11-27")).toBe(4);
+    expect(diaDaSemanaISO("2026-11-29")).toBe(6);
+  });
+
+  it("não escorrega de dia em fuso negativo", () => {
+    // O bug clássico: `new Date("2026-03-10")` é UTC e volta como dia 9,
+    // que é uma segunda — enquanto o dia 10 é terça.
+    expect(diaDaSemanaISO("2026-03-10")).toBe(1);
   });
 });
