@@ -1,6 +1,5 @@
 """Modelos da app escola — domínio principal do sistema."""
 from django.conf import settings
-from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
 from django.db import models
 from simple_history.models import HistoricalRecords
@@ -225,8 +224,12 @@ class Lecionamento(BaseModelEscopado):
     a mesma turma (raro, pois turmas têm ano_letivo no nome), basta criar
     um lecionamento novo para a turma do novo ano.
 
-    `dias_semana` registra em que dias da semana esse vínculo tem aula —
-    é a base pra projetar os slots do diário de aula (app `aulas`).
+    Em que dias da semana o vínculo tem aula **não** mora aqui: é a grade
+    horária (`apps.grade.AulaGrade`) que diz, com dia e tempo. O campo
+    `dias_semana` existiu até nov/2026 e foi removido na fatia 5 do
+    `PRESENCA.md` — a grade diz estritamente mais, e duas fontes sobre o
+    mesmo fato divergiriam. O serializer expõe `dias_grade`, derivado da
+    grade e read-only.
     """
 
     class DiaSemana(models.IntegerChoices):
@@ -248,13 +251,6 @@ class Lecionamento(BaseModelEscopado):
     )
     disciplina = models.ForeignKey(
         Disciplina, on_delete=models.PROTECT, related_name="lecionamentos"
-    )
-    # Dias da semana com aula (0=segunda ... 6=domingo). Vazio = sem grade
-    # definida; o diário não projeta slots automáticos até preencher.
-    dias_semana = ArrayField(
-        models.IntegerField(choices=DiaSemana.choices),
-        default=list,
-        blank=True,
     )
     ativo = models.BooleanField(default=True)
 

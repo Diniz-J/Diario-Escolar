@@ -1,5 +1,5 @@
 """Testes de modelo de `RegistroAula` — invariantes do `clean()`."""
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -13,6 +13,7 @@ from apps.escola.models import (
     Professor,
     Turma,
 )
+from apps.grade.models import AulaGrade, TempoAula
 
 
 class RegistroAulaModelTests(TestCase):
@@ -42,8 +43,24 @@ class RegistroAulaModelTests(TestCase):
             professor=cls.professor,
             turma=cls.turma,
             disciplina=cls.disciplina,
-            dias_semana=[0, 2],  # segunda e quarta
         )
+        # Os dias de aula saem da grade horária desde nov/2026 (fatia 5 do
+        # `PRESENCA.md`) — era `Lecionamento.dias_semana`.
+        cls.tempo = TempoAula.objects.create(
+            escola=cls.escola,
+            turno=cls.turma.turno,
+            ordem=1,
+            hora_inicio=time(7, 0),
+            hora_fim=time(7, 50),
+        )
+        for dia in (0, 2):  # segunda e quarta
+            AulaGrade.objects.create(
+                escola=cls.escola,
+                lecionamento=cls.lecionamento,
+                turma=cls.turma,
+                dia_semana=dia,
+                tempo=cls.tempo,
+            )
 
     def _registro(self, **overrides) -> RegistroAula:
         dados = {
