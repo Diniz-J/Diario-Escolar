@@ -88,11 +88,35 @@ rede) — ver `src/test/` no mapa abaixo.
 
 **`ocorrencias/`** — `Ocorrencia` (turma + aluno + professor opcional + descrição + data + status `aberta`/`em_andamento`/`resolvida`/`arquivada`). Invariantes em `clean()` + serializer. Permissão uniforme admin/diretor/professor. Guard de IDOR no payload `escola`. **Auditado**. **`services.py`**: `notificar_responsavel_ocorrencia` é disparado em `perform_create` e roda numa **thread daemon** (fire-and-forget — POST volta na hora, sem pendurar a resposta HTTP). Em `TESTING` o envio é síncrono pra manter `mail.outbox` determinístico. Destinatários vêm de `apps/portal/destinatarios.py` — um aluno com mãe e pai vinculados recebe **duas mensagens individuais**, cada uma saudada pelo nome do responsável, e a falha de uma não cala a outra. Aluno sem responsável com email é pulado (log warning). Falha de envio é logada com stack trace, nunca propagada. Em produção o backend é `anymail.backends.brevo.EmailBackend` (HTTP API porta 443) — ver Infra.
 
-**`presenca/`** — chamada.
-- `RegistroPresenca` — chamada de uma turma num dia; única por `(escola, turma, data)`. **Auditado**.
-- `ItemPresenca` — status por aluno (`P`/`A`/`J`/`R`). **Único `CASCADE` do projeto** (filho do registro). **Auditado**.
+**`presenca/`** — chamada, **por tempo de aula** desde nov/2026 (ver
+[`PRESENCA.md`](./PRESENCA.md)).
+- `RegistroPresenca` — chamada de um **bloco de tempos** de uma turma num dia. `tempos` é `ArrayField` de ordinais (`[1, 2]` = primeiro e segundo tempos; o dia todo é o turno inteiro) e `disciplina` é **opcional** (nula = chamada do dia, o que faz o mesmo modelo servir fundamental I polivalente e ensino médio por matéria). **Auditado**.
+- `ItemPresenca` — status por aluno (`P`/`A`/`J`/`R`), **inalterado** — é o que manteve timeline, portal e boletim funcionando sem reescrita. **Único `CASCADE` do projeto** (filho do registro). **Auditado**.
 - Auto-geração: criar registro gera um `ItemPresenca(P)` por aluno ativo da turma, em transação atômica.
 - `ItemPresencaViewSet` não expõe POST/DELETE (ciclo de vida pertence ao pai). Leitura inclui inspetor.
+
+Cinco coisas que não se deduzem do schema, todas no `PRESENCA.md`:
+(1) **o unique `(escola, turma, data)` caiu** — a turma tem várias
+chamadas por dia, uma por bloco, e o que não pode repetir é o **tempo**;
+a sobreposição é barrada no `clean()` e no serializer, não no banco,
+porque `UniqueConstraint` não cobre interseção de array e a alternativa
+(tabela filha) custaria um join na agregação da frequência, hoje em duas
+queries com `assertNumQueries` travando — mesma limitação consciente da
+vigência sobreposta do `PlanoCobranca`; (2) **o default de `tempos` é
+`[1]`** (função nomeada `tempo_unico`, porque default de `ArrayField`
+precisa ser serializável), e não lista vazia, porque o peso de um item na
+frequência é o tamanho do bloco e bloco vazio faria o registro sair do
+denominador **em silêncio** — foi também esse default que fez o
+`AddField` backfillar o histórico sem data migration; (3) **`tempos`
+omitido no payload cobre o dia todo** (o turno inteiro, via
+`tempos_padrao`), que é a semântica que a chamada diária tinha e é o que
+manteve a tela de chamada atual funcionando antes da fatia 4; (4) **os
+ordinais só são validados contra o catálogo de `TempoAula` quando ele
+existe** — escola sem horários cadastrados segue lançando chamada, que é
+o estado de toda instalação antes da grade; (5) **quem lança assina**: a
+view resolve o professor do usuário logado (molde do `RegistroAula`), a
+direção pode lançar por outro, e professor que tenta lançar em nome de
+outro leva 403 em vez de ter o campo sobrescrito calado.
 
 **`portal/`** — portal do responsável (ver [`PORTAL.md`](./PORTAL.md)).
 `Responsavel` herda `AbstractBaseUser` **sem** ser `AUTH_USER_MODEL` (o
@@ -286,7 +310,7 @@ Detalhes do contrato real e as pegadinhas estão no `FINANCEIRO.md` §6.
 
 **`planos_ensino/`** — `PlanoEnsino` (ementa, conteúdo programático, objetivos, habilidades BNCC, carga horária, metodologia, recursos, avaliação, `ativo`). Único por `(escola, turma, disciplina, ano_letivo)`. Casca criada num dialog; campos longos preenchidos na tela de detalhe. **Auditado**.
 
-**`boletins/`** — **sem modelo próprio**. `services.py` agrega on-the-fly; `BoletimAlunoView` (APIView) expõe `GET /boletins/aluno/<id>/`. Justificado (J) conta como presença efetiva na frequência.
+**`boletins/`** — **sem modelo próprio**. `services.py` agrega on-the-fly; `BoletimAlunoView` (APIView) expõe `GET /boletins/aluno/<id>/`. Justificado (J) conta como presença efetiva na frequência. Desde nov/2026 a frequência **soma tempos de aula**, não conta chamadas: o peso de cada item é o tamanho do bloco do registro pai (`registro__tempos__len`), porque o mínimo da LDB é sobre carga horária. A régua de quem conta como presente não mudou (P/R/J), só a unidade.
 
 **`timeline/`** — timeline do aluno (item 13 do roadmap). **Sem modelo
 próprio**, molde de `boletins`: `services.py` mescla on-the-fly três
@@ -320,11 +344,27 @@ APIView que serve quatro formatos no mesmo recorte
 
 **Frequência por turma**
 (`GET /relatorios/frequencia/?turma=&periodo=|data_inicio=&data_fim=`) —
-contadores por aluno em UMA query (agregado condicional anotado sobre o
-`Aluno`, com teste travando `assertNumQueries`), alerta de quem está abaixo
-dos 75% da LDB, e a mesma régua de presença do boletim (P/R/J contam; só A
-é falta), com teste comparando as duas pra não divergirem. Turma é
-obrigatória e de outra escola responde 404. Botão na `TurmaDetalhePage`.
+contadores por aluno em duas queries fixas (agregado condicional anotado
+sobre o `Aluno`, com teste travando `assertNumQueries`), alerta de quem
+está abaixo dos 75% da LDB, e a mesma régua de presença do boletim (P/R/J
+contam; só A é falta), com teste comparando as duas pra não divergirem.
+Turma é obrigatória e de outra escola responde 404. Botão na
+`TurmaDetalhePage`.
+
+Desde nov/2026 os contadores são em **tempos de aula**: o peso sai do
+lookup `len` do `ArrayField` (`presencas__registro__tempos__len`, que o
+Postgres resolve como `array_length`) dentro de
+`Coalesce(Sum(..., filter=...), 0)` — é isso que mantém tudo numa query
+anotada em vez de uma por aluno, e o `Coalesce` externo existe porque
+`Sum` sobre `LEFT JOIN` sem linha devolve `NULL` e o aluno sem chamada na
+janela tem que sair com zero. `total_chamadas_aluno` entrou ao lado do
+total em tempos, e os cabeçalhos do CSV/XLSX ganharam `_aulas`: "faltas:
+4" num dia de bloco duplo seria lido como quatro dias de ausência.
+**Armadilha do teste:** antes da mudança toda chamada valia 1, então
+contar itens e somar tempos davam o mesmo número e a suíte inteira passou
+sem alteração depois do refactor — os testes da régua nova
+(`tests/test_frequencia_ponderada.py`) usam bloco de tamanho diferente de
+1 de propósito, senão passam pelo motivo errado.
 
 **Alunos (cadastral)** — action no `AlunoViewSet`
 (`GET /alunos/relatorio/?formato=pdf|csv|xlsx`), **deliberadamente

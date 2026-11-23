@@ -12,6 +12,13 @@ Regra de frequência: `P`, `R` e `J` contam como presença efetiva, só `A`
 é falta. É a mesma régua do boletim
 (`apps/boletins/services.py:calcular_frequencia`) e tem teste travando
 que as duas não divergem: se alguém mudar uma, a suíte acusa.
+
+Desde nov/2026 a unidade é **tempo de aula**, não dia: a chamada cobre um
+bloco de tempos (`PRESENCA.md`), então cada item pesa o tamanho do bloco
+do registro pai em vez de valer 1. O peso sai do lookup `len` do
+`ArrayField` (`array_length` no banco), o que mantém os contadores num
+agregado condicional só — o `assertNumQueries` deste relatório existe
+justamente pra impedir que isso vire uma query por aluno.
 """
 from __future__ import annotations
 
@@ -19,7 +26,8 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from apps.escola.models import Aluno, Turma
@@ -104,11 +112,17 @@ def frequencia_por_turma(
     # aluno (`presencas__registro__turma`).
     nesta_turma = Q(presencas__registro__turma=turma) & janela
 
-    def _contar(status: str | None = None) -> Count:
+    # Peso de cada item: o tamanho do bloco de tempos do registro pai.
+    # `Coalesce` porque `Sum` sobre LEFT JOIN sem linha devolve NULL, e o
+    # aluno sem chamada na janela tem que aparecer com zero, não com None
+    # (ele entra na lista pelo `Q(turma=turma, ativo=True)`).
+    _PESO = "presencas__registro__tempos__len"
+
+    def _somar(status: str | None = None):
         filtro = nesta_turma
         if status:
             filtro = filtro & Q(presencas__status=status)
-        return Count("presencas", filter=filtro)
+        return Coalesce(Sum(_PESO, filter=filtro), 0)
 
     # `pk__in` com subquery (e não um JOIN no filtro) pra a lista não
     # multiplicar as linhas que os `Count` abaixo agregam.
@@ -121,11 +135,16 @@ def frequencia_por_turma(
             | Q(pk__in=com_chamada_aqui.values("aluno_id"))
         )
         .annotate(
-            total=_contar(),
-            presentes=_contar(ItemPresenca.Status.PRESENTE),
-            ausentes=_contar(ItemPresenca.Status.AUSENTE),
-            justificados=_contar(ItemPresenca.Status.JUSTIFICADO),
-            retardatarios=_contar(ItemPresenca.Status.RETARDATARIO),
+            # Quantas chamadas o aluno teve nesta turma na janela. Deixou
+            # de ser o denominador (que agora é soma de tempos), mas segue
+            # no relatório: é o que distingue "faltou 4 aulas num dia de
+            # bloco duplo" de "faltou em 4 dias".
+            total_chamadas_aluno=Count("presencas", filter=nesta_turma),
+            total=_somar(),
+            presentes=_somar(ItemPresenca.Status.PRESENTE),
+            ausentes=_somar(ItemPresenca.Status.AUSENTE),
+            justificados=_somar(ItemPresenca.Status.JUSTIFICADO),
+            retardatarios=_somar(ItemPresenca.Status.RETARDATARIO),
         )
         .order_by("nome_completo", "pk")
     )
@@ -144,6 +163,7 @@ def frequencia_por_turma(
                 "matricula": aluno.matricula,
                 "nome_completo": aluno.nome_completo,
                 "ativo": aluno.ativo,
+                "total_chamadas_aluno": aluno.total_chamadas_aluno,
                 "total": aluno.total,
                 "presentes": aluno.presentes,
                 "ausentes": aluno.ausentes,
@@ -202,16 +222,20 @@ def linhas_planas(relatorio: dict[str, Any]) -> tuple[list[str], list[list[Any]]
     relatório: a secretaria abre o arquivo no Excel e espera matrícula e
     nome primeiro.
     """
+    # Os contadores são em TEMPOS de aula desde nov/2026, e o cabeçalho
+    # diz isso: a secretaria abre no Excel e "faltas: 4" num dia de dois
+    # tempos seria lido como quatro dias de ausência.
     headers = [
         "matricula",
         "nome",
         "situacao",
         "chamadas",
-        "presencas",
-        "faltas",
-        "justificadas",
-        "retardatarios",
-        "presencas_efetivas",
+        "aulas_previstas",
+        "presencas_aulas",
+        "faltas_aulas",
+        "justificadas_aulas",
+        "retardatarios_aulas",
+        "presencas_efetivas_aulas",
         "percentual_presenca",
         "abaixo_do_limite",
     ]
@@ -220,6 +244,7 @@ def linhas_planas(relatorio: dict[str, Any]) -> tuple[list[str], list[list[Any]]
             linha["matricula"],
             linha["nome_completo"],
             "ativo" if linha["ativo"] else "inativo",
+            linha["total_chamadas_aluno"],
             linha["total"],
             linha["presentes"],
             linha["ausentes"],
@@ -482,8 +507,16 @@ def metricas_dashboard(
         ocorrencias_do_aluno &= Q(ocorrencias__turma=turma)
 
     presenca = itens.aggregate(
-        total=Count("pk"),
-        efetivas=Count("pk", filter=Q(status__in=_STATUS_EFETIVOS)),
+        # Mesma unidade do relatório e do boletim: soma de tempos, não
+        # contagem de itens (ver docstring do módulo).
+        total=Coalesce(Sum("registro__tempos__len"), 0),
+        efetivas=Coalesce(
+            Sum(
+                "registro__tempos__len",
+                filter=Q(status__in=_STATUS_EFETIVOS),
+            ),
+            0,
+        ),
     )
     total_itens = presenca["total"] or 0
     efetivas = presenca["efetivas"] or 0
@@ -504,6 +537,8 @@ def metricas_dashboard(
         "turma_id": turma.pk if turma is not None else None,
         "presenca": {
             "percentual_medio": str(percentual),
+            # Mantém o nome da chave (o front já a consome), mas a
+            # unidade agora é tempo de aula, não item de chamada.
             "total_itens": total_itens,
             "presencas_efetivas": efetivas,
             "total_chamadas": chamadas.count(),

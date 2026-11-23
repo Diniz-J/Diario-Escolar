@@ -186,14 +186,34 @@ class RegistroValidationTests(_PresencaSetup):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("data", resp.data)
 
-    def test_falha_duplicidade_no_mesmo_dia(self):
+    def test_falha_bloco_de_tempos_sobreposto(self):
+        """O que não repete é o tempo, não o dia (`PRESENCA.md`).
+
+        Substitui o teste do unique `(escola, turma, data)`: a turma
+        passou a ter uma chamada por bloco de tempos, e sem esta
+        validação duas chamadas no mesmo tempo contariam a carga horária
+        em dobro.
+        """
         RegistroPresenca.objects.create(
-            escola=self.escola, turma=self.turma, data=date.today()
+            escola=self.escola, turma=self.turma, data=date.today(), tempos=[1, 2]
         )
-        payload = self._registro_payload(data=date.today().isoformat())
+        payload = self._registro_payload(
+            data=date.today().isoformat(), tempos=[2, 3]
+        )
         resp = self._request_registro("create", "diretor", payload)
-        # Constraint do banco vira erro DRF 400 (unique violation no serializer).
         self.assertEqual(resp.status_code, 400)
+        self.assertIn("tempos", resp.data)
+
+    def test_blocos_disjuntos_no_mesmo_dia_sao_aceitos(self):
+        """Controle positivo: é o caso que o unique antigo proibia."""
+        RegistroPresenca.objects.create(
+            escola=self.escola, turma=self.turma, data=date.today(), tempos=[1, 2]
+        )
+        payload = self._registro_payload(
+            data=date.today().isoformat(), tempos=[3, 4]
+        )
+        resp = self._request_registro("create", "diretor", payload)
+        self.assertEqual(resp.status_code, 201, resp.data)
 
     def test_diretor_nao_cria_em_outra_escola(self):
         """IDOR: diretor da Escola Teste não escreve na Outra."""
@@ -249,17 +269,19 @@ class RegistroValidationTests(_PresencaSetup):
             RegistroPresenca.objects.filter(pk=registro_outra.id).exists()
         )
 
-    def test_mensagem_duplicidade_em_portugues(self):
-        """A mensagem customizada do UniqueTogetherValidator chega no payload."""
+    def test_mensagem_de_sobreposicao_em_portugues(self):
+        """A frase diz qual tempo colidiu — é o que a tela mostra."""
         RegistroPresenca.objects.create(
-            escola=self.escola, turma=self.turma, data=date.today()
+            escola=self.escola, turma=self.turma, data=date.today(), tempos=[1]
         )
-        payload = self._registro_payload(data=date.today().isoformat())
+        payload = self._registro_payload(
+            data=date.today().isoformat(), tempos=[1]
+        )
         resp = self._request_registro("create", "diretor", payload)
         self.assertEqual(resp.status_code, 400)
-        # A mensagem cai em "non_field_errors" porque o validator é a nível de objeto.
         mensagens = " ".join(str(v) for v in resp.data.values())
         self.assertIn("Já existe chamada", mensagens)
+        self.assertIn("1º", mensagens)
 
 
 class RegistroEscopoTests(TestCase):
