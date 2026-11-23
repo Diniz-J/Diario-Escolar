@@ -51,11 +51,14 @@ class RegistroPresencaCleanTests(_BasePresencaSetup):
     def test_clean_caminho_feliz(self):
         registro = RegistroPresenca(
             escola=self.escola_a, turma=self.turma_a, professor=self.professor_a,
+            tempos=[1],
         )
         registro.full_clean()
 
     def test_clean_sem_professor_ok(self):
-        registro = RegistroPresenca(escola=self.escola_a, turma=self.turma_a)
+        registro = RegistroPresenca(
+            escola=self.escola_a, turma=self.turma_a, tempos=[1]
+        )
         registro.full_clean()
 
     def test_clean_falha_turma_de_outra_escola(self):
@@ -88,13 +91,76 @@ class RegistroPresencaCleanTests(_BasePresencaSetup):
         self.assertIn("professor", ctx.exception.message_dict)
 
 
-class RegistroPresencaConstraintTests(_BasePresencaSetup):
-    """Unicidade `(escola, turma, data)`."""
+class RegistroPresencaBlocoDeTemposTests(_BasePresencaSetup):
+    """Várias chamadas por dia, uma por bloco de tempos (`PRESENCA.md`).
 
-    def test_dois_registros_no_mesmo_dia_falha(self):
-        RegistroPresenca.objects.create(escola=self.escola_a, turma=self.turma_a)
-        with self.assertRaises(IntegrityError), transaction.atomic():
-            RegistroPresenca.objects.create(escola=self.escola_a, turma=self.turma_a)
+    Substitui os testes do antigo unique `(escola, turma, data)`, que
+    caiu em nov/2026: a turma passou a ter uma chamada por bloco, e o que
+    não pode repetir é o **tempo**, não o dia. A garantia saiu do banco
+    (constraint não cobre interseção de array) e virou validação, então
+    estes testes são o que impede o tempo contado em dobro.
+    """
+
+    def test_blocos_disjuntos_no_mesmo_dia_sao_validos(self):
+        RegistroPresenca.objects.create(
+            escola=self.escola_a, turma=self.turma_a, tempos=[1, 2]
+        )
+        segundo = RegistroPresenca(
+            escola=self.escola_a, turma=self.turma_a, tempos=[3, 4]
+        )
+        segundo.full_clean()
+        segundo.save()
+        self.assertEqual(RegistroPresenca.objects.count(), 2)
+
+    def test_bloco_sobreposto_no_mesmo_dia_e_recusado(self):
+        RegistroPresenca.objects.create(
+            escola=self.escola_a, turma=self.turma_a, tempos=[1, 2]
+        )
+        conflitante = RegistroPresenca(
+            escola=self.escola_a, turma=self.turma_a, tempos=[2, 3]
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            conflitante.full_clean()
+        self.assertIn("tempos", ctx.exception.message_dict)
+
+    def test_mesmo_bloco_em_dias_diferentes_e_valido(self):
+        RegistroPresenca.objects.create(
+            escola=self.escola_a, turma=self.turma_a, tempos=[1]
+        )
+        outro_dia = RegistroPresenca(
+            escola=self.escola_a,
+            turma=self.turma_a,
+            data=date.today() - timedelta(days=1),
+            tempos=[1],
+        )
+        outro_dia.full_clean()
+
+    def test_bloco_vazio_e_recusado(self):
+        registro = RegistroPresenca(
+            escola=self.escola_a, turma=self.turma_a, tempos=[]
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            registro.full_clean()
+        self.assertIn("tempos", ctx.exception.message_dict)
+
+    def test_tempo_repetido_no_bloco_e_recusado(self):
+        registro = RegistroPresenca(
+            escola=self.escola_a, turma=self.turma_a, tempos=[1, 1]
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            registro.full_clean()
+        self.assertIn("tempos", ctx.exception.message_dict)
+
+    def test_default_e_um_tempo(self):
+        """Chamada criada fora da API pesa um tempo, não zero.
+
+        Bloco vazio teria peso zero na frequência e sumiria do
+        denominador em silêncio — ver `tempo_unico` em `models.py`.
+        """
+        registro = RegistroPresenca.objects.create(
+            escola=self.escola_a, turma=self.turma_a
+        )
+        self.assertEqual(registro.tempos, [1])
 
     def test_mesma_data_turmas_diferentes_ok(self):
         outra_turma = Turma.objects.create(

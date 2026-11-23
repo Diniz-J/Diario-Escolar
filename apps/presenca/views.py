@@ -14,14 +14,18 @@ materializa o caso de uso padrão: professor abre a chamada e só marca exceçõ
 `ItemPresencaViewSet` não expõe POST/DELETE — o ciclo de vida dos itens é
 gerenciado pelo registro pai. Apenas GET e PATCH (mudar status/observação).
 """
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import mixins, viewsets
+from rest_framework.exceptions import PermissionDenied
 
 from apps.common.pagination import PaginacaoCompulsoria
 from apps.common.permissions import (
+    PERFIS_PRIVILEGIADOS,
     IsAdminOrDiretorOrProfessor,
     IsAdminOrDiretorOrProfessorOrInspetor,
+    eh_admin_global,
 )
 from apps.common.views import (
     EscopoEscolaMixin,
@@ -32,6 +36,17 @@ from apps.common.views import (
 from .filters import RegistroPresencaFilter
 from .models import ItemPresenca, RegistroPresenca
 from .serializers import ItemPresencaSerializer, RegistroPresencaSerializer
+
+
+def _eh_direcao(user) -> bool:
+    return eh_admin_global(user) or getattr(user, "perfil", None) in PERFIS_PRIVILEGIADOS
+
+
+def _professor_do_usuario(user):
+    try:
+        return user.professor
+    except (AttributeError, ObjectDoesNotExist):
+        return None
 
 
 class _PresencaReadWriteMixin(ReadWritePermissionMixin):
@@ -64,6 +79,31 @@ class RegistroPresencaViewSet(
     filter_backends = [DjangoFilterBackend]
     filterset_class = RegistroPresencaFilter
 
+    def _professor_do_registro(self, serializer) -> dict:
+        """Resolve quem assina a chamada, no molde do diário de aula.
+
+        O professor deixou de vir de um select: quem lança assina. A
+        direção segue podendo abrir a chamada por outro (é ela que cobre
+        falta e corrige lançamento), e o professor só por si mesmo — 403
+        em vez de sobrescrever em silêncio, porque lançar presença em nome
+        de outro é o que o registro existe pra impedir.
+
+        Inspetor opera como professor mas não tem cadastro de `Professor`:
+        a chamada dele fica sem assinatura, como antes.
+        """
+        user = self.request.user
+        pedido = serializer.validated_data.get("professor")
+        if _eh_direcao(user):
+            return {}
+        meu = _professor_do_usuario(user)
+        if pedido is not None and meu is not None and pedido.pk != meu.pk:
+            raise PermissionDenied(
+                "Você só pode lançar chamada no seu próprio nome."
+            )
+        if meu is None:
+            return {}
+        return {"professor": meu}
+
     def perform_create(self, serializer) -> None:
         """Cria o registro e popula `ItemPresenca` para cada aluno ativo.
 
@@ -76,8 +116,9 @@ class RegistroPresencaViewSet(
         aluno for reativado depois, novos registros já vão incluí-lo;
         registros antigos seguem sem ele (snapshot histórico).
         """
+        professor = self._professor_do_registro(serializer)
         with transaction.atomic():
-            registro = serializer.save()
+            registro = serializer.save(**professor)
             alunos_ativos = list(registro.turma.alunos.filter(ativo=True))
             # `bulk_create` não chama `save()` nem `clean()` — a invariante
             # `aluno.turma == registro.turma` já é garantida pelo filtro

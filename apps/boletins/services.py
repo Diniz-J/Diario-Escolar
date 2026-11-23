@@ -6,7 +6,7 @@ serialização JSON.
 
 Estrutura desde PR #5 (refator da frente de avaliação):
 
-- `frequencia`: agregado de `ItemPresenca` (P/R/J contam como presença
+- `frequencia`: soma de TEMPOS de `ItemPresenca` (P/R/J contam como presença
   efetiva; só `A` é falta).
 - `notas_por_disciplina`: agrega `NotaAvaliacao` (provas individuais)
   + `NotaPeriodo` (média final digitada pelo professor). **O sistema
@@ -26,7 +26,8 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
+from django.db.models.functions import Coalesce
 
 from apps.avaliacao.models import (
     Avaliacao,
@@ -68,12 +69,25 @@ def calcular_frequencia(
     """
     qs = ItemPresenca.objects.filter(aluno=aluno)
     qs = _filtro_periodo(qs, "registro__data", data_inicio, data_fim)
+
+    # Soma de TEMPOS, não contagem de itens: desde nov/2026 a chamada
+    # cobre um bloco de tempos de aula (`PRESENCA.md`), então o
+    # denominador da frequência é carga horária — a régua da LDB. O peso
+    # de cada item é o tamanho do bloco do registro pai, e o lookup `len`
+    # do `ArrayField` resolve isso no banco (`array_length`), mantendo
+    # tudo num `aggregate` só.
+    peso = "registro__tempos__len"
+
+    def _somar(status: str | None = None):
+        filtro = Q(status=status) if status else Q()
+        return Coalesce(Sum(peso, filter=filtro), 0)
+
     agregado = qs.aggregate(
-        total=Count("id"),
-        presentes=Count("id", filter=Q(status="P")),
-        ausentes=Count("id", filter=Q(status="A")),
-        justificados=Count("id", filter=Q(status="J")),
-        retardatarios=Count("id", filter=Q(status="R")),
+        total=_somar(),
+        presentes=_somar("P"),
+        ausentes=_somar("A"),
+        justificados=_somar("J"),
+        retardatarios=_somar("R"),
     )
     total = agregado["total"] or 0
     efetivas = (
