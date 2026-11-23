@@ -28,6 +28,42 @@ for (const instancia of [api, portalApi]) {
 // refresh e o caminho fica impossível de testar.
 axios.defaults.adapter = "fetch";
 
+// O `Select` do shadcn é Radix, e o Radix usa APIs de ponteiro e de scroll
+// que o jsdom não implementa: sem elas o menu simplesmente não abre, e o
+// teste falha com "Unable to find role=option" — como se a opção não
+// existisse, quando na verdade a lista nunca foi montada. Era o que
+// deixava qualquer tela com `Select` intestável (o motivo de a tela da
+// grade ter ido pra `?turma=` em vez de depender do seletor no teste).
+//
+// Só o que o Radix chama, e nada além: `hasPointerCapture` devolve false
+// porque nenhum elemento tem captura num ambiente sem ponteiro de verdade,
+// e as outras três são no-op. Não altera o app — são métodos do DOM que o
+// browser já fornece.
+for (const [metodo, implementacao] of [
+  ["hasPointerCapture", () => false],
+  ["setPointerCapture", () => {}],
+  ["releasePointerCapture", () => {}],
+  ["scrollIntoView", () => {}],
+] as const) {
+  if (!(metodo in Element.prototype)) {
+    Object.defineProperty(Element.prototype, metodo, {
+      value: implementacao,
+      writable: true,
+      configurable: true,
+    });
+  }
+}
+
+// O Radix mede o viewport do menu com ResizeObserver, que o jsdom também
+// não tem.
+if (!("ResizeObserver" in globalThis)) {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
 // Requisição que nenhum handler cobre. O MSW loga e deixa o request
 // falhar, mas **não** reprova o teste por conta própria — e falha de
 // transporte é indistinguível de um 500 declarado, então um teste de
