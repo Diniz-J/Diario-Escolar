@@ -186,14 +186,34 @@ class RegistroValidationTests(_PresencaSetup):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("data", resp.data)
 
-    def test_falha_duplicidade_no_mesmo_dia(self):
+    def test_falha_bloco_de_tempos_sobreposto(self):
+        """O que não repete é o tempo, não o dia (`PRESENCA.md`).
+
+        Substitui o teste do unique `(escola, turma, data)`: a turma
+        passou a ter uma chamada por bloco de tempos, e sem esta
+        validação duas chamadas no mesmo tempo contariam a carga horária
+        em dobro.
+        """
         RegistroPresenca.objects.create(
-            escola=self.escola, turma=self.turma, data=date.today()
+            escola=self.escola, turma=self.turma, data=date.today(), tempos=[1, 2]
         )
-        payload = self._registro_payload(data=date.today().isoformat())
+        payload = self._registro_payload(
+            data=date.today().isoformat(), tempos=[2, 3]
+        )
         resp = self._request_registro("create", "diretor", payload)
-        # Constraint do banco vira erro DRF 400 (unique violation no serializer).
         self.assertEqual(resp.status_code, 400)
+        self.assertIn("tempos", resp.data)
+
+    def test_blocos_disjuntos_no_mesmo_dia_sao_aceitos(self):
+        """Controle positivo: é o caso que o unique antigo proibia."""
+        RegistroPresenca.objects.create(
+            escola=self.escola, turma=self.turma, data=date.today(), tempos=[1, 2]
+        )
+        payload = self._registro_payload(
+            data=date.today().isoformat(), tempos=[3, 4]
+        )
+        resp = self._request_registro("create", "diretor", payload)
+        self.assertEqual(resp.status_code, 201, resp.data)
 
     def test_diretor_nao_cria_em_outra_escola(self):
         """IDOR: diretor da Escola Teste não escreve na Outra."""
@@ -249,17 +269,87 @@ class RegistroValidationTests(_PresencaSetup):
             RegistroPresenca.objects.filter(pk=registro_outra.id).exists()
         )
 
-    def test_mensagem_duplicidade_em_portugues(self):
-        """A mensagem customizada do UniqueTogetherValidator chega no payload."""
+    def test_mensagem_de_sobreposicao_em_portugues(self):
+        """A frase diz qual tempo colidiu — é o que a tela mostra."""
         RegistroPresenca.objects.create(
-            escola=self.escola, turma=self.turma, data=date.today()
+            escola=self.escola, turma=self.turma, data=date.today(), tempos=[1]
         )
-        payload = self._registro_payload(data=date.today().isoformat())
+        payload = self._registro_payload(
+            data=date.today().isoformat(), tempos=[1]
+        )
         resp = self._request_registro("create", "diretor", payload)
         self.assertEqual(resp.status_code, 400)
-        # A mensagem cai em "non_field_errors" porque o validator é a nível de objeto.
         mensagens = " ".join(str(v) for v in resp.data.values())
         self.assertIn("Já existe chamada", mensagens)
+        self.assertIn("1º", mensagens)
+
+
+class RegistroPatchOwnershipTests(_PresencaSetup):
+    """PATCH de `professor`/`tempos` por professor comum é bloqueado.
+
+    Sem essa trava, o diário vira livre-edição retroativa: qualquer
+    professor sobrescreve a assinatura do colega ou expande os tempos do
+    registro antigo e reescaluda a frequência ponderada em silêncio.
+    """
+
+    def _registro_ja_lancado(self, tempos=None):
+        return RegistroPresenca.objects.create(
+            escola=self.escola,
+            turma=self.turma,
+            data=date.today(),
+            tempos=tempos if tempos is not None else [1, 2],
+            professor=self.professor,
+        )
+
+    def test_professor_nao_patch_professor(self):
+        registro = self._registro_ja_lancado()
+        outro_doc = Usuario.objects.create_user(
+            username="doc2", password="x",
+            perfil=Usuario.Perfil.PROFESSOR, escola=self.escola,
+        )
+        outro = Professor.objects.create(escola=self.escola, usuario=outro_doc)
+        resp = self._request_registro(
+            "partial_update", "professor",
+            payload={"professor": outro.id}, pk=registro.id,
+        )
+        self.assertEqual(resp.status_code, 403)
+        self.assertIn("direção", str(resp.data))
+        registro.refresh_from_db()
+        self.assertEqual(registro.professor_id, self.professor.id)
+
+    def test_professor_nao_patch_tempos(self):
+        registro = self._registro_ja_lancado(tempos=[1])
+        resp = self._request_registro(
+            "partial_update", "professor",
+            payload={"tempos": [1, 2, 3]}, pk=registro.id,
+        )
+        self.assertEqual(resp.status_code, 403)
+        registro.refresh_from_db()
+        self.assertEqual(list(registro.tempos), [1])
+
+    def test_diretor_patch_professor_aceito(self):
+        registro = self._registro_ja_lancado()
+        outro_doc = Usuario.objects.create_user(
+            username="doc3", password="x",
+            perfil=Usuario.Perfil.PROFESSOR, escola=self.escola,
+        )
+        outro = Professor.objects.create(escola=self.escola, usuario=outro_doc)
+        resp = self._request_registro(
+            "partial_update", "diretor",
+            payload={"professor": outro.id}, pk=registro.id,
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        registro.refresh_from_db()
+        self.assertEqual(registro.professor_id, outro.id)
+
+    def test_professor_patch_observacao_aceito(self):
+        """Controle positivo: campos neutros continuam editáveis."""
+        registro = self._registro_ja_lancado()
+        resp = self._request_registro(
+            "partial_update", "professor",
+            payload={"observacao": "chuva forte"}, pk=registro.id,
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
 
 
 class RegistroEscopoTests(TestCase):

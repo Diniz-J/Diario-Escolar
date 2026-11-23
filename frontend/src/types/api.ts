@@ -291,22 +291,52 @@ export interface AgendaSlot {
 // P=Presente, A=Ausente, J=Justificado, R=Retardatário
 export type PresencaStatus = "P" | "A" | "J" | "R";
 
+export interface TempoDetalhe {
+  ordem: number;
+  // Nulos quando o tempo saiu do catálogo depois da chamada: o registro
+  // guarda o ordinal, não o horário (ver PRESENCA.md).
+  hora_inicio: string | null;
+  hora_fim: string | null;
+}
+
 export interface RegistroPresenca {
   id: number;
   escola: number;
   turma: number;
   data: string;
   professor: number | null;
+  // Nula = chamada do dia; preenchida = chamada de uma aula.
+  disciplina: number | null;
+  disciplina_nome: string | null;
+  // Ordinais dos tempos de aula que esta chamada cobre (1 = primeiro
+  // tempo do turno). É o peso do registro na frequência.
+  tempos: number[];
+  tempos_detalhe: TempoDetalhe[];
   observacao: string;
   criado_em: string;
   atualizado_em: string;
 }
 
 // `escola` opcional — backend auto-preenche (`AutoEscopoEscolaMixin`).
+// `tempos` também: omitido, o backend cobre o dia todo (o turno inteiro
+// da turma), que é a semântica que a chamada diária tinha. `professor`
+// vai no payload mas o backend o resolve do usuário logado — professor só
+// lança no próprio nome.
 export type RegistroPresencaInput = Omit<
   RegistroPresenca,
-  "id" | "escola" | "criado_em" | "atualizado_em"
-> & { escola?: number };
+  | "id"
+  | "escola"
+  | "criado_em"
+  | "atualizado_em"
+  | "tempos"
+  | "tempos_detalhe"
+  | "disciplina"
+  | "disciplina_nome"
+> & {
+  escola?: number;
+  tempos?: number[];
+  disciplina?: number | null;
+};
 
 export interface ItemPresenca {
   id: number;

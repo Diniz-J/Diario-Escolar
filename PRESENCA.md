@@ -140,7 +140,34 @@ que importa é "um tempo da turma num dia não tem dois slots", e
 | `+ disciplina` | FK PROTECT, **opcional** (nulo = chamada do dia) |
 | `professor` | resolvido do usuário logado no `perform_create`; direção pode lançar por outro |
 | `- unique (escola, turma, data)` | cai — a turma passa a ter N chamadas por dia |
-| migração | registros existentes recebem `tempos=[1]`, disciplina nula |
+| migração | `AddField` com default `tempo_unico` já grava `[1]` nas linhas existentes — não precisou de data migration |
+
+**O default do campo é `[1]`, não lista vazia, e isso não é cosmética.**
+O peso de um item na frequência é o tamanho do bloco, então bloco vazio
+faria o registro desaparecer do denominador **em silêncio**. Com `[1]`,
+qualquer chamada criada fora da API (shell, management command, migration)
+tem exatamente a semântica que a chamada diária tinha. A função é nomeada
+(`tempo_unico`) porque default de `ArrayField` precisa ser serializável
+pela migration.
+
+**`tempos` é opcional no payload e, omitido, cobre o dia todo** — o turno
+inteiro da turma (`tempos_padrao`), ou um tempo onde não há catálogo. É o
+que mantém o cliente que ainda não manda o campo (a tela de chamada, até
+a fatia 4) funcionando com a mesma semântica de antes: uma chamada por
+dia, valendo o dia.
+
+**Os ordinais só são validados contra o catálogo quando ele existe.** A
+escola que ainda não cadastrou `TempoAula` nenhum continua lançando
+chamada — é o estado de toda instalação antes de a grade ser montada, o
+banco de demo inclusive. Exigir o catálogo aqui travaria a chamada por
+causa de um cadastro que ninguém pediu ainda.
+
+**O professor deixou de vir de um select: quem lança assina.** A view o
+resolve do usuário logado, no molde do `RegistroAula`. A direção segue
+podendo lançar por outro (é ela que cobre falta e corrige lançamento), e
+o professor que tenta lançar em nome de outro leva 403 em vez de ter o
+campo sobrescrito em silêncio. Inspetor opera como professor mas não tem
+cadastro de `Professor`: a chamada dele fica sem assinatura, como antes.
 
 `clean()`: tempos existem no catálogo do turno da turma; tempos não
 sobrepõem outra chamada da mesma turma no mesmo dia.
@@ -164,12 +191,37 @@ boletim funcionando sem reescrita.
 
 Denominador: soma dos `len(tempos)` das chamadas em que o aluno tem
 item. Deixa de ser `COUNT(itens)` e passa a ser soma ponderada — os três
-lugares que calculam isso mudam juntos, na mesma PR:
+lugares que calculam isso mudaram juntos, na mesma PR.
+
+O peso sai do lookup `len` do `ArrayField`
+(`registro__tempos__len`, que o Postgres resolve como
+`coalesce(array_length(tempos, 1), 0)`), dentro de
+`Coalesce(Sum(..., filter=...), 0)`. Isso é o que mantém o relatório por
+turma em **duas queries fixas** independentes do tamanho da turma — tem
+`assertNumQueries` travando, e é a razão de o peso não ser resolvido em
+Python. O `Coalesce` externo existe porque `Sum` sobre `LEFT JOIN` sem
+linha devolve `NULL`, e o aluno sem chamada na janela tem que aparecer
+com zero.
+
+Os três lugares:
 
 - `apps/boletins/services.py::calcular_frequencia`
 - `apps/relatorios/services.py` — frequência por turma (atenção ao
   `assertNumQueries`) e presença média do dashboard
-- `_STATUS_EFETIVOS` deixa de ser lista de status e vira tabela de pesos
+- `_STATUS_EFETIVOS` **continua** sendo lista de status: como o `R` é
+  crachá (§2.3), o peso é uniforme e o que mudou foi a unidade somada,
+  não a régua de quem conta como presente
+
+O relatório ganhou `total_chamadas_aluno` ao lado do total em tempos, e os
+cabeçalhos do CSV/XLSX passaram a dizer `_aulas`: "faltas: 4" num dia de
+bloco duplo seria lido pela secretaria como quatro dias de ausência.
+
+**Armadilha do teste:** até nov/2026 toda chamada valia 1, então contar
+itens e somar tempos davam o mesmo número — a suíte inteira passou sem
+mudança nenhuma depois do refactor. Todo teste da régua nova usa bloco de
+tamanho **diferente de 1** (`apps/relatorios/tests/test_frequencia_ponderada.py`);
+sem isso o teste passa pelo motivo errado e não impede ninguém de voltar
+a contar chamadas.
 
 O teste de não-divergência boletim × relatório continua sendo o que
 impede as duas pontas de se afastarem.
@@ -196,7 +248,7 @@ lá a pergunta é "o que aconteceu", não "quantas faltas tem".
 |---|---|---|
 | 1 | Grade — backend | **entregue** — este doc, `TempoAula`, `AulaGrade`, migration, admin, API só-direção |
 | 2 | Grade — frontend | **entregue** — `/grade` (matriz da turma) e `/grade/tempos` (catálogo), mais a action `clonar` que a tela consome |
-| 3 | Presença por tempo | §3.3 **mais** a régua da §4 — indivisível: separar deixa a frequência errada em produção entre os merges |
+| 3 | Presença por tempo | **entregue** — §3.3 mais a régua da §4, na mesma PR |
 | 4 | Tela de chamada | tempos pré-marcados pela grade, modo dia-todo, ajuste manual |
 | 5 | Aposentar `dias_semana` | `projetar_agenda` lê a grade; campo removido em migration |
 
