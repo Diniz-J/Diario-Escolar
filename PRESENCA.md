@@ -5,15 +5,19 @@ aula**, com grade horária por turma. Decidido em nov/2026.
 
 ---
 
-## 1. O que muda
+## 1. O que mudou
 
-Hoje a chamada é uma por `(escola, turma, data)` e a frequência conta
-**itens** — o denominador é "dias com chamada". Passa a ser uma chamada
-por **bloco de tempos** de uma turma num dia, e a frequência soma
+**Entregue em nov/2026** (PRs #179 a #183; §6 tem as fatias e o que o
+code review pegou). Este documento é o registro das decisões, não um
+plano — o que ele descreve está no ar.
+
+Até então a chamada era uma por `(escola, turma, data)` e a frequência
+contava **itens**: o denominador era "dias com chamada". Passou a ser uma
+chamada por **bloco de tempos** de uma turma num dia, e a frequência soma
 **tempos** — o denominador é carga horária, que é a régua da LDB (75% da
 carga, não dos dias).
 
-Três coisas entram juntas: o bloco de tempos no registro, o professor
+Três coisas entraram juntas: o bloco de tempos no registro, o professor
 resolvido do usuário logado, e a grade horária que pré-preenche os
 tempos do dia.
 
@@ -255,8 +259,58 @@ lá a pergunta é "o que aconteceu", não "quantas faltas tem".
 Ordem: grade antes da presença, pra a tela de chamada (fatia 4) nascer
 já com a sugestão e não ser reescrita.
 
-**As cinco fatias estão entregues.** Duas decisões da 5 que não estavam
-previstas aqui e valem registro:
+**As cinco fatias estão mergeadas** (PRs #179 a #183, nov/2026), e a
+`main` ficou verde depois da #184.
+
+### 6.1 O que o code review pegou
+
+Cada fatia levou um commit de conserto antes do merge, e os cinco apontam
+para o mesmo tipo de erro: a invariante foi aplicada **num caminho só**.
+Ficam aqui porque a próxima pessoa a mexer nisto vai passar pelos mesmos
+pontos.
+
+**A invariante do `create` não vale no `update`.** `perform_create`
+resolvia o professor do usuário logado, mas o PATCH ficou aberto: um
+professor podia assinar por cima da chamada alheia, ou esticar `tempos`
+num registro antigo — e esticar o bloco **reescreve o peso da
+frequência** retroativamente, sem nada na UI dizendo que o percentual do
+boletim mudou. O `perform_update` trava os dois campos fora da direção.
+
+**Remover coluna sem migrar o dado esvazia a tela em silêncio.** A fatia
+5 derrubou `Lecionamento.dias_semana` depois de a projeção passar a ler a
+grade, mas quem tinha dias preenchidos e nenhum slot ficaria sem agenda
+no diário — e nada falharia. A `escola/0011` ganhou `RunPython`
+idempotente que cria um slot no primeiro `TempoAula` ativo do turno. O
+agravante: a fatia 3 fez exatamente esse cuidado para `tempos` (§3.3), e
+a 5 não o repetiu.
+
+**`PROTECT` não protege soft delete.** O comentário original dizia "tempo
+em uso por slot da grade é `PROTECT`" — falso: o FK só dispara em delete
+hard, e ali o `DELETE` desativa. Desativar tempo ainda referenciado por
+slot ativo deixava a grade apontando pra horário morto. Comentário que
+afirma garantia inexistente é pior que comentário nenhum.
+
+**Filtrar o slot não é filtrar o vínculo.** `projetar_agenda` exigia
+`AulaGrade.ativo` mas não `lecionamento__ativo`, então slot ativo
+pendurado em vínculo encerrado seguia projetando aula de professor que
+saiu.
+
+**Check-then-insert sem lock é 500 sob concorrência.** O clone validava
+"destino sem grade" fora da transação do `bulk_create`: dois POSTs
+simultâneos passavam os dois e o segundo morria no unique parcial. Virou
+transação com `select_for_update` na turma destino, com o
+`IntegrityError` restante traduzido pra 400. O mapa de
+`(professor, disciplina)` também passou a resolver empate pelo menor id,
+porque o modelo não impede dois lecionamentos ativos do mesmo par.
+
+**Estado derivado precisa resetar quando o contexto muda.** No dialog da
+chamada, `temposTocados` sobrevivia à troca de turma e de data, então o
+formulário mandava o bloco da turma anterior. E a falha de
+`/tempos-aula/` caía no default do backend ("um tempo"), confundindo "não
+tem catálogo" com "o catálogo não carregou" — agora trava o envio, ao
+contrário da falha de `/grade-aulas/`, que segue não travando.
+
+### 6.2 Duas decisões da fatia 5 que não estavam previstas aqui
 
 **O substituto do campo chama-se `dias_grade`, não `dias_semana`.** É
 derivado da grade e read-only, no molde do `ano_letivo` do mesmo
