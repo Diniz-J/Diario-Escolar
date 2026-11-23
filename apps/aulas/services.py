@@ -39,6 +39,7 @@ def projetar_agenda(
             lecionamento__professor_id=professor_id,
             lecionamento__turma_id=turma_id,
             lecionamento__disciplina_id=disciplina_id,
+            lecionamento__ativo=True,
             ativo=True,
         ).values_list("dia_semana", flat=True)
     )

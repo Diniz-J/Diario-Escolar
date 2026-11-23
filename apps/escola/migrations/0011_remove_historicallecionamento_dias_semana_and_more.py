@@ -3,13 +3,59 @@
 from django.db import migrations
 
 
+def backfill_grade_de_dias_semana(apps, schema_editor):
+    """Backfill de dias_semana -> AulaGrade pra lecionamentos sem grade preenchida; evita perda silenciosa da projecao de agenda apos o drop da coluna."""
+    Lecionamento = apps.get_model("escola", "Lecionamento")
+    AulaGrade = apps.get_model("grade", "AulaGrade")
+    TempoAula = apps.get_model("grade", "TempoAula")
+
+    # Lecionamento com dias_semana nao-vazio e sem AulaGrade ativa ligada.
+    ativos = Lecionamento.objects.filter(ativo=True).exclude(dias_semana=[]).exclude(
+        dias_semana__isnull=True
+    )
+    for lec in ativos.iterator():
+        turno = lec.turma.turno
+        # 1o tempo ativo do turno da turma, por ordem.
+        tempo = (
+            TempoAula.objects.filter(escola_id=lec.escola_id, turno=turno, ativo=True)
+            .order_by("ordem")
+            .first()
+        )
+        if tempo is None:
+            print(
+                f"[0011 backfill] sem TempoAula ativo em escola={lec.escola_id} "
+                f"turno={turno}; lecionamento={lec.id} pulado."
+            )
+            continue
+        for dia in lec.dias_semana or []:
+            # Idempotente: nao cria se ja existe slot ativo desse lecionamento no dia.
+            if AulaGrade.objects.filter(
+                lecionamento_id=lec.id, dia_semana=dia, ativo=True
+            ).exists():
+                continue
+            AulaGrade.objects.create(
+                lecionamento_id=lec.id,
+                turma_id=lec.turma_id,
+                dia_semana=dia,
+                tempo_id=tempo.id,
+                ativo=True,
+                escola_id=lec.escola_id,
+            )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
         ("escola", "0010_historicallecionamento_dias_semana_and_more"),
+        ("grade", "0001_initial"),
     ]
 
     operations = [
+        migrations.RunPython(
+            backfill_grade_de_dias_semana,
+            reverse_code=migrations.RunPython.noop,
+        ),
+        # perda intencional de historico da coluna; dias letivos passam a sair da grade.
         migrations.RemoveField(
             model_name="historicallecionamento",
             name="dias_semana",
