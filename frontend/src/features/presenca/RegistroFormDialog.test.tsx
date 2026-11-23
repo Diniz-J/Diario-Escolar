@@ -247,4 +247,66 @@ describe("RegistroFormDialog — bloco de tempos", () => {
       ).toBeDisabled(),
     );
   });
+
+  it("falha ao carregar tempos avisa e trava o envio", async () => {
+    // Rede caiu no catálogo de tempos: deixar passar faria a chamada ser
+    // enviada sem `tempos`, e o backend assumiria um tempo — a chamada
+    // entraria no tempo errado sem o usuário saber. O aviso é o mesmo
+    // genérico do projeto.
+    autenticarComo("diretor");
+    responder();
+    servidor.use(
+      http.get(`${API}/tempos-aula/`, () =>
+        HttpResponse.json({ detail: "boom" }, { status: 500 }),
+      ),
+    );
+    abrir();
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Abrir chamada" }),
+      ).toBeDisabled(),
+    );
+  });
+
+  it("troca de turma reseta a escolha explícita de tempos", async () => {
+    // Professor desmarca um tempo na turma A e troca pra turma B: a
+    // sugestão da grade precisa voltar, senão o formulário manda o bloco
+    // da turma anterior sem avisar.
+    autenticarComo("professor");
+    responder({
+      tempos: [
+        tempo(1, "07:00:00", "07:50:00"),
+        tempo(2, "07:50:00", "08:40:00"),
+      ],
+      slots: [slot(1), slot(2)],
+      turmas: () =>
+        HttpResponse.json([TURMA, { ...TURMA, id: 2, nome: "6º B" }]),
+    });
+    abrir();
+
+    // Como há duas turmas, a sugestão inicial não aparece sozinha; o
+    // professor escolhe a turma A primeiro.
+    const [seletorTurma] = await screen.findAllByRole("combobox");
+    await userEvent.click(seletorTurma);
+    await userEvent.click(await screen.findByRole("option", { name: /6º A/ }));
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { pressed: true })).toHaveLength(2),
+    );
+
+    // Desmarca o 1º tempo.
+    const marcados = screen.getAllByRole("button", { pressed: true });
+    await userEvent.click(marcados[0]);
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { pressed: true })).toHaveLength(1),
+    );
+
+    // Troca pra 6º B: a sugestão da grade volta pra bloco cheio.
+    await userEvent.click(screen.getAllByRole("combobox")[0]);
+    await userEvent.click(await screen.findByRole("option", { name: /6º B/ }));
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { pressed: true })).toHaveLength(2),
+    );
+  });
 });

@@ -129,10 +129,22 @@ export function RegistroFormDialog({
   const disciplinaEfetiva = disciplinaTocada ?? disciplinaSugerida;
 
   // A turma é exigida na validação de submit: sem a lista não há chamada a
-  // abrir. As listas de tempo e de grade **não** travam o envio: sem
-  // catálogo cadastrado o backend assume um tempo, e é assim que a escola
-  // que ainda não montou a grade segue lançando chamada.
-  const falhouCarregar = turmasQuery.isError;
+  // abrir. A lista de grade **não** trava o envio: sem catálogo cadastrado
+  // o backend assume um tempo, e é assim que a escola que ainda não montou
+  // a grade segue lançando chamada. Já a falha do catálogo de tempos é
+  // diferente: a escola tem catálogo (ou pode ter), mas a rede caiu — se
+  // deixarmos passar, o backend assumiria um tempo por "escola sem grade"
+  // e a chamada entraria no tempo errado sem o usuário saber.
+  const falhouCarregar = turmasQuery.isError || temposQuery.isError;
+
+  // Trocar de turma ou data faz a grade sugerir outro bloco; manter a
+  // escolha explícita do usuário anterior deixaria o formulário mentindo
+  // sobre o que ele está mandando. Resetamos nos handlers (e não num
+  // efeito) por causa da regra `react-hooks/set-state-in-effect`.
+  function resetarSugestao() {
+    setTemposTocados(null);
+    setDisciplinaTocada(null);
+  }
 
   function alternarTempo(ordem: number) {
     const atual = temposEfetivos;
@@ -208,7 +220,13 @@ export function RegistroFormDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label className={LABEL}>Turma</Label>
-            <Select value={turmaEfetiva} onValueChange={setTurmaId}>
+            <Select
+              value={turmaEfetiva}
+              onValueChange={(valor) => {
+                setTurmaId(valor);
+                resetarSugestao();
+              }}
+            >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecione uma turma" />
               </SelectTrigger>
@@ -232,7 +250,10 @@ export function RegistroFormDialog({
               required
               max={hoje}
               value={data}
-              onChange={(e) => setData(e.target.value)}
+              onChange={(e) => {
+                setData(e.target.value);
+                resetarSugestao();
+              }}
             />
           </div>
 
