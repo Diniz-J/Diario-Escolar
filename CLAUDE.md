@@ -151,6 +151,34 @@ linhas de volta). `tarefas.py` é a rota que o workflow agendado chama —
 segunda rota sem autenticação do projeto, com lista de permissão de
 command e token em `compare_digest`. Command `notificacoes_reenviar`.
 
+**`grade/`** — grade horária (fatia 1 do [`PRESENCA.md`](./PRESENCA.md)).
+Dois modelos de cadastro de direção: `TempoAula` (catálogo de horários por
+escola **e turno** — é o que torna a duração do tempo configurável por
+cliente, sem 50 minutos no código) e `AulaGrade`, o slot, que é um
+`Lecionamento` ocupando um `TempoAula` num dia da semana. Escrita só
+direção; leitura alcança professor e inspetor, porque a tela de chamada
+lê a grade pra pré-marcar os tempos do dia. `DELETE` desativa. Quatro
+coisas que não se deduzem do schema: (1) **a grade sugere, o registro de
+presença é dono do dado** — a chamada copia tempo, disciplina e professor
+em vez de apontar pra cá por FK, porque editar a grade ou realocá-la em
+janeiro não pode reescrever chamada passada (mesmo raciocínio do valor
+congelado da `Fatura`), e é isso que faz "professor cobrindo falta de
+colega" ser edição normal em vez de exceção de schema; (2) **o slot
+aponta pro `Lecionamento`**, não pra disciplina e professor soltos, então
+herda a validação do trio e um vínculo inválido não é agendável — o custo
+é que não existe slot "a definir"; (3) **`AulaGrade.turma` é
+desnormalizado e essa é a única razão do campo**, porque o unique que
+importa é `(escola, turma, dia_semana, tempo)` e `UniqueConstraint` não
+atravessa FK (mesmo caso de `Fatura.aluno`) — por ser derivado, o
+serializer o preenche do lecionamento e nunca aceita do payload; (4) o
+unique é **parcial** (`condition=ativo`), pra o slot desativado ficar como
+histórico da grade antiga sem impedir remontar o mesmo horário, e por ser
+condicional o DRF **não** monta validator automático pra ele: a duplicata
+precisa de checagem explícita no serializer pra responder 400 em vez de
+estourar como 500 (a mesma pegadinha do `FINANCEIRO.md` §5). O slot
+**não** é validado contra `Lecionamento.dias_semana`, que a grade vai
+substituir.
+
 **`materiais/`** — mural do professor pra turma (fatia 5 do `PORTAL.md`).
 `Material` = turma + disciplina + professor + título + descrição + link
 (só http/https, sem upload). **Auditado**. Mesmo molde do `RegistroAula`:

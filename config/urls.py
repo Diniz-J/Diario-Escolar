@@ -92,6 +92,7 @@ api_v1_patterns = [
     path("", include("apps.avaliacao.urls")),
     path("", include("apps.notificacoes.urls")),
     path("", include("apps.aulas.urls")),
+    path("", include("apps.grade.urls")),
     path("", include("apps.materiais.urls")),
     path("", include("apps.financeiro.urls")),
 ]
