@@ -84,7 +84,13 @@ rede) — ver `src/test/` no mapa abaixo.
 - `Disciplina` — única por `(escola, nome)`; campo `ativa`. **Não auditado**.
 - `Aluno` — não loga; matrícula única por escola; invariante turma/escola. **DELETE = soft delete** (`ativo=False`); o front esconde inativos por padrão e oferece toggle "Mostrar inativos" + ação "Reativar" (PATCH `ativo=true`). Tem `nome_responsavel` + `email_responsavel` (obrigatórios no serializer, `blank` no banco pros antigos) — destino da notificação de ocorrência. **Auditado** (`HistoricalRecords()`).
 - `Professor` — OneToOne com `Usuario(perfil=professor)`; `ativo`; invariante `usuario.escola == professor.escola`. **Auditado**.
-- `Lecionamento` — vínculo granular **professor × turma × disciplina** (substituiu a antiga M2M `Professor.disciplinas`). `ano_letivo` derivado da turma. Unique `(professor, turma, disciplina)`. `clean()` valida escola alinhada nos três. `CASCADE` no professor, `PROTECT` em turma/disciplina. **Auditado**. O campo `dias_semana` existiu até nov/2026 e foi **removido** (fatia 5 do `PRESENCA.md`): quem diz em que dias o vínculo tem aula é a grade horária (`apps.grade`), que diz dia **e** tempo — duas fontes sobre o mesmo fato divergiriam. O serializer expõe `dias_grade` no lugar, derivado e read-only, anotado com `Coalesce(ArrayAgg(...), [])` no viewset. O **nome diferente** é a decisão que importa: um read-only chamado `dias_semana` aceitaria o PATCH de quem tentasse editar os dias e o descartaria em silêncio. O `Coalesce` existe porque `ArrayAgg` devolve `NULL` e não lista vazia quando não há slot, e a ficha do professor itera o valor; o `distinct` porque o mesmo dia aparece uma vez por tempo. O enum `DiaSemana` ficou — é dele que a `AulaGrade` tira as choices.
+- `Lecionamento` — vínculo granular **professor × turma × disciplina** (substituiu a antiga M2M `Professor.disciplinas`). `ano_letivo` derivado da turma. Unique `(professor, turma, disciplina)`. `clean()` valida escola alinhada nos três. `CASCADE` no professor, `PROTECT` em turma/disciplina. **Auditado**. O campo `dias_semana` existiu até nov/2026 e foi **removido** (fatia 5 do `PRESENCA.md`): quem diz em que dias o vínculo tem aula é a grade horária (`apps.grade`), que diz dia **e** tempo — duas fontes sobre o mesmo fato divergiriam. O serializer expõe `dias_grade` no lugar, derivado e read-only, anotado com `Coalesce(ArrayAgg(...), [])` no viewset. O **nome diferente** é a decisão que importa: um read-only chamado `dias_semana` aceitaria o PATCH de quem tentasse editar os dias e o descartaria em silêncio. O `Coalesce` existe porque `ArrayAgg` devolve `NULL` e não lista vazia quando não há slot, e a ficha do professor itera o valor; o `distinct` porque o mesmo dia aparece uma vez por tempo. O enum `DiaSemana` ficou — é dele que a `AulaGrade` tira as choices. A
+migration que derruba a coluna (`escola/0011`) **backfilla antes**: pra
+cada lecionamento ativo com `dias_semana` preenchido e sem slot, cria um
+`AulaGrade` no primeiro `TempoAula` ativo do turno — sem isso a agenda do
+diário esvaziaria **em silêncio** no deploy, porque a projeção passou a
+ler a grade. Lecionamento numa escola sem catálogo de tempos é pulado com
+aviso no log (não há onde encaixar o slot).
 
 **`ocorrencias/`** — `Ocorrencia` (turma + aluno + professor opcional + descrição + data + status `aberta`/`em_andamento`/`resolvida`/`arquivada`). Invariantes em `clean()` + serializer. Permissão uniforme admin/diretor/professor. Guard de IDOR no payload `escola`. **Auditado**. **`services.py`**: `notificar_responsavel_ocorrencia` é disparado em `perform_create` e roda numa **thread daemon** (fire-and-forget — POST volta na hora, sem pendurar a resposta HTTP). Em `TESTING` o envio é síncrono pra manter `mail.outbox` determinístico. Destinatários vêm de `apps/portal/destinatarios.py` — um aluno com mãe e pai vinculados recebe **duas mensagens individuais**, cada uma saudada pelo nome do responsável, e a falha de uma não cala a outra. Aluno sem responsável com email é pulado (log warning). Falha de envio é logada com stack trace, nunca propagada. Em produção o backend é `anymail.backends.brevo.EmailBackend` (HTTP API porta 443) — ver Infra.
 
@@ -116,7 +122,12 @@ existe** — escola sem horários cadastrados segue lançando chamada, que é
 o estado de toda instalação antes da grade; (5) **quem lança assina**: a
 view resolve o professor do usuário logado (molde do `RegistroAula`), a
 direção pode lançar por outro, e professor que tenta lançar em nome de
-outro leva 403 em vez de ter o campo sobrescrito calado.
+outro leva 403 em vez de ter o campo sobrescrito calado; **e o mesmo
+vale no PATCH**, que é onde a primeira versão vazava — sem o
+`perform_update`, professor comum podia assinar por cima da chamada alheia
+ou esticar `tempos` num registro antigo, e esticar o bloco **reescreve o
+peso da frequência** retroativamente, sem nada na UI dizendo que o
+percentual do boletim mudou.
 
 **Tela (fatia 4)** — o `RegistroFormDialog` ganhou o seletor de tempos
 (botões toggle, não checkbox: o professor lança no celular, em sala) com
@@ -129,12 +140,17 @@ perfil**, porque o diretor que também dá aula tem grade própria e merece
 a mesma sugestão (tem teste travando os dois lados); (2) a disciplina só
 é sugerida quando os slots do dia são todos da mesma — dois tempos de
 matérias diferentes são duas chamadas, e preencher por palpite colocaria
-a aula errada no registro; (3) a falha de `/tempos-aula/` e
-`/grade-aulas/` **não** trava o envio, só a de `/turmas/`: sem catálogo o
-seletor nem aparece e o backend assume um tempo, que é como a escola sem
-grade montada opera. O estado guarda só o que o usuário tocou
-(`temposTocados`/`disciplinaTocada`), com o valor efetivo derivado da
-query — padrão da casa pros FormDialogs.
+a aula errada no registro; (3) a falha de `/grade-aulas/` **não** trava o
+envio, mas a de `/tempos-aula/` **trava** — e a distinção é o ponto: sem
+catálogo cadastrado o backend assume um tempo, e é assim que a escola sem
+grade opera, então confundir "não tem catálogo" com "o catálogo não
+carregou" faria a chamada entrar no tempo errado em silêncio. O estado
+guarda só o que o usuário tocou (`temposTocados`/`disciplinaTocada`), com
+o valor efetivo derivado da query — padrão da casa pros FormDialogs — e
+**trocar de turma ou data reseta os dois**, nos handlers e não num efeito
+(`react-hooks/set-state-in-effect`): a grade sugere outro bloco, e manter
+a escolha anterior deixaria o formulário mandando o bloco de outra turma
+sem avisar.
 
 **`portal/`** — portal do responsável (ver [`PORTAL.md`](./PORTAL.md)).
 `Responsavel` herda `AbstractBaseUser` **sem** ser `AUTH_USER_MODEL` (o
@@ -217,9 +233,15 @@ unique é **parcial** (`condition=ativo`), pra o slot desativado ficar como
 histórico da grade antiga sem impedir remontar o mesmo horário, e por ser
 condicional o DRF **não** monta validator automático pra ele: a duplicata
 precisa de checagem explícita no serializer pra responder 400 em vez de
-estourar como 500 (a mesma pegadinha do `FINANCEIRO.md` §5). O slot
-**não** é validado contra `Lecionamento.dias_semana`, que a grade vai
-substituir.
+estourar como 500 (a mesma pegadinha do `FINANCEIRO.md` §5).
+
+Duas regras do ciclo de vida do `TempoAula` que o `PROTECT` **não** dá:
+`DELETE` é soft, e `on_delete=PROTECT` só dispara em delete hard — então
+desativar um tempo ainda referenciado por slot ativo é barrado por
+checagem explícita no `perform_destroy`, senão a grade ficaria com slot
+apontando pra horário morto e a chamada renderizaria um tempo que não
+existe mais. E o `list` filtra `ativo=True` quando não vem `?ativo=`
+explícito, pros seletores não oferecerem tempo desativado.
 
 **Frontend da grade (fatia 2)** — `/grade` monta a semana da turma e
 `/grade/tempos` é o catálogo, sob um item só de sidebar com abas internas
@@ -245,6 +267,15 @@ porque o mapeamento é por `(professor, disciplina)` na turma destino e por
 que não tem equivalente é **ignorado e reportado** na resposta, e o dialog
 mostra essa lista em vez de um toast: clonagem que omitisse isso faria a
 direção crer numa semana completa.
+
+O service roda o check de "destino sem grade" e o `bulk_create` **na mesma
+transação, com `select_for_update` na turma destino**: sem isso dois POSTs
+concorrentes passam os dois pelo check e o segundo morre no unique parcial
+como 500 — o `IntegrityError` que sobrar ainda é traduzido pra 400. E o
+mapa de `(professor, disciplina)` resolve empate pelo **menor id**
+(`order_by("id")` + `setdefault`), porque o modelo não impede hoje dois
+lecionamentos ativos do mesmo par e sem isso o clone dependeria da ordem
+que o ORM devolvesse.
 
 **`materiais/`** — mural do professor pra turma (fatia 5 do `PORTAL.md`).
 `Material` = turma + disciplina + professor + título + descrição + link
@@ -425,7 +456,7 @@ worker; o erro manda pro CSV/XLSX, que não têm teto. O nome da turma no
 cabeçalho sai dos dados, não do `?turma=`: id de outra escola devolve
 recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
 
-**`aulas/`** — diário de classe (conteúdo ministrado por aula). `RegistroAula` = turma + disciplina + professor + data + `conteudo` (texto livre) + `status` (`rascunho`→`lancado`→`conferido`) + `conferido_por`/`conferido_em` (visto da direção). Quarto conceito ao lado de `PlanoEnsino` (planejado no ano), `Tarefa` (atividade do aluno) e `RegistroPresenca` (quem veio) — registra "o que foi dado na aula do dia". Único por `(escola, turma, disciplina, data)`. **Auditado**. `clean()`/serializer: escola alinhada, **`Lecionamento` ativo obrigatório** pro trio, data não-futura, conteúdo exigido ao lançar. Viewset escopado (direção vê a escola toda; professor/inspetor só os próprios); `perform_create` bloqueia (403) lançar em nome de outro. Action `conferir` (só direção) move `lancado`→`conferido` e grava quem/quando — o serializer recusa `status=conferido` (sem auto-conferência); aula conferida trava edição. Action `agenda` (`?turma=&disciplina=&mes=YYYY-MM`) projeta os slots do mês a partir dos dias que a **grade horária** (`apps.grade`) dá ao lecionamento, on-the-fly (sem tabela), via `services.py` — era `Lecionamento.dias_semana` até nov/2026. Os dias entram **desduplicados**: a grade tem uma linha por tempo, e como o diário é por dia (não por tempo), sem o `set` um bloco duplo mostraria a mesma aula duas vezes e a direção conferiria em dobro. **Completo: backend #89; front — diário do professor #90, ficha do professor #91, PDF #94 + redesenho do PDF #97, card no dashboard #93.**
+**`aulas/`** — diário de classe (conteúdo ministrado por aula). `RegistroAula` = turma + disciplina + professor + data + `conteudo` (texto livre) + `status` (`rascunho`→`lancado`→`conferido`) + `conferido_por`/`conferido_em` (visto da direção). Quarto conceito ao lado de `PlanoEnsino` (planejado no ano), `Tarefa` (atividade do aluno) e `RegistroPresenca` (quem veio) — registra "o que foi dado na aula do dia". Único por `(escola, turma, disciplina, data)`. **Auditado**. `clean()`/serializer: escola alinhada, **`Lecionamento` ativo obrigatório** pro trio, data não-futura, conteúdo exigido ao lançar. Viewset escopado (direção vê a escola toda; professor/inspetor só os próprios); `perform_create` bloqueia (403) lançar em nome de outro. Action `conferir` (só direção) move `lancado`→`conferido` e grava quem/quando — o serializer recusa `status=conferido` (sem auto-conferência); aula conferida trava edição. Action `agenda` (`?turma=&disciplina=&mes=YYYY-MM`) projeta os slots do mês a partir dos dias que a **grade horária** (`apps.grade`) dá ao lecionamento, on-the-fly (sem tabela), via `services.py` — era `Lecionamento.dias_semana` até nov/2026. Os dias entram **desduplicados**: a grade tem uma linha por tempo, e como o diário é por dia (não por tempo), sem o `set` um bloco duplo mostraria a mesma aula duas vezes e a direção conferiria em dobro. O filtro exige `lecionamento__ativo=True` além de `AulaGrade.ativo`: slot ativo pendurado em vínculo encerrado continuaria projetando aula de professor que saiu. **Completo: backend #89; front — diário do professor #90, ficha do professor #91, PDF #94 + redesenho do PDF #97, card no dashboard #93.**
 
 ### Frontend — `frontend/src/`
 
@@ -814,7 +845,7 @@ recorte vazio, mas resolver pelo parâmetro imprimiria o nome alheio.
     da tela que os abriu, os dois últimos como action do viewset que já
     tem o filtro e o escopo. PDF via WeasyPrint com teto de linhas
     (síncrono na request), CSV/XLSX via tablib sem teto.
-11. **Diário de classe (`RegistroAula`)** — **FUNCIONAL (5 fatias mergeadas)**. Pedido de cliente: professor lança o conteúdo programático ministrado por aula; direção dá o visto. Decisões travadas: grade de horário (`Lecionamento.dias_semana`) projeta slots, workflow de 3 estados (`rascunho`→`lancado`→`conferido`), conteúdo texto livre, conferência uma a uma (sem lote). Navegação da direção: aba Professores → clica no professor → **`ProfessorDetalhePage` (ficha 360º com tabs Diário/Lecionamentos/Ocorrências/Dados)** → lista cronológica das aulas → confere → **exporta PDF** (com filtros + espaço de assinatura). Pendência de conferência vira card no Dashboard. Fatiado em PRs — **todas mergeadas**: ① backend (#89) · ② PDF (#94) · ③ front diário do professor (#90) · ④ front ficha do professor (#91) · ⑤ card no dashboard (#93). Ficha ganhou também filtros (período+status), agrupamento por mês e contadores; perfil **`coordenador`** entrou como alias de diretor junto da ficha (#91).
+11. **Diário de classe (`RegistroAula`)** — **FUNCIONAL (5 fatias mergeadas)**. Pedido de cliente: professor lança o conteúdo programático ministrado por aula; direção dá o visto. Decisões travadas: a grade horária projeta slots (era `Lecionamento.dias_semana`; desde nov/2026 é a `apps.grade` — ver `PRESENCA.md`), workflow de 3 estados (`rascunho`→`lancado`→`conferido`), conteúdo texto livre, conferência uma a uma (sem lote). Navegação da direção: aba Professores → clica no professor → **`ProfessorDetalhePage` (ficha 360º com tabs Diário/Lecionamentos/Ocorrências/Dados)** → lista cronológica das aulas → confere → **exporta PDF** (com filtros + espaço de assinatura). Pendência de conferência vira card no Dashboard. Fatiado em PRs — **todas mergeadas**: ① backend (#89) · ② PDF (#94) · ③ front diário do professor (#90) · ④ front ficha do professor (#91) · ⑤ card no dashboard (#93). Ficha ganhou também filtros (período+status), agrupamento por mês e contadores; perfil **`coordenador`** entrou como alias de diretor junto da ficha (#91).
 
    ✅ **Redesenho do PDF do diário — ENTREGUE (PR #97).** Layout reformulado em 4 eixos: status consolidado num badge único (sem repetição da nota "Conferido por X em Y"); cabeçalho/meta reorganizado em blocos; estrutura da lista trocada de tabela pra blocos por aula com conteúdo respirando; identidade visual alinhada (olive/ferrugem/sepia + serifa nos títulos + badges tintados: rascunho mostarda, lançado ferrugem, conferido olive). Tocado por um CC no Claude Desktop. ⚠️ WeasyPrint segue sem renderizar no Windows — iteração local exige container/preview.
 
@@ -1140,8 +1171,12 @@ Divisor de esforço (a decisão que define o tamanho): a chamada precisa funcion
 assume a API no ar e faz rollback se cair.
 - **Com conexão na sala** → PWA simples, ~1-2 PRs (manifest + SW + polir touch da
   lista de presença).
-- **Sem sinal na sala** → fila local (IndexedDB) + sync + conflito (a unique
-  `(escola, turma, data)` ancora o merge). Frente de semanas, não "de graça".
+- **Sem sinal na sala** → fila local (IndexedDB) + sync + conflito. Frente de
+  semanas, não "de graça" — e **ficou mais difícil** desde nov/2026: a unique
+  `(escola, turma, data)` que ancoraria o merge **caiu** com a presença por
+  tempo, e o que não pode repetir agora é interseção de bloco de tempos,
+  barrada em `clean()` e não no banco (ver `PRESENCA.md`). O merge offline
+  teria que reconciliar bloco, não dia.
 
 Trade-off de segurança: refresh longo no `localStorage` amplia a janela de um
 token roubado (baixo risco pro pai só-leitura, maior pro professor que escreve).
