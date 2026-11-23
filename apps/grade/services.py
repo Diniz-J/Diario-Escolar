@@ -23,7 +23,7 @@ por turno divergente.
 from dataclasses import dataclass, field
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from simple_history.utils import bulk_create_with_history
 
 from apps.escola.models import Lecionamento, Turma
@@ -54,82 +54,106 @@ def clonar_grade(*, origem: Turma, destino: Turma) -> ResultadoClonagem:
         raise ValidationError(
             {"turma_destino": "A turma destino deve ser diferente da origem."}
         )
-    if AulaGrade.objects.filter(turma=destino, ativo=True).exists():
-        raise ValidationError(
-            {
-                "turma_destino": (
-                    "A turma destino já tem grade montada. Remova os horários "
-                    "existentes antes de clonar."
+
+    # Trava a turma destino e revalida "sem grade ativa" dentro da mesma
+    # transação pra que dois POSTs concorrentes não passem ambos pelo check
+    # e depois caiam no unique parcial como IntegrityError (500).
+    with transaction.atomic():
+        Turma.objects.select_for_update().filter(pk=destino.pk).first()
+        if AulaGrade.objects.filter(turma=destino, ativo=True).exists():
+            raise ValidationError(
+                {
+                    "turma_destino": (
+                        "A turma destino já tem grade montada. Remova os horários "
+                        "existentes antes de clonar."
+                    )
+                }
+            )
+
+        slots_origem = list(
+            AulaGrade.objects.filter(turma=origem, ativo=True).select_related(
+                "tempo", "lecionamento"
+            )
+        )
+        resultado = ResultadoClonagem()
+        if not slots_origem:
+            return resultado
+
+        # Lecionamentos ativos do destino, indexados por (professor, disciplina)
+        # — é o par que significa "quem dá esta matéria nesta turma". Se o
+        # mesmo par aparecer em mais de um lecionamento ativo (invariante que
+        # o modelo não garante hoje), `setdefault` + `order_by("id")` fixa o
+        # de menor id, pra o clone não depender da ordem do ORM.
+        lecionamentos: dict[tuple[int, int], Lecionamento] = {}
+        for lec in Lecionamento.objects.filter(
+            turma=destino, ativo=True
+        ).order_by("id"):
+            lecionamentos.setdefault((lec.professor_id, lec.disciplina_id), lec)
+        # Tempos do turno do destino, indexados por ordem.
+        tempos = {
+            tempo.ordem: tempo
+            for tempo in TempoAula.objects.filter(
+                escola_id=destino.escola_id, turno=destino.turno, ativo=True
+            )
+        }
+
+        novos: list[AulaGrade] = []
+        for slot in slots_origem:
+            chave = (
+                slot.lecionamento.professor_id,
+                slot.lecionamento.disciplina_id,
+            )
+            lecionamento = lecionamentos.get(chave)
+            tempo = tempos.get(slot.tempo.ordem)
+
+            if lecionamento is None:
+                resultado.ignorados.append(
+                    {
+                        "dia_semana": slot.dia_semana,
+                        "tempo_ordem": slot.tempo.ordem,
+                        "motivo": (
+                            "Não há lecionamento ativo deste professor para esta "
+                            "disciplina na turma destino."
+                        ),
+                    }
                 )
-            }
-        )
+                continue
+            if tempo is None:
+                resultado.ignorados.append(
+                    {
+                        "dia_semana": slot.dia_semana,
+                        "tempo_ordem": slot.tempo.ordem,
+                        "motivo": (
+                            f"A turma destino não tem {slot.tempo.ordem}º tempo "
+                            "cadastrado no turno dela."
+                        ),
+                    }
+                )
+                continue
 
-    slots_origem = list(
-        AulaGrade.objects.filter(turma=origem, ativo=True).select_related(
-            "tempo", "lecionamento"
-        )
-    )
-    resultado = ResultadoClonagem()
-    if not slots_origem:
+            novos.append(
+                AulaGrade(
+                    escola_id=destino.escola_id,
+                    lecionamento=lecionamento,
+                    turma=destino,
+                    dia_semana=slot.dia_semana,
+                    tempo=tempo,
+                )
+            )
+
+        if novos:
+            try:
+                bulk_create_with_history(novos, AulaGrade)
+            except IntegrityError as exc:
+                # Caiu no unique parcial — outro POST concorrente venceu a
+                # corrida depois do nosso check. Traduz pra 400 em vez de 500.
+                raise ValidationError(
+                    {
+                        "turma_destino": (
+                            "Outro clone concorrente já criou slots nessa turma; "
+                            "recarregue e tente de novo."
+                        )
+                    }
+                ) from exc
+        resultado.criados = len(novos)
         return resultado
-
-    # Lecionamentos ativos do destino, indexados por (professor, disciplina)
-    # — é o par que significa "quem dá esta matéria nesta turma".
-    lecionamentos = {
-        (lec.professor_id, lec.disciplina_id): lec
-        for lec in Lecionamento.objects.filter(turma=destino, ativo=True)
-    }
-    # Tempos do turno do destino, indexados por ordem.
-    tempos = {
-        tempo.ordem: tempo
-        for tempo in TempoAula.objects.filter(
-            escola_id=destino.escola_id, turno=destino.turno, ativo=True
-        )
-    }
-
-    novos: list[AulaGrade] = []
-    for slot in slots_origem:
-        chave = (slot.lecionamento.professor_id, slot.lecionamento.disciplina_id)
-        lecionamento = lecionamentos.get(chave)
-        tempo = tempos.get(slot.tempo.ordem)
-
-        if lecionamento is None:
-            resultado.ignorados.append(
-                {
-                    "dia_semana": slot.dia_semana,
-                    "tempo_ordem": slot.tempo.ordem,
-                    "motivo": (
-                        "Não há lecionamento ativo deste professor para esta "
-                        "disciplina na turma destino."
-                    ),
-                }
-            )
-            continue
-        if tempo is None:
-            resultado.ignorados.append(
-                {
-                    "dia_semana": slot.dia_semana,
-                    "tempo_ordem": slot.tempo.ordem,
-                    "motivo": (
-                        f"A turma destino não tem {slot.tempo.ordem}º tempo "
-                        "cadastrado no turno dela."
-                    ),
-                }
-            )
-            continue
-
-        novos.append(
-            AulaGrade(
-                escola_id=destino.escola_id,
-                lecionamento=lecionamento,
-                turma=destino,
-                dia_semana=slot.dia_semana,
-                tempo=tempo,
-            )
-        )
-
-    if novos:
-        with transaction.atomic():
-            bulk_create_with_history(novos, AulaGrade)
-    resultado.criados = len(novos)
-    return resultado
