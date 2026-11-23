@@ -1,5 +1,5 @@
 """Testes do `RegistroAulaViewSet` — CRUD, escopo, conferência e agenda."""
-from datetime import date
+from datetime import date, time
 
 from rest_framework.test import APIRequestFactory, force_authenticate
 
@@ -15,6 +15,7 @@ from apps.escola.models import (
     Professor,
     Turma,
 )
+from apps.grade.models import AulaGrade, TempoAula
 
 
 class _AulasSetup(TestCase):
@@ -47,8 +48,24 @@ class _AulasSetup(TestCase):
             professor=cls.professor,
             turma=cls.turma,
             disciplina=cls.disciplina,
-            dias_semana=[0, 2],  # segunda e quarta
         )
+        # Os dias de aula saem da grade horária desde nov/2026 (fatia 5 do
+        # `PRESENCA.md`) — era `Lecionamento.dias_semana`.
+        cls.tempo = TempoAula.objects.create(
+            escola=cls.escola,
+            turno=cls.turma.turno,
+            ordem=1,
+            hora_inicio=time(7, 0),
+            hora_fim=time(7, 50),
+        )
+        for dia in (0, 2):  # segunda e quarta
+            AulaGrade.objects.create(
+                escola=cls.escola,
+                lecionamento=cls.lecionamento,
+                turma=cls.turma,
+                dia_semana=dia,
+                tempo=cls.tempo,
+            )
         cls.diretor = Usuario.objects.create_user(
             username="dir",
             password="x",
@@ -226,6 +243,51 @@ class RegistroAulaAgendaTests(_AulasSetup):
         self.assertTrue(len(resp.data) > 0)
         # Lecionamento tem aula só seg(0)/qua(2).
         self.assertTrue(all(s["dia_semana"] in (0, 2) for s in resp.data))
+
+    def test_dia_com_dois_tempos_projeta_um_slot(self):
+        """O diário é por dia, a grade é por tempo (`PRESENCA.md` §2.8).
+
+        Com a projeção lendo a grade, um dia de bloco duplo tem duas
+        linhas em `AulaGrade` — e precisa render **um** slot, senão a
+        agenda mostraria a mesma aula duas vezes e a direção conferiria
+        em dobro.
+        """
+        segundo_tempo = TempoAula.objects.create(
+            escola=self.escola,
+            turno=self.turma.turno,
+            ordem=2,
+            hora_inicio=time(7, 50),
+            hora_fim=time(8, 40),
+        )
+        AulaGrade.objects.create(
+            escola=self.escola,
+            lecionamento=self.lecionamento,
+            turma=self.turma,
+            dia_semana=0,
+            tempo=segundo_tempo,
+        )
+
+        mes = date.today().strftime("%Y-%m")
+        req = self.factory.get(
+            f"/?turma={self.turma.id}&disciplina={self.disciplina.id}&mes={mes}"
+        )
+        force_authenticate(req, user=self.usuario_docente)
+        resp = RegistroAulaViewSet.as_view({"get": "agenda"})(req)
+        self.assertEqual(resp.status_code, 200)
+
+        datas = [slot["data"] for slot in resp.data]
+        self.assertEqual(len(datas), len(set(datas)))
+
+    def test_agenda_vazia_sem_grade_montada(self):
+        AulaGrade.objects.filter(lecionamento=self.lecionamento).delete()
+        mes = date.today().strftime("%Y-%m")
+        req = self.factory.get(
+            f"/?turma={self.turma.id}&disciplina={self.disciplina.id}&mes={mes}"
+        )
+        force_authenticate(req, user=self.usuario_docente)
+        resp = RegistroAulaViewSet.as_view({"get": "agenda"})(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(list(resp.data), [])
 
     def test_agenda_exige_parametros(self):
         req = self.factory.get("/")

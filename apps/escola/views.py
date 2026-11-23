@@ -4,6 +4,11 @@ Todos os ViewSets escopam o queryset à escola do `request.user` (via
 `EscopoEscolaMixin` ou override manual em `EscolaViewSet`). Admin e superuser
 bypassam o filtro.
 """
+from django.contrib.postgres.aggregates import ArrayAgg
+from django.contrib.postgres.fields import ArrayField
+from django.db import models
+from django.db.models import Q, Value
+from django.db.models.functions import Coalesce
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -276,10 +281,28 @@ class LecionamentoViewSet(
 ):
     """CRUD de lecionamentos (vínculo professor × turma × disciplina)."""
 
+    # `dias_grade` anotado (e não resolvido no serializer): a ficha do
+    # professor lista todos os lecionamentos dele, e `obj.slots_grade` por
+    # linha seria uma query por vínculo. `distinct` porque o mesmo dia
+    # aparece uma vez por tempo da grade, e o diário é por dia.
     queryset = (
         Lecionamento.objects.select_related(
             "professor__usuario", "turma", "disciplina", "escola"
-        ).order_by("turma__ano_letivo", "turma__nome", "disciplina__nome")
+        )
+        .annotate(
+            # `Coalesce` porque `ArrayAgg` devolve NULL (não lista vazia)
+            # quando o vínculo não tem slot nenhum, e a ficha do professor
+            # itera o valor — `None` quebraria a tela.
+            dias_grade=Coalesce(
+                ArrayAgg(
+                    "slots_grade__dia_semana",
+                    distinct=True,
+                    filter=Q(slots_grade__ativo=True),
+                ),
+                Value([], output_field=ArrayField(models.IntegerField())),
+            )
+        )
+        .order_by("turma__ano_letivo", "turma__nome", "disciplina__nome")
     )
     serializer_class = LecionamentoSerializer
     filter_backends = [DjangoFilterBackend]

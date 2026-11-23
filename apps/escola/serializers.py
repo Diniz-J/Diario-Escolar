@@ -182,10 +182,24 @@ class LecionamentoSerializer(AutoEscopoEscolaSerializerMixin, serializers.ModelS
     `ano_letivo` é exposto read-only via fonte da turma — evita duplicar
     informação no banco e mantém a UI capaz de filtrar por ano sem mais
     um JOIN.
+
+    `dias_grade` é a mesma ideia aplicada aos dias de aula: eles saem da
+    grade horária (`apps.grade.AulaGrade`), que substituiu o campo
+    `Lecionamento.dias_semana` em nov/2026 (fatia 5 do `PRESENCA.md`). O
+    nome é **diferente** do campo removido de propósito: um read-only
+    chamado `dias_semana` aceitaria um PATCH e o descartaria em silêncio,
+    e quem editasse os dias por ali concluiria que salvou. Vem anotado por
+    `ArrayAgg` no viewset — sem isso seria uma query por linha na ficha do
+    professor.
     """
 
     ano_letivo = serializers.IntegerField(
         source="turma.ano_letivo", read_only=True
+    )
+    # `default=list` porque o `ArrayAgg` devolve None quando o
+    # lecionamento não tem slot nenhum, e o front itera o valor.
+    dias_grade = serializers.ListField(
+        child=serializers.IntegerField(), read_only=True, default=list
     )
 
     class Meta:
@@ -197,15 +211,20 @@ class LecionamentoSerializer(AutoEscopoEscolaSerializerMixin, serializers.ModelS
             "turma",
             "disciplina",
             "ano_letivo",
-            # Grade horária (0=segunda ... 6=domingo). Base da projeção da
-            # agenda do diário e exibida na ficha do professor. Sem isto no
-            # serializer o front recebe `undefined` e quebra ao iterar.
-            "dias_semana",
+            # Dias que a grade dá a este vínculo (0=segunda ... 6=domingo),
+            # derivados e read-only — ver docstring da classe.
+            "dias_grade",
             "ativo",
             "criado_em",
             "atualizado_em",
         ]
-        read_only_fields = ["id", "ano_letivo", "criado_em", "atualizado_em"]
+        read_only_fields = [
+            "id",
+            "ano_letivo",
+            "dias_grade",
+            "criado_em",
+            "atualizado_em",
+        ]
         extra_kwargs = _ESCOLA_OPCIONAL
 
     def validate_escola(self, value):

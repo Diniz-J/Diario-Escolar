@@ -176,8 +176,12 @@ export interface Lecionamento {
   disciplina: number;
   ano_letivo: number;
   ativo: boolean;
-  // Dias da semana com aula (0=segunda ... 6=domingo); base da agenda do diário.
-  dias_semana: number[];
+  // Dias da semana com aula (0=segunda ... 6=domingo), **derivados da
+  // grade horária** e read-only: o campo `dias_semana` do lecionamento foi
+  // removido em nov/2026 (ver PRESENCA.md). O nome é diferente de propósito
+  // — um read-only com o nome do campo antigo aceitaria o PATCH e o
+  // descartaria em silêncio.
+  dias_grade: number[];
   criado_em: string;
   atualizado_em: string;
 }

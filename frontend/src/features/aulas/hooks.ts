@@ -54,8 +54,8 @@ interface AgendaParams {
   professor?: number;
 }
 
-// Projeção dos slots de aula do mês — calculada server-side a partir dos
-// `dias_semana` do lecionamento (sem tabela). Só dispara com turma,
+// Projeção dos slots de aula do mês — calculada server-side a partir da
+// grade horária da turma (sem tabela de slots). Só dispara com turma,
 // disciplina e mês definidos.
 export function useAgendaAula(params: Partial<AgendaParams>) {
   const { turma, disciplina, mes, professor } = params;
