@@ -947,3 +947,70 @@ export interface TimelineAluno {
   truncado: boolean;
   eventos: TimelineEvento[];
 }
+
+// --- Grade horária (fatia 1-2 do PRESENCA.md) -----------------------------
+
+export interface TempoAula {
+  id: number;
+  escola: number;
+  turno: Turno;
+  turno_display: string;
+  ordem: number;
+  // `TimeField` do DRF: "07:00:00".
+  hora_inicio: string;
+  hora_fim: string;
+  ativo: boolean;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export type TempoAulaInput = {
+  escola?: number;
+  turno: Turno;
+  ordem: number;
+  hora_inicio: string;
+  hora_fim: string;
+  ativo?: boolean;
+};
+
+export interface AulaGrade {
+  id: number;
+  escola: number;
+  lecionamento: number;
+  // Derivada do lecionamento no backend — read-only, não vai no payload.
+  turma: number;
+  turma_nome: string;
+  // 0=segunda ... 6=domingo, alinhado com `date.weekday()` do Python.
+  dia_semana: number;
+  dia_semana_display: string;
+  tempo: number;
+  tempo_ordem: number;
+  tempo_hora_inicio: string;
+  tempo_hora_fim: string;
+  disciplina: number;
+  disciplina_nome: string;
+  professor: number;
+  professor_nome: string;
+  ativo: boolean;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export type AulaGradeInput = {
+  escola?: number;
+  lecionamento: number;
+  dia_semana: number;
+  tempo: number;
+  ativo?: boolean;
+};
+
+export interface ClonagemIgnorada {
+  dia_semana: number;
+  tempo_ordem: number;
+  motivo: string;
+}
+
+export interface ClonagemResultado {
+  criados: number;
+  ignorados: ClonagemIgnorada[];
+}

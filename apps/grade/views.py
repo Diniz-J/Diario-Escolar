@@ -10,15 +10,36 @@ projetar a partir dela.
 (`ativo=True`), então o slot desativado fica como histórico da grade
 antiga sem impedir remontar o mesmo horário.
 """
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import viewsets
+from rest_framework import serializers, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
 
 from apps.common.permissions import IsAdminOrDiretorOrProfessorOrInspetor
 from apps.common.views import EscopoEscolaMixin, ReadWritePermissionMixin
 
 from .models import AulaGrade, TempoAula
-from .serializers import AulaGradeSerializer, TempoAulaSerializer
+from .serializers import (
+    AulaGradeSerializer,
+    ClonarGradeSerializer,
+    TempoAulaSerializer,
+)
+from .services import clonar_grade
+
+
+def _erro_drf(exc: DjangoValidationError) -> serializers.ValidationError:
+    """Traduz o `ValidationError` do Django no do DRF, por campo.
+
+    Sem isto a exceção que o `services.py` levanta sai como 500. Segunda
+    cópia desta tradução no projeto (a outra está em
+    `apps/financeiro/serializers.py`, pública porque a view de lá também
+    precisa); a terceira vai pra `apps/common`.
+    """
+    if hasattr(exc, "error_dict"):
+        return serializers.ValidationError(exc.message_dict)
+    return serializers.ValidationError({"detail": exc.messages})
 
 
 class _GradeReadWriteMixin(ReadWritePermissionMixin):
@@ -92,3 +113,32 @@ class AulaGradeViewSet(
         """Soft delete — ver docstring do módulo."""
         instance.ativo = False
         instance.save(update_fields=["ativo", "atualizado_em"])
+
+    @action(detail=False, methods=["post"], url_path="clonar")
+    def clonar(self, request):
+        """Copia a grade de uma turma pra outra (virada de ano letivo).
+
+        Escrita, então cai no `WRITE_PERMISSION` do mixin (só direção) —
+        `permission_classes` no decorator seria ignorado em silêncio,
+        porque o mixin sobrescreve `get_permissions`.
+
+        Responde 200 com o que entrou e o que foi deixado de fora: slot
+        sem lecionamento equivalente na turma destino é ignorado, e
+        clonagem que omitisse isso faria a direção crer numa semana
+        completa.
+        """
+        entrada = ClonarGradeSerializer(
+            data=request.data, context={"request": request}
+        )
+        entrada.is_valid(raise_exception=True)
+        try:
+            resultado = clonar_grade(
+                origem=entrada.validated_data["turma_origem"],
+                destino=entrada.validated_data["turma_destino"],
+            )
+        except DjangoValidationError as exc:
+            raise _erro_drf(exc) from exc
+        return Response(
+            {"criados": resultado.criados, "ignorados": resultado.ignorados},
+            status=status.HTTP_200_OK,
+        )

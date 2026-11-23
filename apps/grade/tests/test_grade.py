@@ -437,3 +437,109 @@ class AulaGradeApiTests(_GradeSetup):
         self.assertEqual(resposta.data["disciplina_nome"], "Matemática")
         self.assertEqual(resposta.data["professor"], self.prof1.id)
         self.assertEqual(resposta.data["tempo_ordem"], self.tempo1.ordem)
+
+
+class ClonarGradeTests(_GradeSetup):
+    """Clonagem pra virada de ano letivo (`apps/grade/services.py`)."""
+
+    URL = reverse("api_v1:aula-grade-clonar")
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        super().setUpTestData()
+        # Turma de 2027 com os mesmos pares professor×disciplina.
+        cls.turma_2027 = Turma.objects.create(
+            escola=cls.escola,
+            nome="1º A",
+            turno=Turma.Turno.MATUTINO,
+            ano_letivo=2027,
+        )
+        cls.lec_mat_2027 = cls._lecionar(
+            cls.prof1, cls.turma_2027, cls.matematica
+        )
+        # Grade de 2026: matemática na segunda (1º tempo) e português na
+        # terça (2º tempo).
+        AulaGrade.objects.create(
+            escola=cls.escola,
+            lecionamento=cls.lec_mat,
+            turma=cls.turma_manha,
+            dia_semana=Lecionamento.DiaSemana.SEGUNDA,
+            tempo=cls.tempo1,
+        )
+        AulaGrade.objects.create(
+            escola=cls.escola,
+            lecionamento=cls.lec_port,
+            turma=cls.turma_manha,
+            dia_semana=Lecionamento.DiaSemana.TERCA,
+            tempo=cls.tempo2,
+        )
+
+    def _clonar(self, origem, destino):
+        return self.client.post(
+            self.URL,
+            {"turma_origem": origem.id, "turma_destino": destino.id},
+            format="json",
+        )
+
+    def test_clona_o_par_que_existe_e_reporta_o_que_falta(self):
+        """Português não foi recontratado em 2027: entra matemática só."""
+        self._como(self.diretora)
+        resposta = self._clonar(self.turma_manha, self.turma_2027)
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        self.assertEqual(resposta.data["criados"], 1)
+        self.assertEqual(len(resposta.data["ignorados"]), 1)
+        self.assertEqual(
+            resposta.data["ignorados"][0]["tempo_ordem"], self.tempo2.ordem
+        )
+
+        novo = AulaGrade.objects.get(turma=self.turma_2027, ativo=True)
+        self.assertEqual(novo.lecionamento_id, self.lec_mat_2027.id)
+        self.assertEqual(novo.dia_semana, Lecionamento.DiaSemana.SEGUNDA)
+        self.assertEqual(novo.tempo_id, self.tempo1.id)
+
+    def test_destino_com_grade_montada_da_400(self):
+        AulaGrade.objects.create(
+            escola=self.escola,
+            lecionamento=self.lec_mat_2027,
+            turma=self.turma_2027,
+            dia_semana=Lecionamento.DiaSemana.QUINTA,
+            tempo=self.tempo1,
+        )
+        self._como(self.diretora)
+        resposta = self._clonar(self.turma_manha, self.turma_2027)
+        self.assertEqual(resposta.status_code, 400, resposta.data)
+        self.assertIn("turma_destino", resposta.data)
+
+    def test_clonar_pra_si_mesma_da_400(self):
+        self._como(self.diretora)
+        resposta = self._clonar(self.turma_manha, self.turma_manha)
+        self.assertEqual(resposta.status_code, 400, resposta.data)
+
+    def test_turma_de_outra_escola_da_400(self):
+        """Guard de IDOR: o par consistente de outra escola também é barrado."""
+        self._como(self.diretora)
+        resposta = self._clonar(self.turma_b, self.turma_2027)
+        self.assertEqual(resposta.status_code, 400, resposta.data)
+        self.assertIn("turma_origem", resposta.data)
+
+    def test_tempo_e_remapeado_pela_ordem_no_turno_do_destino(self):
+        """Clonar pra turma de outro turno usa o tempo de lá, não o daqui."""
+        turma_tarde_2027 = Turma.objects.create(
+            escola=self.escola,
+            nome="1º T",
+            turno=Turma.Turno.VESPERTINO,
+            ano_letivo=2027,
+        )
+        self._lecionar(self.prof1, turma_tarde_2027, self.matematica)
+        self._como(self.diretora)
+
+        resposta = self._clonar(self.turma_manha, turma_tarde_2027)
+        self.assertEqual(resposta.status_code, 200, resposta.data)
+        self.assertEqual(resposta.data["criados"], 1)
+        novo = AulaGrade.objects.get(turma=turma_tarde_2027, ativo=True)
+        self.assertEqual(novo.tempo_id, self.tempo_tarde.id)
+
+    def test_professor_nao_clona(self):
+        self._como(self.prof1.usuario)
+        resposta = self._clonar(self.turma_manha, self.turma_2027)
+        self.assertEqual(resposta.status_code, 403)
