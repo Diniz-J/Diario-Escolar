@@ -295,6 +295,34 @@ class TempoAulaApiTests(_GradeSetup):
         self.tempo2.refresh_from_db()
         self.assertFalse(self.tempo2.ativo)
 
+    def test_delete_bloqueado_com_slot_ativo_apontando(self):
+        """Soft delete não pode deixar slot ativo órfão de tempo desativado."""
+        AulaGrade.objects.create(
+            escola=self.escola,
+            lecionamento=self.lec_mat,
+            turma=self.turma_manha,
+            dia_semana=Lecionamento.DiaSemana.SEGUNDA,
+            tempo=self.tempo1,
+        )
+        self._como(self.diretora)
+        resposta = self.client.delete(url_tempo(self.tempo1.id))
+        self.assertEqual(resposta.status_code, 400, resposta.data)
+        self.tempo1.refresh_from_db()
+        self.assertTrue(self.tempo1.ativo)
+
+    def test_lista_default_esconde_desativados(self):
+        self.tempo2.ativo = False
+        self.tempo2.save(update_fields=["ativo"])
+        self._como(self.diretora)
+        ids = {item["id"] for item in self.client.get(URL_TEMPOS).data}
+        self.assertNotIn(self.tempo2.id, ids)
+        self.assertIn(self.tempo1.id, ids)
+        ids_com_filtro = {
+            item["id"]
+            for item in self.client.get(URL_TEMPOS, {"ativo": "false"}).data
+        }
+        self.assertIn(self.tempo2.id, ids_com_filtro)
+
 
 class AulaGradeApiTests(_GradeSetup):
     def test_turma_vem_do_lecionamento_e_nao_do_payload(self):

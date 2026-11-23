@@ -12,6 +12,7 @@ antiga sem impedir remontar o mesmo horário.
 """
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets
+from rest_framework.exceptions import ValidationError
 
 from apps.common.permissions import IsAdminOrDiretorOrProfessorOrInspetor
 from apps.common.views import EscopoEscolaMixin, ReadWritePermissionMixin
@@ -38,8 +39,27 @@ class TempoAulaViewSet(
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["turno", "ativo"]
 
+    def get_queryset(self):
+        # Soft delete: sem ?ativo=... explícito, lista só ativos pros seletores
+        # não oferecerem tempos desativados.
+        qs = super().get_queryset()
+        if "ativo" not in self.request.query_params:
+            qs = qs.filter(ativo=True)
+        return qs
+
     def perform_destroy(self, instance) -> None:
-        """Soft delete — tempo em uso por slot da grade é PROTECT."""
+        """Soft delete — bloqueia se houver slot ativo apontando pro tempo.
+
+        O `on_delete=PROTECT` do FK só dispara em delete hard; aqui fazemos
+        soft delete, então a checagem tem que ser explícita, senão a grade
+        fica com slots ativos referenciando tempo desativado e a tela de
+        chamada renderiza horário morto.
+        """
+        if instance.slots_grade.filter(ativo=True).exists():
+            raise ValidationError(
+                "Tempo em uso por slot(s) ativo(s) na grade; "
+                "remova ou desative os slots antes."
+            )
         instance.ativo = False
         instance.save(update_fields=["ativo", "atualizado_em"])
 
